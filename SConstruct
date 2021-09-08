@@ -2,6 +2,8 @@ import kconfiglib
 import os
 import multiprocessing
 from pathlib import Path
+import platform
+import subprocess
 
 
 def PhonyTargets(
@@ -15,6 +17,29 @@ def PhonyTargets(
         env = DefaultEnvironment()
     t = env.Alias(target, depends, action)
     env.AlwaysBuild(t)
+
+
+class SillySpawnForUselessWindows:
+    def ourspawn(self, sh, escape, cmd, args, env):
+        newargs = ' '.join(args[1:])
+        cmdline = cmd + " " + newargs
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        proc = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, startupinfo=startupinfo, shell = False, env = env)
+        data, err = proc.communicate()
+        rv = proc.wait()
+        if rv:
+            print("=====")
+            print(err)
+            print("=====")
+        return rv
+
+def correct_spawn( env ):
+    if platform.system() == 'Windows':
+        buf = SillySpawnForUselessWindows()
+        buf.ourenv = env
+        env['SPAWN'] = buf.ourspawn
 
 
 def getKconfig(kconfig):
@@ -57,7 +82,7 @@ def generate_sdkconfig_header(target, source, env):
         f.write(content)
 
 
-MINGW = 'mingw' in COMMAND_LINE_TARGETS
+MINGW = platform.system() == "Windows"
 PROGRAM = "simulated.exe" if MINGW else "simulated"
 MAIN = "main"
 SIMULATOR = 'simulator'
@@ -73,7 +98,9 @@ CFLAGS = [
     "-g",
     "-O0",
     "-DLV_CONF_INCLUDE_SIMPLE",
+    "-DLV_LVGL_H_INCLUDE_SIMPLE",
     '-DprojCOVERAGE_TEST=1',
+    "-DLV_KCONFIG_IGNORE",
     "-Wno-unused-parameter",
     "-static-libgcc",
     "-static-libstdc++",
@@ -83,7 +110,9 @@ LDLIBS = ["-lmingw32", "-lSDL2main",
 
 CPPPATH = [
     COMPONENTS, f'{SIMULATOR}/port', f'#{MAIN}',
-    f"#{MAIN}/config", f"#{SIMULATOR}", B64, CJSON
+    f"#{MAIN}/config", f"#{SIMULATOR}", B64, CJSON,
+    f"#{COMPONENTS}/lvgl", 
+    f"#{COMPONENTS}/lvgl/lvgl", 
 ]
 
 
@@ -102,13 +131,20 @@ def main():
         "LIBS": LDLIBS,
     }
 
-    env = Environment(**env_options)
+    env = Environment(**env_options, tools=['mingw'] if MINGW else None)
+    correct_spawn(env)
     env.Tool('compilation_db')
 
-    freertos_env = env
-    (freertos, include) = SConscript(f'{FREERTOS}/SConscript', exports=['freertos_env'])
+    gel_env = env
+    gel_selected = ['pagemanager', 'collections', 'data_structures']
+    (gel_objects, include) = SConscript(
+        f'{COMPONENTS}/gel/SConscript', exports=['gel_env', 'gel_selected'])
     env['CPPPATH'] += [include]
 
+    freertos_env = env
+    (freertos, include) = SConscript(
+        f'{FREERTOS}/SConscript', exports=['freertos_env'])
+    env['CPPPATH'] += [include]
 
     sdkconfig = env.Command(
         f"{SIMULATOR}/sdkconfig.h",
@@ -118,14 +154,22 @@ def main():
 
     sources = Glob(f'{SIMULATOR}/*.c')
     sources += Glob(f'{SIMULATOR}/port/*.c')
+    sources += Glob(f'{SIMULATOR}/indev/*.c')
+    sources += Glob(f'{SIMULATOR}/display/*.c')
     sources += [File(filename) for filename in Path('main/model').rglob('*.c')]
-    sources += [File(filename) for filename in Path('main/config').rglob('*.c')]
-    # sources += [File(filename) for filename in Path('main/view').rglob('*.c')]
-    sources += [File(filename) for filename in Path('main/controller').rglob('*.c')]
+    sources += [File(filename)
+                for filename in Path('main/config').rglob('*.c')]
+    sources += [File(filename) for filename in Path('main/view').rglob('*.c')]
+    sources += [File(filename)
+                for filename in Path('main/controller').rglob('*.c')]
+    sources += [
+        File(filename) for filename in Path(f'{COMPONENTS}/lvgl/lvgl/src').rglob('*.c')
+    ]
     sources += [File(f'{CJSON}/cJSON.c')]
-    sources += [File(f'{B64}/encode.c'), File(f'{B64}/decode.c'), File(f'{B64}/buffer.c')]
+    sources += [File(f'{B64}/encode.c'),
+                File(f'{B64}/decode.c'), File(f'{B64}/buffer.c')]
 
-    prog = env.Program(PROGRAM, sources + freertos)
+    prog = env.Program(PROGRAM, sources + freertos + gel_objects)
     PhonyTargets('run', './simulated', prog, env)
     env.Alias('mingw', prog)
     env.CompilationDatabase('build/compile_commands.json')
