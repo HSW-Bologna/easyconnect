@@ -16,3 +16,6 @@
 [submodule "components/gel"]
 	path = components/gel
 	url = https://github.com/Maldus512/generic_embedded_libs.git
+[submodule "components/liblightmodbus-esp"]
+	path = components/liblightmodbus-esp
+	url = https://github.com/Jacajack/liblightmodbus-esp.git

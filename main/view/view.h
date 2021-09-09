@@ -15,6 +15,7 @@ void        view_process_message(view_page_command_t vmsg, model_t *model);
 void        view_destroy_all(void *data, void *extra);
 void        view_close_all(void *data);
 void        view_start(model_t *model);
+void view_register_default_callback(lv_obj_t *obj, int id);
 
 
 extern pman_page_t page_main;
