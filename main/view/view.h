@@ -18,7 +18,7 @@ void        view_start(model_t *model);
 void view_register_default_callback(lv_obj_t *obj, int id);
 
 
-extern pman_page_t page_main;
+extern pman_page_t page_main, page_settings;
 
 
 #endif

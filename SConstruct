@@ -26,7 +26,7 @@ class SillySpawnForUselessWindows:
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         proc = subprocess.Popen(cmdline, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, startupinfo=startupinfo, shell = False, env = env)
+                                stderr=subprocess.PIPE, startupinfo=startupinfo, shell=False, env=env)
         data, err = proc.communicate()
         rv = proc.wait()
         if rv:
@@ -35,7 +35,8 @@ class SillySpawnForUselessWindows:
             print("=====")
         return rv
 
-def correct_spawn( env ):
+
+def correct_spawn(env):
     if platform.system() == 'Windows':
         buf = SillySpawnForUselessWindows()
         buf.ourenv = env
@@ -87,6 +88,7 @@ PROGRAM = "simulated.exe" if MINGW else "simulated"
 MAIN = "main"
 SIMULATOR = 'simulator'
 COMPONENTS = "components"
+LVGL = f"{COMPONENTS}/lvgl"
 FREERTOS = f'{SIMULATOR}/freertos-simulator'
 CJSON = f'{SIMULATOR}/cJSON'
 B64 = f'{SIMULATOR}/b64'
@@ -111,8 +113,8 @@ LDLIBS = ["-lmingw32", "-lSDL2main",
 CPPPATH = [
     COMPONENTS, f'{SIMULATOR}/port', f'#{MAIN}',
     f"#{MAIN}/config", f"#{SIMULATOR}", B64, CJSON,
-    f"#{COMPONENTS}/lvgl", 
-    f"#{COMPONENTS}/lvgl/lvgl", 
+    f"#{LVGL}",
+    f"#{LVGL}/lvgl",
 ]
 
 
@@ -163,7 +165,10 @@ def main():
     sources += [File(filename)
                 for filename in Path('main/controller').rglob('*.c')]
     sources += [
-        File(filename) for filename in Path(f'{COMPONENTS}/lvgl/lvgl/src').rglob('*.c')
+        File(filename) for filename in Path(f'{LVGL}/customization').rglob('*.c')
+    ]
+    sources += [
+        File(filename) for filename in Path(f'{LVGL}/lvgl/src').rglob('*.c')
     ]
     sources += [File(f'{CJSON}/cJSON.c')]
     sources += [File(f'{B64}/encode.c'),
