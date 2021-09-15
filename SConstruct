@@ -107,12 +107,13 @@ CFLAGS = [
     "-static-libgcc",
     "-static-libstdc++",
 ]
-LDLIBS = ["-lmingw32", "-lSDL2main",
+LDLIBS = ["-lmingw32", "-lwinmm", "-lSDL2main",
           "-lSDL2"] if MINGW else ["-lSDL2"] + ['-lpthread']
 
 CPPPATH = [
     COMPONENTS, f'{SIMULATOR}/port', f'#{MAIN}',
     f"#{MAIN}/config", f"#{SIMULATOR}", B64, CJSON,
+    f"#{FREERTOS}",
     f"#{LVGL}",
     f"#{LVGL}/lvgl",
 ]
