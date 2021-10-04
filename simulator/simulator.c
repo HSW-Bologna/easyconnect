@@ -7,6 +7,7 @@
 #include "view/view.h"
 #include "model/model.h"
 #include "controller/controller.h"
+#include "controller/gui.h"
 
 
 static const char *TAG = "Main";

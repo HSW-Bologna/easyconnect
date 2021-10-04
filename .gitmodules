@@ -19,3 +19,6 @@
 [submodule "components/liblightmodbus-esp"]
 	path = components/liblightmodbus-esp
 	url = https://github.com/Jacajack/liblightmodbus-esp.git
+[submodule "components/esp_littlefs"]
+	path = components/esp_littlefs
+	url = https://github.com/joltwallet/esp_littlefs.git

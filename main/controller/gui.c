@@ -2,6 +2,7 @@
 #include "view/view.h"
 #include "utils/utils.h"
 #include "gel/timer/timecheck.h"
+#include "controller.h"
 
 
 void controller_gui_manage(model_t *pmodel) {
@@ -15,7 +16,7 @@ void controller_gui_manage(model_t *pmodel) {
     timestamp = now;
 
     while (view_get_next_message(pmodel, &umsg, &event)) {
-        // controllerProcessMessage(umsg.cmsg, pmodel);
+        controller_manage_message(pmodel, &umsg.cmsg);
         view_process_message(umsg.vmsg, pmodel);
     }
 }

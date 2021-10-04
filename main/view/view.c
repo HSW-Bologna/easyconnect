@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdlib.h>
 #include "lvgl.h"
 #include "view.h"
 #include "gel/pagemanager/page_manager.h"
@@ -93,10 +94,6 @@ void view_process_message(view_page_command_t vmsg, model_t *model) {
             view_event((view_event_t){.code = VIEW_EVENT_CODE_OPEN});
             break;
 
-        case VIEW_COMMAND_CODE_UPDATE:
-            pman_page_update(&pman, model);
-            break;
-
         default:
             /* do nothing */
             break;
@@ -146,11 +143,13 @@ void view_register_default_callback(lv_obj_t *obj, int id) {
     lv_obj_set_event_cb(obj, page_event_cb);
 }
 
+
 void view_register_default_callback_number(lv_obj_t *obj, int id, int number) {
     lv_obj_user_data_t data = {.id = id, .number = number};
     lv_obj_set_user_data(obj, data);
     lv_obj_set_event_cb(obj, page_event_cb);
 }
+
 
 static void change_page_extra(model_t *model, const pman_page_t *page, void *extra) {
     assert(page != NULL);

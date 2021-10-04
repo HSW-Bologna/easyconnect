@@ -200,7 +200,7 @@ void save_uint64_option(uint64_t *value, char *key) {
 }
 
 
-int load_blob_option(void *value, size_t len, char *key) {
+int storage_load_blob_option(void *value, size_t len, char *key) {
     nvs_handle_t handle;
     esp_err_t    err;
     assert(strlen(key) <= 15);
@@ -217,7 +217,7 @@ int load_blob_option(void *value, size_t len, char *key) {
 }
 
 
-void save_blob_option(void *value, size_t len, char *key) {
+void storage_save_blob_option(void *value, size_t len, char *key) {
     nvs_handle_t handle;
     ESP_LOGI(TAG, "Trying to save key %s", key);
     assert(strlen(key) <= 15);

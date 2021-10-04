@@ -101,6 +101,7 @@ CFLAGS = [
     "-O0",
     "-DLV_CONF_INCLUDE_SIMPLE",
     "-DLV_LVGL_H_INCLUDE_SIMPLE",
+    "-DPC_SIMULATOR",
     '-DprojCOVERAGE_TEST=1',
     "-DLV_KCONFIG_IGNORE",
     "-Wno-unused-parameter",

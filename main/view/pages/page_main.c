@@ -32,9 +32,10 @@ LV_IMG_DECLARE(img_tre_luci_accese);
 LV_IMG_DECLARE(img_tre_luci_spente);
 
 
-#define DRAWER_HEIGHT 160
-#define PULLER_HEIGHT 40
-#define DRAWER_RADIUS 32
+#define CENTER_X_DELTA 20
+#define DRAWER_HEIGHT  340
+#define PULLER_HEIGHT  40
+#define DRAWER_RADIUS  32
 
 
 enum {
@@ -45,7 +46,7 @@ enum {
     BTN_FILTER_ID,
     SLIDER_ID,
     SETTINGS_BTN_ID,
-    DEMO_BTN_ID,
+    TECH_SETTINGS_BTN_ID,
 };
 
 
@@ -94,10 +95,16 @@ struct page_data {
     lv_obj_t *btn_light;
     lv_obj_t *btn_fan;
     lv_obj_t *btn_filter;
+    lv_obj_t *lbl_temperature;
     lv_obj_t *slider;
 
     size_t demo_index;
 };
+
+
+static void update_info(model_t *pmodel, struct page_data *data) {
+    lv_label_set_text_fmt(data->lbl_temperature, "%i C", model_get_temperature(pmodel));
+}
 
 
 static void update_images(struct page_data *data) {
@@ -129,6 +136,20 @@ static void *create_page(model_t *model, void *extra) {
 static void open_page(model_t *model, void *arg) {
     struct page_data *data = arg;
 
+    lv_obj_t *title = lv_label_create(lv_scr_act(), NULL);
+    lv_obj_set_style_local_text_font(title, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &font_digital_64);
+    lv_label_set_long_mode(title, LV_LABEL_LONG_BREAK);
+    lv_obj_set_width(title, 240);
+    lv_label_set_align(title, LV_LABEL_ALIGN_CENTER);
+    lv_label_set_text(title, "Easy Connect");
+    lv_obj_align(title, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 8);
+
+    lv_obj_t *lbl = lv_label_create(lv_scr_act(), NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, CENTER_X_DELTA, 0);
+    data->lbl_temperature = lbl;
+
     lv_obj_t *cont_drag = lv_cont_create(lv_scr_act(), NULL);
     lv_obj_set_size(cont_drag, 250, DRAWER_HEIGHT);
     lv_obj_align(cont_drag, NULL, LV_ALIGN_OUT_TOP_MID, 0, PULLER_HEIGHT);
@@ -138,7 +159,8 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_t *cont = lv_cont_create(cont_drag, NULL);
     lv_obj_set_size(cont, 250, DRAWER_HEIGHT - PULLER_HEIGHT);
     lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
-    lv_cont_set_layout(cont, LV_LAYOUT_ROW_BOTTOM);
+    lv_cont_set_layout(cont, LV_LAYOUT_COLUMN_MID);
+    lv_obj_set_style_local_pad_top(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 64);
     lv_obj_set_drag(cont_drag, true);
     lv_obj_set_drag_parent(cont, true);
     lv_obj_set_drag_dir(cont_drag, LV_DRAG_DIR_VER);
@@ -146,17 +168,23 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_set_signal_cb(cont_drag, limit_cb);
     lv_obj_set_style_local_radius(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, DRAWER_RADIUS);
 
+    lv_obj_t *warnings = lv_btn_create(cont, NULL);
+    lv_obj_set_size(warnings, 200, 60);
+    lbl = lv_label_create(warnings, NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_label_set_text(lbl, "Record errori");
+
     lv_obj_t *settings = lv_btn_create(cont, NULL);
-    lv_obj_set_size(settings, 60, 60);
-    lv_obj_t *lbl = lv_label_create(settings, NULL);
-    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_title());
-    lv_label_set_text(lbl, LV_SYMBOL_SETTINGS);
+    lv_obj_set_size(settings, 200, 60);
+    lbl = lv_label_create(settings, lbl);
+    lv_label_set_text(lbl, "Menu' utente");
     view_register_default_callback(settings, SETTINGS_BTN_ID);
 
-    lv_obj_t *warnings = lv_btn_create(cont, NULL);
-    lv_obj_set_size(warnings, 60, 60);
-    lbl = lv_label_create(warnings, lbl);
-    lv_label_set_text(lbl, LV_SYMBOL_WARNING);
+    lv_obj_t *tech = lv_btn_create(cont, NULL);
+    lv_obj_set_size(tech, 200, 60);
+    lbl = lv_label_create(tech, lbl);
+    lv_label_set_text(lbl, "Menu' assistenza");
+    view_register_default_callback(tech, TECH_SETTINGS_BTN_ID);
 
     lv_obj_t *butn1 = lv_btn_create(lv_scr_act(), NULL);
     lv_obj_t *butn2 = lv_btn_create(lv_scr_act(), NULL);
@@ -204,11 +232,7 @@ static void open_page(model_t *model, void *arg) {
     data->slider = sl;
     view_register_default_callback(data->slider, SLIDER_ID);
 
-    lv_obj_t *demo = lv_btn_create(lv_scr_act(), NULL);
-    lbl            = lv_label_create(demo, NULL);
-    lv_label_set_text(lbl, "demo");
-    lv_obj_align(demo, NULL, LV_ALIGN_CENTER, 0, 0);
-    view_register_default_callback(demo, DEMO_BTN_ID);
+    update_info(model, data);
 }
 
 
@@ -249,13 +273,9 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             msg.vmsg.page = &page_settings;
                             break;
 
-                        case DEMO_BTN_ID:
-                            if (data->demo_index < 2) {
-                                data->demo_index++;
-                            } else {
-                                data->demo_index = 0;
-                            }
-                            update_images(data);
+                        case TECH_SETTINGS_BTN_ID:
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_tech_settings;
                             break;
 
                         default:
