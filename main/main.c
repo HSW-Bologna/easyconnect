@@ -10,6 +10,8 @@
 #include "lvgl_helpers.h"
 #include "peripherals/system.h"
 #include "peripherals/modbus.h"
+#include "peripherals/storage.h"
+
 
 static const char *TAG = "Main";
 
@@ -21,6 +23,7 @@ void app_main(void) {
     system_i2c_init();
     lvgl_driver_init();
     modbus_init();
+    storage_init();
 
     model_init(&model);
     view_init(disp_driver_flush, ft6x36_read);

@@ -14,7 +14,7 @@ int  load_uint32_option(uint32_t *value, char *key);
 void save_uint32_option(uint32_t *value, char *key);
 int  load_uint64_option(uint64_t *value, char *key);
 void save_uint64_option(uint64_t *value, char *key);
-int  storage_load_blob_option(void *value, size_t len, char *key);
-void storage_save_blob_option(void *value, size_t len, char *key);
+int  storage_load_blob(void *value, size_t len, char *key);
+void storage_save_blob(void *value, size_t len, char *key);
 
 #endif

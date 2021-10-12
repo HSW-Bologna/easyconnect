@@ -2,6 +2,7 @@
 #include "lvgl.h"
 #include "view.h"
 #include "common.h"
+#include "model/model.h"
 
 
 lv_obj_t *view_common_back_button(int id) {
@@ -39,8 +40,32 @@ lv_obj_t *view_common_title(int id, char *string, lv_obj_t **label) {
 
 
 
+lv_obj_t *view_common_limit_address_picker(model_t *pmodel, lv_obj_t *dd) {
+    size_t    count = 0;
+    uint8_t prev_address = 0;
+    uint8_t address      = model_get_available_address(pmodel, prev_address);
+
+    lv_dropdown_clear_options(dd);
+
+    while (address != prev_address) {
+        char string[32] = {0};
+        snprintf(string, sizeof(string), "%i", address);
+        lv_dropdown_add_option(dd, string, count);
+        count++;
+        prev_address = address;
+        address      = model_get_available_address(pmodel, prev_address);
+    }
+
+    return dd;
+}
+
+
+
 lv_obj_t *view_common_address_picker(lv_obj_t *root, int id) {
     lv_obj_t *dd = lv_dropdown_create(root, NULL);
+    lv_obj_set_style_local_text_font(dd, LV_DROPDOWN_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_obj_set_style_local_text_font(dd, LV_DROPDOWN_PART_LIST, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_obj_set_style_local_text_font(dd, LV_DROPDOWN_PART_SELECTED, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
 
     for (size_t i = 1; i < 256; i++) {
         char string[32] = {0};

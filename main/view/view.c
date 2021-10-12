@@ -6,6 +6,7 @@
 #include "gel/collections/queue.h"
 #include "view_types.h"
 #include "model/model.h"
+#include "style.h"
 
 
 QUEUE_DECLARATION(event_queue, view_event_t, 32);
@@ -24,6 +25,7 @@ static lv_indev_t *       touch_dev = NULL;
 lv_indev_t *view_init(void (*flush_cb)(struct _disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p),
                       bool (*read_cb)(struct _lv_indev_drv_t *indev_drv, lv_indev_data_t *data)) {
     lv_init();
+    style_init();
 
     static lv_color_t    buf1[DISP_BUF_SIZE];
     static lv_color_t    buf2[DISP_BUF_SIZE];
@@ -133,7 +135,7 @@ lv_task_t *view_register_periodic_task(size_t period, lv_task_prio_t prio, int i
 
 
 void view_start(model_t *model) {
-    change_page(model, &page_main);
+    change_page(model, &page_splash);
 }
 
 

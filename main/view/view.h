@@ -17,9 +17,11 @@ void        view_close_all(void *data);
 void        view_start(model_t *model);
 void        view_register_default_callback(lv_obj_t *obj, int id);
 void        view_register_default_callback_number(lv_obj_t *obj, int id, int number);
+lv_task_t * view_register_periodic_task(size_t period, lv_task_prio_t prio, int id);
 
 
-extern pman_page_t page_main, page_settings, page_tech_settings, page_devices, page_commissioning;
+extern const pman_page_t page_main, page_settings, page_tech_settings, page_devices, page_commissioning,
+    page_manual_device_config, page_device_info, page_splash;
 
 
 #endif

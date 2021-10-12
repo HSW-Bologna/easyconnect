@@ -7,6 +7,8 @@ typedef enum {
     VIEW_EVENT_CODE_LVGL,
     VIEW_EVENT_CODE_OPEN,
     VIEW_EVENT_CODE_TIMER,
+    VIEW_EVENT_CODE_DEVICE_CONFIGURED,
+    VIEW_EVENT_CODE_DEVICE_UPDATE,
 } view_event_code_t;
 
 typedef struct {
@@ -20,6 +22,10 @@ typedef struct {
             } data;
         };
         int sensor;
+        struct {
+            uint8_t address;
+            int     error;
+        };
     };
 } view_event_t;
 
@@ -36,7 +42,7 @@ typedef struct {
 
     union {
         struct {
-            const void *page;
+            void const *page;
             void *      extra;
         };
     };
@@ -47,13 +53,20 @@ typedef enum {
     VIEW_CONTROLLER_MESSAGE_NOTHING = 0,
     VIEW_CONTROLLER_MESSAGE_CODE_CONFIGURE_DEVICE_ADDRESS,
     VIEW_CONTROLLER_MESSAGE_CODE_AUTOMATIC_COMMISSIONING,
+    VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS,
+    VIEW_CONTROLLER_MESSAGE_CODE_SAVE,
+    VIEW_CONTROLLER_MESSAGE_CODE_SET_CLASS,
 } view_controller_message_code_t;
 
 typedef struct {
     view_controller_message_code_t code;
 
     union {
-        uint8_t address;
+        struct {
+            uint8_t address;
+            uint16_t class;
+        };
+        uint8_t light_value;
     };
 } view_controller_message_t;
 

@@ -77,7 +77,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 }
 
 
-pman_page_t page_tech_settings = {
+const pman_page_t page_tech_settings = {
     .create        = create_page,
     .destroy       = view_destroy_all,
     .open          = open_page,

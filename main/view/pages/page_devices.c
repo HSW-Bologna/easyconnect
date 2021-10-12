@@ -4,12 +4,29 @@
 #include "model/model.h"
 
 
+#define DEVICES_PER_PAGE 15
+
+
 enum {
     BUTTON_BACK_ID,
     ADDRESS_BTN_ID,
+    NEW_DEVICE_BTN_ID,
+    PREV_PAGE_BTN_ID,
+    NEXT_PAGE_BTN_ID,
+    ADDRESS_DD_ID,
+    CONFIRM_ADDRESS_BTN_ID,
+    CANCEL_ADDRESS_BTN_ID,
 };
 
-struct page_data {};
+
+struct page_data {
+    uint8_t   starting_address;
+    lv_obj_t *cont;
+    lv_obj_t *address_dd;
+    lv_obj_t *popup;
+    lv_obj_t *next;
+    lv_obj_t *prev;
+};
 
 
 static lv_obj_t *address_button(lv_obj_t *root, uint8_t address) {
@@ -24,30 +41,153 @@ static lv_obj_t *address_button(lv_obj_t *root, uint8_t address) {
 }
 
 
+static uint8_t last_address_page(model_t *pmodel) {
+    uint8_t result = 0;
+    int     done   = 0;
+
+    do {
+        uint8_t next = result;
+        result       = model_get_next_device_address(pmodel, result);
+
+        for (size_t i = 0; i < DEVICES_PER_PAGE; i++) {
+            uint8_t old = next;
+            next        = model_get_next_device_address(pmodel, old);
+
+            if (old == next) {
+                done = 1;
+                break;
+            }
+        }
+
+        if (!done) {
+            result = next;
+        }
+    } while (!done);
+
+    return result;
+}
+
+
+static void update_device_list(model_t *pmodel, struct page_data *data) {
+    lv_obj_clean(data->cont);
+    size_t devices = model_get_configured_devices(pmodel);
+
+    if (devices <= DEVICES_PER_PAGE) {
+        lv_btn_set_state(data->prev, LV_BTN_STATE_DISABLED);
+        lv_btn_set_state(data->next, LV_BTN_STATE_DISABLED);
+    } else {
+        lv_btn_set_state(data->prev, LV_BTN_STATE_RELEASED);
+        lv_btn_set_state(data->next, LV_BTN_STATE_RELEASED);
+    }
+
+    if (devices == 0) {
+        // There are no devices
+        return;
+    }
+
+    // First time
+    if (data->starting_address == 0) {
+        data->starting_address = model_get_next_device_address(pmodel, data->starting_address);
+    }
+    // The current starting address has been deleted
+    if (!model_is_address_configured(pmodel, data->starting_address)) {
+        data->starting_address = model_get_next_device_address(pmodel, data->starting_address);
+    }
+    // There were no more devices
+    if (!model_is_address_configured(pmodel, data->starting_address)) {
+        data->starting_address = last_address_page(pmodel);
+    }
+
+    size_t  i            = 0;
+    uint8_t address      = data->starting_address;
+    uint8_t prev_address = address;
+    do {
+        address_button(data->cont, address);
+        prev_address = address;
+        address      = model_get_next_device_address(pmodel, prev_address);
+    } while (address != prev_address && ++i < DEVICES_PER_PAGE);
+
+    view_common_limit_address_picker(pmodel, data->address_dd);
+}
+
+
 static void *create_page(model_t *model, void *extra) {
     struct page_data *data = malloc(sizeof(struct page_data));
+    data->starting_address = 0;
     return data;
 }
 
 
-static void open_page(model_t *model, void *arg) {
+static void open_page(model_t *pmodel, void *arg) {
     struct page_data *data = arg;
-    (void)data;
 
-    lv_obj_t *title = view_common_title(BUTTON_BACK_ID, "Rete Easy Connect", NULL);
+    lv_obj_t *title = view_common_title(BUTTON_BACK_ID, "Dispositivi", NULL);
 
-    lv_obj_t *page = lv_page_create(lv_scr_act(), NULL);
-    lv_page_set_scrl_layout(page, LV_LAYOUT_PRETTY_TOP);
-    lv_obj_set_size(page, LV_HOR_RES_MAX, LV_VER_RES_MAX - lv_obj_get_height(title) - 8);
-    lv_obj_align(page, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, 0);
+    lv_obj_t *cont = lv_cont_create(lv_scr_act(), NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_PRETTY_TOP);
+    lv_obj_set_size(cont, LV_HOR_RES_MAX, LV_VER_RES_MAX - lv_obj_get_height(title) - 8 - 48);
+    lv_obj_align(cont, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -52);
+    data->cont = cont;
 
-    for (size_t i = 1; i < 32; i++) {
-        address_button(page, i);
-    }
+    lv_obj_t *btn = lv_btn_create(lv_scr_act(), NULL);
+    lv_obj_t *lbl = lv_label_create(btn, NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_label_set_text(lbl, LV_SYMBOL_PLUS);
+    lv_obj_set_size(btn, 64, 48);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -4);
+    view_register_default_callback(btn, NEW_DEVICE_BTN_ID);
+
+    btn = lv_btn_create(lv_scr_act(), NULL);
+    lbl = lv_label_create(btn, lbl);
+    lv_label_set_text(lbl, LV_SYMBOL_LEFT);
+    lv_obj_set_size(btn, 100, 48);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 4, -4);
+    view_register_default_callback(btn, PREV_PAGE_BTN_ID);
+    data->prev = btn;
+
+    btn = lv_btn_create(lv_scr_act(), btn);
+    lbl = lv_label_create(btn, lbl);
+    lv_label_set_text(lbl, LV_SYMBOL_RIGHT);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -4, -4);
+    view_register_default_callback(btn, NEXT_PAGE_BTN_ID);
+    data->next = btn;
+
+    cont = lv_cont_create(lv_scr_act(), NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_OFF);
+    lv_obj_set_size(cont, 240, 280);
+    lv_obj_align(cont, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    lbl = lv_label_create(cont, NULL);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_obj_set_width(lbl, 220);
+    lv_label_set_text(lbl, "Selezionare un indirizzo disponibile");
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 8);
+
+    lv_obj_t *dd = view_common_address_picker(cont, ADDRESS_DD_ID);
+    lv_obj_align(dd, NULL, LV_ALIGN_IN_TOP_MID, 0, 64);
+    data->address_dd = dd;
+
+    btn = lv_btn_create(cont, btn);
+    lbl = lv_label_create(btn, NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_label_set_text(lbl, LV_SYMBOL_PLUS);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -8);
+    view_register_default_callback(btn, CONFIRM_ADDRESS_BTN_ID);
+
+    btn = lv_btn_create(cont, btn);
+    lbl = lv_label_create(btn, lbl);
+    lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 8, -8);
+    view_register_default_callback(btn, CANCEL_ADDRESS_BTN_ID);
+    data->popup = cont;
+
+    update_device_list(pmodel, data);
+    lv_obj_set_hidden(data->popup, 1);
 }
 
 
-static view_message_t process_page_event(model_t *model, void *arg, view_event_t event) {
+static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_t event) {
     struct page_data *data = arg;
     (void)data;
     view_message_t msg = {0};
@@ -59,12 +199,72 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                     switch (event.data.id) {
                         case BUTTON_BACK_ID:
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SAVE;
+                            break;
+
+                        case NEW_DEVICE_BTN_ID:
+                            lv_obj_set_hidden(data->popup, 0);
+                            break;
+
+                        case CANCEL_ADDRESS_BTN_ID:
+                            lv_obj_set_hidden(data->popup, 1);
                             break;
 
                         case ADDRESS_BTN_ID:
-                            msg.cmsg.code    = VIEW_CONTROLLER_MESSAGE_CODE_CONFIGURE_DEVICE_ADDRESS;
-                            msg.cmsg.address = event.data.number;
+                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
+                            msg.vmsg.page  = &page_device_info;
+                            msg.vmsg.extra = (void *)(uintptr_t)event.data.number;
                             break;
+
+                        case PREV_PAGE_BTN_ID: {
+                            size_t  i            = 0;
+                            uint8_t address      = data->starting_address;
+                            uint8_t next_address = address;
+                            do {
+                                next_address = address;
+                                address      = model_get_prev_device_address(pmodel, next_address);
+                            } while (address != next_address && ++i < DEVICES_PER_PAGE);
+
+                            if (address != next_address) {
+                                data->starting_address = address;
+                            } else {
+                                data->starting_address = last_address_page(pmodel);
+                            }
+
+                            lv_obj_set_hidden(data->popup, 1);
+                            update_device_list(pmodel, data);
+                            break;
+                        }
+
+
+                        case NEXT_PAGE_BTN_ID: {
+                            size_t  i            = 0;
+                            uint8_t address      = data->starting_address;
+                            uint8_t prev_address = address;
+                            do {
+                                prev_address = address;
+                                address      = model_get_next_device_address(pmodel, prev_address);
+                            } while (address != prev_address && ++i < DEVICES_PER_PAGE);
+
+                            if (address != prev_address) {
+                                data->starting_address = address;
+                            } else {
+                                data->starting_address = model_get_next_device_address(pmodel, 0);
+                            }
+                            lv_obj_set_hidden(data->popup, 1);
+                            update_device_list(pmodel, data);
+                            break;
+                        }
+
+                        case CONFIRM_ADDRESS_BTN_ID: {
+                            char string[32] = {0};
+                            lv_dropdown_get_selected_str(data->address_dd, string, sizeof(string));
+                            uint8_t address = atoi(string);
+                            model_new_device(pmodel, address);
+                            lv_obj_set_hidden(data->popup, 1);
+                            update_device_list(pmodel, data);
+                            break;
+                        }
                     }
                     break;
                 }
@@ -82,7 +282,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 }
 
 
-pman_page_t page_devices = {
+const pman_page_t page_devices = {
     .create        = create_page,
     .destroy       = view_destroy_all,
     .open          = open_page,
