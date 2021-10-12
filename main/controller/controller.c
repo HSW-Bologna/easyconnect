@@ -6,11 +6,10 @@
 #include "utils/utils.h"
 #include "gel/timer/timecheck.h"
 #include "configuration.h"
+#include "state.h"
 #include "peripherals/storage.h"
 #include "esp_log.h"
 
-
-static void update_output_for_all_devices_of_class(model_t *pmodel, device_class_t class, int value);
 
 
 static const char *TAG = "Controller";
@@ -29,9 +28,47 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS: {
-            update_output_for_all_devices_of_class(pmodel, DEVICE_CLASS_LIGHT_1, (msg->light_value & 0x01) > 0);
-            update_output_for_all_devices_of_class(pmodel, DEVICE_CLASS_LIGHT_2, (msg->light_value & 0x02) > 0);
-            update_output_for_all_devices_of_class(pmodel, DEVICE_CLASS_LIGHT_3, (msg->light_value & 0x04) > 0);
+            controller_update_class_output(pmodel, DEVICE_CLASS_LIGHT_1, (msg->light_value & 0x01) > 0);
+            controller_update_class_output(pmodel, DEVICE_CLASS_LIGHT_2, (msg->light_value & 0x02) > 0);
+            controller_update_class_output(pmodel, DEVICE_CLASS_LIGHT_3, (msg->light_value & 0x04) > 0);
+            break;
+        }
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN:
+            switch (model_get_fan_state(pmodel)) {
+                case MODEL_FAN_STATE_OFF:
+                    controller_state_event(pmodel, STATE_EVENT_FAN_START);
+                    break;
+
+                default:
+                    controller_state_event(pmodel, STATE_EVENT_FAN_STOP);
+            }
+            break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER: {
+            size_t esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
+            size_t ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
+
+            if (ulf_count > 0) {
+                if (model_get_fan_state(pmodel) == MODEL_FAN_STATE_FAN_RUNNING) {
+                    model_uvc_filter_toggle(pmodel);
+                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER,
+                                                   model_get_uvc_filter_state(pmodel));
+                    controller_state_event(pmodel, STATE_EVENT_FAN_START);
+                    view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
+                } else {
+                    controller_state_event(pmodel, STATE_EVENT_FAN_UVC_START);
+                }
+            }
+
+            if (esf_count > 0) {
+                model_electrostatic_filter_toggle(pmodel);
+                controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER,
+                                               model_get_electrostatic_filter_state(pmodel));
+                controller_state_event(pmodel, STATE_EVENT_FAN_START);
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
+            }
+
             break;
         }
 
@@ -97,10 +134,12 @@ void controller_manage(model_t *pmodel) {
                 break;
         }
     }
+
+    controller_state_manage(pmodel);
 }
 
 
-static void update_output_for_all_devices_of_class(model_t *pmodel, device_class_t class, int value) {
+void controller_update_class_output(model_t *pmodel, device_class_t class, int value) {
     uint8_t starting_address = 0;
     uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
     while (address != starting_address) {

@@ -225,3 +225,45 @@ int model_all_devices_queried(model_t *pmodel) {
 
     return 1;
 }
+
+
+model_fan_state_t model_get_fan_state(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return pmodel->state;
+}
+
+
+void model_set_filter_state(model_t *pmodel, model_fan_state_t state) {
+    assert(pmodel != NULL);
+    pmodel->state = state;
+}
+
+
+int model_get_electrostatic_filter_state(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return pmodel->electrostatic_filter_on;
+}
+
+
+void model_electrostatic_filter_toggle(model_t *pmodel) {
+    assert(pmodel != NULL);
+    pmodel->electrostatic_filter_on = !pmodel->electrostatic_filter_on;
+}
+
+
+int model_get_uvc_filter_state(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return pmodel->uvc_filter_on;
+}
+
+
+void model_uvc_filter_toggle(model_t *pmodel) {
+    assert(pmodel != NULL);
+    pmodel->uvc_filter_on = !pmodel->uvc_filter_on;
+}
+
+
+void model_uvc_filter_on(model_t *pmodel) {
+    assert(pmodel != NULL);
+    pmodel->uvc_filter_on = 1;
+}

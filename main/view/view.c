@@ -103,7 +103,7 @@ void view_process_message(view_page_command_t vmsg, model_t *model) {
 }
 
 void view_event(view_event_t event) {
-    event_queue_enqueue(&q, &event);
+    assert(event_queue_enqueue(&q, &event) == ENQUEUE_RESULT_SUCCESS);
 }
 
 void view_destroy_all(void *data, void *extra) {

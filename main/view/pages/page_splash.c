@@ -31,6 +31,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
     view_message_t msg = {0};
 
     switch (event.code) {
+        case VIEW_EVENT_CODE_OPEN:
         case VIEW_EVENT_CODE_DEVICE_UPDATE:
             if (model_all_devices_queried(model)) {
                 msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;

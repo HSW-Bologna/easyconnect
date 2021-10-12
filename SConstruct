@@ -140,7 +140,7 @@ def main():
     env.Tool('compilation_db')
 
     gel_env = env
-    gel_selected = ['pagemanager', 'collections', 'data_structures']
+    gel_selected = ['pagemanager', 'collections', 'data_structures', "timer"]
     (gel_objects, include) = SConscript(
         f'{COMPONENTS}/gel/SConscript', exports=['gel_env', 'gel_selected'])
     env['CPPPATH'] += [include]
