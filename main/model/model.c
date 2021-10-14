@@ -4,20 +4,13 @@
 #include "model.h"
 
 
-#define ADDR2INDEX(addr)     (addr - 1)
-#define INDEX2ADDR(addr)     (addr + 1)
-#define ASSERT_ADDRESS(addr) assert(addr != 0 && ADDR2INDEX(addr) < MODEL_MAX_DEVICES);
-
 
 void model_init(model_t *pmodel) {
     assert(pmodel != NULL);
 
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature = 32;
-
-    for (size_t i = 0; i < MODEL_MAX_DEVICES; i++) {
-        pmodel->devices[i].address = INDEX2ADDR(i);
-    }
+    device_list_init(pmodel->devices);
 }
 
 
@@ -29,146 +22,79 @@ int model_get_temperature(model_t *pmodel) {
 
 int model_is_address_configured(model_t *pmodel, uint8_t address) {
     assert(pmodel != NULL);
-    ASSERT_ADDRESS(address);
-
-    return pmodel->devices[ADDR2INDEX(address)].status != DEVICE_STATUS_NOT_CONFIGURED;
+    return device_list_is_address_configured(pmodel->devices, address);
 }
 
 
 uint8_t model_get_available_address(model_t *pmodel, uint8_t previous) {
     assert(pmodel != NULL);
-
-    for (size_t i = ADDR2INDEX(previous + 1); i < MODEL_MAX_DEVICES; i++) {
-        if (pmodel->devices[i].status == DEVICE_STATUS_NOT_CONFIGURED) {
-            return (uint8_t)INDEX2ADDR(i);
-        }
-    }
-
-    return previous;
+    return device_list_get_available_address(pmodel->devices, previous);
 }
 
 
 uint8_t model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous, device_class_t class) {
     assert(pmodel != NULL);
-
-    for (size_t i = ADDR2INDEX(previous + 1); i < MODEL_MAX_DEVICES; i++) {
-        if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED && pmodel->devices[i].class == class) {
-            return (uint8_t)INDEX2ADDR(i);
-        }
-    }
-
-    return previous;
+    return device_list_get_next_device_address_by_class(pmodel->devices, previous, class);
 }
 
 
 uint8_t model_get_next_device_address(model_t *pmodel, uint8_t previous) {
     assert(pmodel != NULL);
-
-    for (size_t i = ADDR2INDEX(previous + 1); i < MODEL_MAX_DEVICES; i++) {
-        if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
-            return (uint8_t)INDEX2ADDR(i);
-        }
-    }
-
-    return previous;
+    return device_list_get_next_device_address(pmodel->devices, previous);
 }
 
 
 uint8_t model_get_prev_device_address(model_t *pmodel, uint8_t next) {
     assert(pmodel != NULL);
-
-    if (ADDR2INDEX((int)next - 1) >= 0) {
-        for (int i = ADDR2INDEX(next - 1); i >= 0; i--) {
-            if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
-                return (uint8_t)INDEX2ADDR(i);
-            }
-        }
-    }
-
-    return next;
+    return device_list_get_prev_device_address(pmodel->devices, next);
 }
+
 
 int model_new_device(model_t *pmodel, uint8_t address) {
     assert(pmodel != NULL);
-    ASSERT_ADDRESS(address);
-    size_t index = ADDR2INDEX(address);
-
-    if (pmodel->devices[index].status != DEVICE_STATUS_NOT_CONFIGURED) {
-        return -1;
-    }
-
-    pmodel->devices[index].status = DEVICE_STATUS_CONFIGURED;
-    return 0;
+    return device_list_new_device(pmodel->devices, address);
 }
 
 
 address_map_t model_get_address_map(model_t *pmodel) {
     assert(pmodel != NULL);
-    address_map_t map = {0};
-
-    for (size_t i = 0; i < MODEL_MAX_DEVICES; i++) {
-        if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
-            address_map_set_bit(&map, INDEX2ADDR(i));
-        }
-    }
-
-    return map;
+    return device_list_get_address_map(pmodel->devices);
 }
 
 
 size_t model_get_configured_devices(model_t *pmodel) {
     assert(pmodel != NULL);
-    size_t count = 0;
-
-    for (size_t i = 0; i < MODEL_MAX_DEVICES; i++) {
-        if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
-            count++;
-        }
-    }
-
-    return count;
+    return device_list_get_configured_devices(pmodel->devices);
 }
 
 
 void model_delete_device(model_t *pmodel, uint8_t address) {
     assert(pmodel != NULL);
-    ASSERT_ADDRESS(address);
-    size_t index                  = ADDR2INDEX(address);
-    pmodel->devices[index].status = DEVICE_STATUS_NOT_CONFIGURED;
+    device_list_delete_device(pmodel->devices, address);
 }
 
 
 void model_get_device(model_t *pmodel, device_t *device, uint8_t address) {
     assert(pmodel != NULL);
-    ASSERT_ADDRESS(address);
-    size_t index = ADDR2INDEX(address);
-    *device      = pmodel->devices[index];
+    device_list_get_device(pmodel->devices, device, address);
 }
 
 
-void model_set_device_error(model_t *pmodel, uint8_t address) {
+void model_set_device_error(model_t *pmodel, uint8_t address, int error) {
     assert(pmodel != NULL);
-    ASSERT_ADDRESS(address);
-    size_t index                  = ADDR2INDEX(address);
-    pmodel->devices[index].status = DEVICE_STATUS_COMMUNICATION_ERROR;
+    device_list_set_device_error(pmodel->devices, address, error);
 }
 
 
 void model_set_device_sn(model_t *pmodel, uint8_t address, uint16_t serial_number) {
     assert(pmodel != NULL);
-    ASSERT_ADDRESS(address);
-    size_t index                         = ADDR2INDEX(address);
-    pmodel->devices[index].status        = DEVICE_STATUS_OK;
-    pmodel->devices[index].serial_number = serial_number;
+    device_list_set_device_sn(pmodel->devices, address, serial_number);
 }
 
 
 void model_set_device_class(model_t *pmodel, uint8_t address, uint8_t class) {
     assert(pmodel != NULL);
-    ASSERT_ADDRESS(address);
-    size_t index                  = ADDR2INDEX(address);
-    pmodel->devices[index].status = DEVICE_STATUS_OK;
-    pmodel->devices[index].class  = class;
+    device_list_set_device_class(pmodel->devices, address, class);
 }
 
 
@@ -176,7 +102,7 @@ int model_get_light_class(model_t *pmodel, device_class_t *class) {
     assert(pmodel != NULL);
     int found = 0;
 
-    for (size_t i = 0; i < MODEL_MAX_DEVICES; i++) {
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
         if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
             if (pmodel->devices[i].class == DEVICE_CLASS_LIGHT_1 || pmodel->devices[i].class == DEVICE_CLASS_LIGHT_2 ||
                 pmodel->devices[i].class == DEVICE_CLASS_LIGHT_3) {
@@ -202,7 +128,7 @@ size_t model_get_class_count(model_t *pmodel, device_class_t class) {
     assert(pmodel != NULL);
     size_t count = 0;
 
-    for (size_t i = 0; i < MODEL_MAX_DEVICES; i++) {
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
         if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
             if (pmodel->devices[i].class == class) {
                 count++;
@@ -217,7 +143,7 @@ size_t model_get_class_count(model_t *pmodel, device_class_t class) {
 
 int model_all_devices_queried(model_t *pmodel) {
     assert(pmodel != NULL);
-    for (size_t i = 0; i < MODEL_MAX_DEVICES; i++) {
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
         if (pmodel->devices[i].status == DEVICE_STATUS_CONFIGURED) {
             return 0;
         }

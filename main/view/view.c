@@ -139,15 +139,33 @@ void view_start(model_t *model) {
 }
 
 
-void view_register_default_callback(lv_obj_t *obj, int id) {
-    lv_obj_user_data_t data = {.id = id, .number = 0};
+void view_blood_pact(lv_obj_t *obj1, lv_obj_t *obj2) {
+    lv_obj_user_data_t data1 = lv_obj_get_user_data(obj1);
+    lv_obj_user_data_t data2 = lv_obj_get_user_data(obj2);
+    data1.sibling            = obj2;
+    data2.sibling            = obj1;
+    lv_obj_set_user_data(obj1, data1);
+    lv_obj_set_user_data(obj2, data2);
+}
+
+
+void view_new_signal_handler(lv_obj_t *obj, lv_signal_cb_t cb) {
+    lv_obj_user_data_t data = lv_obj_get_user_data(obj);
+    data.ancestor_signal    = lv_obj_get_signal_cb(obj);
     lv_obj_set_user_data(obj, data);
-    lv_obj_set_event_cb(obj, page_event_cb);
+    lv_obj_set_signal_cb(obj, cb);
+}
+
+
+void view_register_default_callback(lv_obj_t *obj, int id) {
+    view_register_default_callback_number(obj, id, 0);
 }
 
 
 void view_register_default_callback_number(lv_obj_t *obj, int id, int number) {
-    lv_obj_user_data_t data = {.id = id, .number = number};
+    lv_obj_user_data_t data = lv_obj_get_user_data(obj);
+    data.id                 = id;
+    data.number             = number;
     lv_obj_set_user_data(obj, data);
     lv_obj_set_event_cb(obj, page_event_cb);
 }

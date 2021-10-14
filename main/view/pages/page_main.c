@@ -9,6 +9,7 @@
 #include "src/lv_widgets/lv_cont.h"
 #include "src/lv_widgets/lv_slider.h"
 #include "view/view.h"
+#include "view/common.h"
 #include "model/model.h"
 #include "view/style.h"
 #include <assert.h>
@@ -43,8 +44,8 @@ LV_IMG_DECLARE(img_tre_luci_spente);
 
 
 #define CENTER_X_DELTA 20
-#define DRAWER_HEIGHT  340
-#define PULLER_HEIGHT  40
+#define DRAWER_HEIGHT  280
+#define PULLER_HEIGHT  64
 #define DRAWER_RADIUS  32
 
 
@@ -99,32 +100,62 @@ enum {
     BTN_FILTER_ID,
     SLIDER_ID,
     SETTINGS_BTN_ID,
+    ERRORS_BTN_ID,
     TECH_SETTINGS_BTN_ID,
     TASK_BLINK_ID,
 };
 
 
-static lv_signal_cb_t ancestor_signal;
-
-
-static lv_res_t limit_cb(lv_obj_t *obj, lv_signal_t signal, void *arg) {
-    const int start  = (-DRAWER_RADIUS);
-    const int end    = -(DRAWER_HEIGHT - PULLER_HEIGHT);
+static lv_res_t drawer_drag_cb(lv_obj_t *obj, lv_signal_t signal, void *arg) {
+    const int start  = -DRAWER_HEIGHT;
+    const int end    = -DRAWER_RADIUS;
     const int midway = (end - start) / 2;
 
+    lv_obj_user_data_t data = lv_obj_get_user_data(obj);
+
     if (signal == LV_SIGNAL_COORD_CHG) {
-        if (lv_obj_get_y(obj) > start) {
+        if (lv_obj_get_y(obj) < start) {
             lv_obj_set_y(obj, start);
-        } else if (lv_obj_get_y(obj) < end) {
+        } else if (lv_obj_get_y(obj) > end) {
             lv_obj_set_y(obj, end);
         }
+        lv_obj_align(data.sibling, obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
     } else if (signal == LV_SIGNAL_DRAG_END) {
-        if (lv_obj_get_y(obj) >= midway) {
+        if (lv_obj_get_y(obj) < midway) {
             lv_obj_set_y(obj, start);
         } else {
             lv_obj_set_y(obj, end);
         }
     }
+
+    lv_signal_cb_t ancestor_signal = data.ancestor_signal;
+    return ancestor_signal(obj, signal, arg);
+}
+
+
+static lv_res_t tab_drag_cb(lv_obj_t *obj, lv_signal_t signal, void *arg) {
+    const int start  = 0;
+    const int end    = DRAWER_HEIGHT - DRAWER_RADIUS;
+    const int midway = (end - start) / 2;
+
+    lv_obj_user_data_t data = lv_obj_get_user_data(obj);
+
+    if (signal == LV_SIGNAL_COORD_CHG) {
+        if (lv_obj_get_y(obj) < start) {
+            lv_obj_set_y(obj, start);
+        } else if (lv_obj_get_y(obj) > end) {
+            lv_obj_set_y(obj, end);
+        }
+        lv_obj_align(data.sibling, obj, LV_ALIGN_OUT_TOP_MID, 0, 0);
+    } else if (signal == LV_SIGNAL_DRAG_END) {
+        if (lv_obj_get_y(obj) < midway) {
+            lv_obj_set_y(obj, start);
+        } else {
+            lv_obj_set_y(obj, end);
+        }
+    }
+
+    lv_signal_cb_t ancestor_signal = data.ancestor_signal;
     return ancestor_signal(obj, signal, arg);
 }
 
@@ -318,42 +349,7 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, CENTER_X_DELTA, 0);
     data->lbl_temperature = lbl;
 
-    lv_obj_t *cont_drag = lv_cont_create(lv_scr_act(), NULL);
-    lv_obj_set_size(cont_drag, 250, DRAWER_HEIGHT);
-    lv_obj_align(cont_drag, NULL, LV_ALIGN_OUT_TOP_MID, 0, PULLER_HEIGHT);
-    lv_obj_add_style(cont_drag, LV_CONT_PART_MAIN, &style_transparent_cont);
-
-    lv_obj_t *cont = lv_cont_create(cont_drag, NULL);
-    lv_obj_set_size(cont, 250, DRAWER_HEIGHT - PULLER_HEIGHT);
-    lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
-    lv_cont_set_layout(cont, LV_LAYOUT_COLUMN_MID);
-    lv_obj_set_style_local_pad_top(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 64);
-    lv_obj_set_drag(cont_drag, true);
-    lv_obj_set_drag_parent(cont, true);
-    lv_obj_set_drag_dir(cont_drag, LV_DRAG_DIR_VER);
-    ancestor_signal = lv_obj_get_signal_cb(cont_drag);
-    lv_obj_set_signal_cb(cont_drag, limit_cb);
-    lv_obj_set_style_local_radius(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, DRAWER_RADIUS);
-
-    lv_obj_t *warnings = lv_btn_create(cont, NULL);
-    lv_obj_set_size(warnings, 200, 60);
-    lbl = lv_label_create(warnings, NULL);
-    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
-    lv_label_set_text(lbl, "Record errori");
-
-    lv_obj_t *settings = lv_btn_create(cont, NULL);
-    lv_obj_set_size(settings, 200, 60);
-    lbl = lv_label_create(settings, lbl);
-    lv_label_set_text(lbl, "Menu' utente");
-    view_register_default_callback(settings, SETTINGS_BTN_ID);
-
-    lv_obj_t *tech = lv_btn_create(cont, NULL);
-    lv_obj_set_size(tech, 200, 60);
-    lbl = lv_label_create(tech, lbl);
-    lv_label_set_text(lbl, "Menu' assistenza");
-    view_register_default_callback(tech, TECH_SETTINGS_BTN_ID);
-
-    cont = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_t *cont = lv_cont_create(lv_scr_act(), NULL);
     lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_transparent_cont);
     lv_cont_set_layout(cont, LV_LAYOUT_CENTER);
     lv_obj_set_size(cont, 100, 320);
@@ -398,6 +394,36 @@ static void open_page(model_t *model, void *arg) {
     lv_slider_set_range(sl, 0, 4);
     data->slider = sl;
     view_register_default_callback(data->slider, SLIDER_ID);
+
+    lv_obj_t *drawer = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_set_size(drawer, 400, DRAWER_HEIGHT);
+    lv_obj_align(drawer, NULL, LV_ALIGN_OUT_TOP_MID, 0, 0);
+    lv_cont_set_layout(drawer, LV_LAYOUT_COLUMN_MID);
+    lv_obj_set_style_local_pad_top(drawer, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 64);
+    lv_obj_set_drag(drawer, true);
+    lv_obj_set_drag_dir(drawer, LV_DRAG_DIR_VER);
+    lv_obj_set_style_local_radius(drawer, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, DRAWER_RADIUS);
+
+    lv_obj_t *cont_drag = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_set_size(cont_drag, 250, PULLER_HEIGHT);
+    lv_obj_set_auto_realign(cont_drag, 1);
+    lv_obj_align(cont_drag, drawer, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+    lv_obj_add_style(cont_drag, LV_CONT_PART_MAIN, &style_transparent_cont);
+    lv_obj_set_drag(cont_drag, true);
+    lv_obj_set_drag_dir(cont_drag, LV_DRAG_DIR_VER);
+
+    view_blood_pact(drawer, cont_drag);
+    view_new_signal_handler(cont_drag, tab_drag_cb);
+    view_new_signal_handler(drawer, drawer_drag_cb);
+
+    lv_obj_t *warnings = view_common_menu_button(drawer, "Record errori", 300, ERRORS_BTN_ID);
+    lv_obj_set_drag_parent(warnings, true);
+
+    lv_obj_t *settings = view_common_menu_button(drawer, "Menu' utente", 300, SETTINGS_BTN_ID);
+    lv_obj_set_drag_parent(settings, true);
+
+    lv_obj_t *tech = view_common_menu_button(drawer, "Menu' assistenza", 300, TECH_SETTINGS_BTN_ID);
+    lv_obj_set_drag_parent(tech, true);
 
     update_info(model, data);
     update_all_buttons(model, data);

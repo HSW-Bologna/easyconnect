@@ -30,7 +30,9 @@
 #define MODBUS_COMMUNICATION_ATTEMPTS 4
 
 #define MODBUS_CONFIG_ADDRESS_FUNCTION 64
+#define MODBUS_NETWORK_INITIALIZATION  65
 #define MODBUS_RANDOM_SERIAL_NUMBER    66
+#define MODBUS_SET_CLASS_OUTPUT        70
 
 #define MODBUS_ADDRESS_HOLDING_REGISTER_ADDRESS 0
 #define MODBUS_CLASS_HOLDING_REGISTER_ADDRESS   1
@@ -45,6 +47,7 @@ typedef enum {
     TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
     TASK_MESSAGE_CODE_SET_DEVICE_CLASS,
     TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING,
+    TASK_MESSAGE_CODE_SCAN,
 } task_message_code_t;
 
 
@@ -74,6 +77,7 @@ static int  write_holding_register(ModbusMaster *master, uint8_t address, uint16
 static int  write_holding_registers(ModbusMaster *master, uint8_t address, uint16_t starting_address, uint16_t *data,
                                     size_t num);
 static int  write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int value);
+static int  get_device_info(ModbusMaster *master, uint8_t address);
 
 
 static const char *       TAG       = "Modbus";
@@ -182,6 +186,12 @@ void modbus_automatic_commissioning(void) {
 }
 
 
+void modbus_scan(void) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_SCAN};
+    xQueueSend(messageq, &message, portMAX_DELAY);
+}
+
+
 void modbus_set_device_class(uint8_t address, uint8_t class) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_SET_DEVICE_CLASS, .address = address, .class = class};
     xQueueSend(messageq, &message, portMAX_DELAY);
@@ -213,6 +223,8 @@ static ModbusError dataCallback(const ModbusMaster *master, const ModbusDataCall
     if (response != NULL) {
         switch (response->code) {
             case MODBUS_RESPONSE_CODE_INFO: {
+                response->address = args->address;
+
                 switch (args->index) {
                     case MODBUS_SN_HOLDING_REGISTER_ADDRESS:
                         response->serial_number = args->value;
@@ -289,27 +301,7 @@ static void modbus_task(void *args) {
                     response.code = MODBUS_RESPONSE_CODE_INFO;
                     modbusMasterSetUserPointer(&master, &response);
                     ESP_LOGI(TAG, "Reading info from %i", message.address);
-                    int res = 0;
-
-                    do {
-                        res = 0;
-                        err =
-                            modbusBuildRequest03RTU(&master, message.address, MODBUS_CLASS_HOLDING_REGISTER_ADDRESS, 2);
-                        assert(modbusIsOk(err));
-                        uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(&master),
-                                         modbusMasterGetRequestLength(&master));
-
-                        int len = uart_read_bytes(MB_PORTNUM, buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
-                        err     = modbusParseResponseRTU(&master, modbusMasterGetRequest(&master),
-                                                     modbusMasterGetRequestLength(&master), buffer, len);
-
-                        if (!modbusIsOk(err)) {
-                            res = 1;
-                            vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
-                        }
-                    } while (res && counter++ < MODBUS_COMMUNICATION_ATTEMPTS);
-
-                    if (res) {
+                    if (get_device_info(&master, message.address)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         xQueueSend(responseq, &response, portMAX_DELAY);
@@ -339,6 +331,23 @@ static void modbus_task(void *args) {
                     if (write_coil(&master, message.address, 0, message.value)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
+                    break;
+                }
+
+                case TASK_MESSAGE_CODE_SCAN: {
+                    response.code = MODBUS_RESPONSE_CODE_INFO;
+                    modbusMasterSetUserPointer(&master, &response);
+
+                    for (size_t i = 1; i < 256; i++) {
+                        if (get_device_info(&master, i) == 0) {
+                            xQueueSend(responseq, &response, portMAX_DELAY);
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
+                    }
+
+                    ESP_LOGI(TAG, "Scan done!");
+                    response.code = MODBUS_RESPONSE_CODE_SCAN_DONE;
+                    xQueueSend(responseq, &response, portMAX_DELAY);
                     break;
                 }
 
@@ -461,6 +470,7 @@ static int configure_device_manually(ModbusMaster *master, uint8_t address) {
     assert(modbusIsOk(err));
     uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 
+    // TODO: retry
     int len = uart_read_bytes(MB_PORTNUM, buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
     err = modbusParseResponseRTU(master, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master), buffer,
                                  len);
@@ -525,6 +535,31 @@ static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int
             ESP_LOGW(TAG, "Write coil for %i error: %i %i", address, err.source, err.error);
             res = 1;
             vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
+        }
+    } while (res && counter++ < MODBUS_COMMUNICATION_ATTEMPTS);
+
+    return res;
+}
+
+
+static int get_device_info(ModbusMaster *master, uint8_t address) {
+    ModbusErrorInfo err;
+    uint8_t         buffer[MODBUS_MAX_PACKET_SIZE] = {0};
+    int             res                            = 0;
+    size_t          counter                        = 0;
+
+    do {
+        res = 0;
+        err = modbusBuildRequest03RTU(master, address, MODBUS_CLASS_HOLDING_REGISTER_ADDRESS, 2);
+        assert(modbusIsOk(err));
+        uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
+
+        int len = uart_read_bytes(MB_PORTNUM, buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
+        err     = modbusParseResponseRTU(master, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master),
+                                     buffer, len);
+
+        if (!modbusIsOk(err)) {
+            res = 1;
         }
     } while (res && counter++ < MODBUS_COMMUNICATION_ATTEMPTS);
 

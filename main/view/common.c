@@ -41,7 +41,7 @@ lv_obj_t *view_common_title(int id, char *string, lv_obj_t **label) {
 
 
 lv_obj_t *view_common_limit_address_picker(model_t *pmodel, lv_obj_t *dd) {
-    size_t    count = 0;
+    size_t  count        = 0;
     uint8_t prev_address = 0;
     uint8_t address      = model_get_available_address(pmodel, prev_address);
 
@@ -77,13 +77,21 @@ lv_obj_t *view_common_address_picker(lv_obj_t *root, int id) {
 }
 
 
-lv_obj_t *view_common_menu_button(lv_obj_t *root, char *text, int id) {
-    lv_obj_t *btn = lv_btn_create(lv_scr_act(), NULL);
-    lv_obj_set_size(btn, 220, 60);
+lv_obj_t *view_common_menu_button(lv_obj_t *root, char *text, size_t width, int id) {
+    lv_obj_t *btn = lv_btn_create(root, NULL);
+    lv_obj_set_size(btn, width, 60);
     lv_obj_t *lbl = lv_label_create(btn, NULL);
     lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_SROLL);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_obj_set_width(lbl, width - 8);
     lv_label_set_text(lbl, text);
     view_register_default_callback(btn, id);
 
     return btn;
+}
+
+
+lv_obj_t *view_common_default_menu_button(lv_obj_t *root, char *text, int id) {
+    return view_common_menu_button(root, text, 220, id);
 }

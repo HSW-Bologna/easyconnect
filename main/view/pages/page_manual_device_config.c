@@ -110,7 +110,7 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_align(spinner, NULL, LV_ALIGN_CENTER, 0, 0);
     data->spinner = spinner;
 
-    lv_obj_t *btn = view_common_menu_button(lv_scr_act(), "Configura", CONFIG_BTN_ID);
+    lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), "Configura", CONFIG_BTN_ID);
     lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, 0);
     data->btn = btn;
 

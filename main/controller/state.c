@@ -96,6 +96,10 @@ static int env_clean_sf_entry(model_t *pmodel) {
 
 static int env_clean_sf_event_manager(model_t *pmodel, state_event_code_t event) {
     switch (event) {
+        case STATE_EVENT_FAN_UVC_START:
+            auto_uvc_on = 1;
+            break;
+
         case STATE_EVENT_ENVIRONMENTAL_CLEANING_DONE:
             if (model_get_class_count(pmodel, DEVICE_CLASS_IMMISSION_FAN) > 0) {
                 return MODEL_FAN_STATE_SF_IF_ENV_CLEANING;
@@ -128,6 +132,10 @@ static int env_clean_if_entry(model_t *pmodel) {
 
 static int env_clean_if_event_manager(model_t *pmodel, state_event_code_t event) {
     switch (event) {
+        case STATE_EVENT_FAN_UVC_START:
+            auto_uvc_on = 1;
+            break;
+
         case STATE_EVENT_ENVIRONMENTAL_CLEANING_DONE:
             return MODEL_FAN_STATE_OFF;
 
@@ -150,6 +158,10 @@ static int env_clean_sf_if_entry(model_t *pmodel) {
 
 static int env_clean_sf_if_event_manager(model_t *pmodel, state_event_code_t event) {
     switch (event) {
+        case STATE_EVENT_FAN_UVC_START:
+            auto_uvc_on = 1;
+            break;
+
         case STATE_EVENT_ENVIRONMENTAL_CLEANING_DONE:
             if (auto_uvc_on) {
                 auto_uvc_on = 0;

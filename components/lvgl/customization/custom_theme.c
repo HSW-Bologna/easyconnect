@@ -304,8 +304,8 @@ static void basic_init(void) {
 
     lv_style_set_pad_left(&styles->btn, LV_STATE_DEFAULT, LV_DPX(40));
     lv_style_set_pad_right(&styles->btn, LV_STATE_DEFAULT, LV_DPX(40));
-    lv_style_set_pad_top(&styles->btn, LV_STATE_DEFAULT, LV_DPX(15));
-    lv_style_set_pad_bottom(&styles->btn, LV_STATE_DEFAULT, LV_DPX(15));
+    lv_style_set_pad_top(&styles->btn, LV_STATE_DEFAULT, 10);
+    lv_style_set_pad_bottom(&styles->btn, LV_STATE_DEFAULT, 10);
     lv_style_set_pad_inner(&styles->btn, LV_STATE_DEFAULT, LV_DPX(20));
     lv_style_set_outline_width(&styles->btn, LV_STATE_DEFAULT, OUTLINE_WIDTH);
     lv_style_set_outline_opa(&styles->btn, LV_STATE_DEFAULT, LV_OPA_0);

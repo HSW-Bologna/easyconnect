@@ -24,8 +24,8 @@ static void open_page(model_t *model, void *arg) {
     (void)data;
 
     view_common_title(BUTTON_BACK_ID, "Configurazione", NULL);
-    lv_obj_t *btn1 = view_common_menu_button(lv_scr_act(), "Manuale", MANUAL_BTN_ID);
-    lv_obj_t *btn2 = view_common_menu_button(lv_scr_act(), "Automatico", AUTOMATIC_BTN_ID);
+    lv_obj_t *btn1 = view_common_default_menu_button(lv_scr_act(), "Manuale", MANUAL_BTN_ID);
+    lv_obj_t *btn2 = view_common_default_menu_button(lv_scr_act(), "Automatico", AUTOMATIC_BTN_ID);
 
     lv_obj_align(btn1, NULL, LV_ALIGN_IN_TOP_MID, 0, 100);
     lv_obj_align(btn2, btn1, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);

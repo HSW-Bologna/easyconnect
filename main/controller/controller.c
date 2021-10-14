@@ -27,6 +27,10 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
         case VIEW_CONTROLLER_MESSAGE_NOTHING:
             break;
 
+        case VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_SCAN:
+            modbus_scan();
+            break;
+
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS: {
             controller_update_class_output(pmodel, DEVICE_CLASS_LIGHT_1, (msg->light_value & 0x01) > 0);
             controller_update_class_output(pmodel, DEVICE_CLASS_LIGHT_2, (msg->light_value & 0x02) > 0);
@@ -50,11 +54,13 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             size_t ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
 
             if (ulf_count > 0) {
-                if (model_get_fan_state(pmodel) == MODEL_FAN_STATE_FAN_RUNNING) {
+                if (model_get_fan_state(pmodel) == MODEL_FAN_STATE_FAN_RUNNING || model_get_uvc_filter_state(pmodel)) {
                     model_uvc_filter_toggle(pmodel);
                     controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER,
                                                    model_get_uvc_filter_state(pmodel));
-                    controller_state_event(pmodel, STATE_EVENT_FAN_START);
+                    if (model_get_uvc_filter_state(pmodel)) {
+                        controller_state_event(pmodel, STATE_EVENT_FAN_START);
+                    }
                     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
                 } else {
                     controller_state_event(pmodel, STATE_EVENT_FAN_UVC_START);
@@ -65,7 +71,9 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                 model_electrostatic_filter_toggle(pmodel);
                 controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER,
                                                model_get_electrostatic_filter_state(pmodel));
-                controller_state_event(pmodel, STATE_EVENT_FAN_START);
+                if (model_get_electrostatic_filter_state(pmodel)) {
+                    controller_state_event(pmodel, STATE_EVENT_FAN_START);
+                }
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
             }
 
@@ -113,8 +121,12 @@ void controller_manage(model_t *pmodel) {
         switch (response.code) {
             case MODBUS_RESPONSE_ERROR:
                 ESP_LOGW(TAG, "Device %i did not respond!", response.address);
-                model_set_device_error(pmodel, response.address);
+                model_set_device_error(pmodel, response.address, 1);
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address});
+                break;
+
+            case MODBUS_RESPONSE_CODE_SCAN_DONE:
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_SEARCH_DONE});
                 break;
 
             case MODBUS_RESPONSE_DEVICE_MANUAL_CONFIGURATION:
