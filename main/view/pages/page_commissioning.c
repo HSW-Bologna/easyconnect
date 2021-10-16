@@ -47,7 +47,8 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case AUTOMATIC_BTN_ID:
-                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_AUTOMATIC_COMMISSIONING;
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_automatic_device_config;
                             break;
 
                         case MANUAL_BTN_ID:

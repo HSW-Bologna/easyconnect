@@ -8,3 +8,4 @@ Template for esp32 projects
  - All'accensione manda un messaggio broadcast di accensione (per riportare a uno stato fermo tutti i dispositivi)
  - Nella comunicazione modbus, nelle risposte poni dei limiti in base alla lunghezza che ti aspetti
  - Rimescola per bene la generazione casuale (mac delle due interfacce + serial number)
+ - scaricare la seriale prima di mandare dei messaggi

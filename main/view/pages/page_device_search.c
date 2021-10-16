@@ -1,4 +1,7 @@
 #include <stdlib.h>
+#include "src/lv_core/lv_disp.h"
+#include "src/lv_core/lv_obj.h"
+#include "src/lv_misc/lv_area.h"
 #include "view/view.h"
 #include "view/common.h"
 #include "model/model.h"
@@ -24,6 +27,7 @@ struct page_data {
     lv_obj_t *prev;
     lv_obj_t *scan;
     lv_obj_t *spinner;
+    lv_obj_t *lbl_scan;
 
     device_t devices[MODBUS_MAX_DEVICES];
 };
@@ -157,9 +161,16 @@ static void open_page(model_t *pmodel, void *arg) {
     view_register_default_callback(btn, NEXT_PAGE_BTN_ID);
     data->next = btn;
 
+    lbl = lv_label_create(lv_scr_act(), NULL);
+    lv_obj_set_size(lbl, 64, 48);
+    lv_obj_set_style_local_text_font(lbl, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_obj_align(lbl, data->scan, LV_ALIGN_OUT_RIGHT_MID, 4, 0);
+    data->lbl_scan = lbl;
+
     update_device_list(data);
     lv_obj_set_hidden(data->spinner, 1);
     lv_obj_set_hidden(data->scan, 0);
+    lv_obj_set_hidden(data->lbl_scan, 1);
 }
 
 
@@ -173,12 +184,17 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                 device_list_new_device(data->devices, event.address);
                 device_list_set_device_error(data->devices, event.address, 0);
                 update_device_list(data);
+            } 
+            if (lv_obj_get_hidden(data->lbl_scan)) {
+                lv_obj_set_hidden(data->lbl_scan, 0);
             }
+            lv_label_set_text_fmt(data->lbl_scan, "%i...", event.address);
             break;
 
         case VIEW_EVENT_CODE_DEVICE_SEARCH_DONE:
             lv_obj_set_hidden(data->spinner, 1);
             lv_obj_set_hidden(data->scan, 0);
+            lv_obj_set_hidden(data->lbl_scan, 1);
             break;
 
         case VIEW_EVENT_CODE_LVGL: {
@@ -193,7 +209,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
                         case BUTTON_BACK_ID:
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
-                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SAVE;
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_STOP_CURRENT_OPERATION;
                             break;
 
                         case ADDRESS_BTN_ID:

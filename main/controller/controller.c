@@ -27,6 +27,11 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
         case VIEW_CONTROLLER_MESSAGE_NOTHING:
             break;
 
+        case VIEW_CONTROLLER_MESSAGE_CODE_STOP_CURRENT_OPERATION: {
+            modbus_stop_current_operation();
+            break;
+        }
+
         case VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_SCAN:
             modbus_scan();
             break;
@@ -84,6 +89,11 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             modbus_automatic_commissioning();
             break;
 
+        case VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO: {
+            modbus_read_device_info(msg->address);
+            break;
+        }
+
         case VIEW_CONTROLLER_MESSAGE_CODE_CONFIGURE_DEVICE_ADDRESS:
             modbus_configure_device_address(msg->address);
             break;
@@ -124,20 +134,29 @@ void controller_manage(model_t *pmodel) {
                 break;
 
             case MODBUS_RESPONSE_ERROR:
-                ESP_LOGW(TAG, "Device %i did not respond!", response.address);
-                model_set_device_error(pmodel, response.address, 1);
-                view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address});
+                    ESP_LOGW(TAG, "Device %i did not respond!", response.address);
+                    model_set_device_error(pmodel, response.address, 1);
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = 1});
                 break;
 
             case MODBUS_RESPONSE_CODE_SCAN_DONE:
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_SEARCH_DONE});
                 break;
 
+            case MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION_LISTENING_DONE:
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_LISTENING_DONE});
+
+            break;
             case MODBUS_RESPONSE_DEVICE_MANUAL_CONFIGURATION:
                 view_event((view_event_t){
                     .code = VIEW_EVENT_CODE_DEVICE_CONFIGURED, .error = response.error, .address = response.address});
                 break;
 
+            case MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION:
+                view_event((view_event_t){
+                    .code = VIEW_EVENT_CODE_DEVICE_CONFIGURED, .error = response.error, .address = response.address, .data.number = response.devices_number});
+                break;
+            
             case MODBUS_RESPONSE_CODE_CLASS:
                 model_set_device_error(pmodel, response.address, 0);
                 model_set_device_class(pmodel, response.address, response.class);
@@ -145,10 +164,12 @@ void controller_manage(model_t *pmodel) {
                 break;
 
             case MODBUS_RESPONSE_CODE_INFO:
-                model_set_device_error(pmodel, response.address, 0);
-                model_set_device_sn(pmodel, response.address, response.serial_number);
-                model_set_device_class(pmodel, response.address, response.class);
-                view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address});
+                if (!response.scanning) {
+                    model_set_device_error(pmodel, response.address, 0);
+                    model_set_device_sn(pmodel, response.address, response.serial_number);
+                    model_set_device_class(pmodel, response.address, response.class);
+                }
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = response.error});
                 break;
         }
     }
@@ -159,7 +180,7 @@ void controller_manage(model_t *pmodel) {
 
 void controller_update_class_output(model_t *pmodel, device_class_t class, int value) {
     modbus_set_class_output(class, value);
-    
+
     uint8_t starting_address = 0;
     uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
     while (address != starting_address) {

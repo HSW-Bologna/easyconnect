@@ -23,7 +23,7 @@ void        view_new_signal_handler(lv_obj_t *obj, lv_signal_cb_t cb);
 
 
 extern const pman_page_t page_main, page_settings, page_tech_settings, page_devices, page_commissioning,
-    page_manual_device_config, page_device_info, page_splash, page_device_search;
+    page_manual_device_config, page_device_info, page_splash, page_device_search, page_automatic_device_config;
 
 
 #endif

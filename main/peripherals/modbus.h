@@ -6,6 +6,8 @@
 
 typedef enum {
     MODBUS_RESPONSE_DEVICE_MANUAL_CONFIGURATION,
+    MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION,
+    MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION_LISTENING_DONE,
     MODBUS_RESPONSE_CODE_INFO,
     MODBUS_RESPONSE_CODE_CLASS,
     MODBUS_RESPONSE_CODE_SCAN_DONE,
@@ -17,6 +19,8 @@ typedef struct {
     modbus_response_code_t code;
     uint8_t                address;
     int                    error;
+    int                    scanning;
+    int                    devices_number;
     union {
         struct {
             uint16_t class;
@@ -36,5 +40,6 @@ int  modbus_automatic_commissioning_done(unsigned long millis);
 int  modbus_get_response(modbus_response_t *response);
 void modbus_set_class_output(uint16_t class, int value);
 void modbus_scan(void);
+void modbus_stop_current_operation(void);
 
 #endif

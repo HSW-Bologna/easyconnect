@@ -1,4 +1,9 @@
 #include <stdlib.h>
+#include "src/lv_core/lv_disp.h"
+#include "src/lv_core/lv_obj.h"
+#include "src/lv_misc/lv_area.h"
+#include "src/lv_widgets/lv_btn.h"
+#include "src/lv_widgets/lv_label.h"
 #include "view/view.h"
 #include "view/common.h"
 #include "model/model.h"
@@ -9,6 +14,7 @@ enum {
     BACK_BTN_ID,
     DELETE_BTN_ID,
     CLASS_BTN_ID,
+    REFRESH_BTN_ID,
 };
 
 
@@ -128,6 +134,13 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -4);
     view_register_default_callback(btn, DELETE_BTN_ID);
 
+    btn = lv_btn_create(lv_scr_act(), NULL);
+    lbl = lv_label_create(btn,NULL);
+    lv_label_set_text(lbl, LV_SYMBOL_REFRESH);
+    lv_obj_set_size(btn, 48, 48);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, 0, 0);
+    view_register_default_callback(btn, REFRESH_BTN_ID);
+
     update_info(pmodel, data);
 }
 
@@ -163,6 +176,11 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             msg.cmsg.class       = class;
                             msg.cmsg.address     = data->device.address;
                             break;
+                        }
+
+                        case REFRESH_BTN_ID: {
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO;
+                            msg.cmsg.address = data->device.address;
                         }
 
                         default:

@@ -1,6 +1,7 @@
 #include <string.h>
 #include <assert.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/projdefs.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -89,10 +90,10 @@ static int  confirm_device_address(ModbusMaster *master, uint8_t address);
 static void configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number);
 
 
-static const char *       TAG       = "Modbus";
-static QueueHandle_t      messageq  = NULL;
-static QueueHandle_t      responseq = NULL;
-static EventGroupHandle_t events    = NULL;
+static const char *  TAG       = "Modbus";
+static QueueHandle_t messageq  = NULL;
+static QueueHandle_t responseq = NULL;
+static TaskHandle_t  task      = NULL;
 
 
 static ModbusMasterFunctionHandler custom_functions[] = {
@@ -165,23 +166,14 @@ void modbus_init(void) {
     static uint8_t       queue_buffer2[MODBUS_MESSAGE_QUEUE_SIZE * sizeof(modbus_response_t)] = {0};
     responseq = xQueueCreateStatic(MODBUS_MESSAGE_QUEUE_SIZE, sizeof(modbus_response_t), queue_buffer2, &static_queue2);
 
-    events = xEventGroupCreate();
-    xEventGroupSetBits(events, MODBUS_AUTO_COMMISSIONING_DONE_BIT);
-
     static uint8_t      task_stack[BASE_TASK_SIZE * 4] = {0};
     static StaticTask_t static_task;
-    xTaskCreateStatic(modbus_task, TAG, sizeof(task_stack), NULL, 5, task_stack, &static_task);
+    task = xTaskCreateStatic(modbus_task, TAG, sizeof(task_stack), NULL, 5, task_stack, &static_task);
 }
 
 
 int modbus_get_response(modbus_response_t *response) {
     return xQueueReceive(responseq, response, 0) == pdTRUE;
-}
-
-
-int modbus_automatic_commissioning_done(unsigned long millis) {
-    return xEventGroupWaitBits(events, MODBUS_AUTO_COMMISSIONING_DONE_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(millis)) ==
-           pdTRUE;
 }
 
 
@@ -230,6 +222,11 @@ void modbus_read_device_info(uint8_t address) {
 void modbus_read_device_inputs(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_INPUTS, .address = address};
     xQueueSend(messageq, &message, portMAX_DELAY);
+}
+
+
+void modbus_stop_current_operation(void) {
+    xTaskNotifyGive(task);
 }
 
 
@@ -294,6 +291,7 @@ static void modbus_task(void *args) {
 
     for (;;) {
         size_t counter = 0;
+        xTaskNotifyStateClear(task);
 
         if (xQueueReceive(messageq, &message, pdMS_TO_TICKS(100))) {
             modbus_response_t response = {.address = message.address};
@@ -363,9 +361,18 @@ static void modbus_task(void *args) {
                     modbusMasterSetUserPointer(&master, &response);
 
                     for (size_t i = 1; i < 256; i++) {
-                        if (get_device_info(&master, i) == 0) {
-                            xQueueSend(responseq, &response, portMAX_DELAY);
+                        if (ulTaskNotifyTake(pdTRUE, 0)) {
+                            break;
                         }
+
+                        if (get_device_info(&master, i) == 0) {
+                            response.error = 0;
+                        } else {
+                            response.error    = 1;
+                            response.scanning = 1;
+                            response.address  = i;
+                        }
+                        xQueueSend(responseq, &response, portMAX_DELAY);
                         vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
                     }
 
@@ -379,7 +386,6 @@ static void modbus_task(void *args) {
                     uint16_t period = 10;
                     uint8_t  data[] = {(period >> 8) & 0xFF, period & 0xFF};
 
-                    xEventGroupClearBits(events, MODBUS_AUTO_COMMISSIONING_DONE_BIT);
                     send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, MODBUS_RANDOM_SERIAL_NUMBER, data,
                                          sizeof(data));
                     DEVICE_LIST(found_devices);
@@ -419,6 +425,9 @@ static void modbus_task(void *args) {
                     }
 
                     ESP_LOGI(TAG, "Listening done, configuring...");
+                    response.code = MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION_LISTENING_DONE;
+                    xQueueSend(responseq, &response, portMAX_DELAY);
+
                     vTaskDelay(pdMS_TO_TICKS(500));
                     uart_flush(MB_PORTNUM);
 
@@ -433,8 +442,9 @@ static void modbus_task(void *args) {
                         address          = device_list_get_next_device_address(found_devices, starting_address);
                     }
 
-                    starting_address = 0;
-                    address          = device_list_get_next_device_address(found_devices, starting_address);
+                    size_t confirmed_devices = 0;
+                    starting_address         = 0;
+                    address                  = device_list_get_next_device_address(found_devices, starting_address);
                     while (address != starting_address) {
                         device_t device;
                         device_list_get_device(found_devices, &device, address);
@@ -443,13 +453,17 @@ static void modbus_task(void *args) {
                         if (get_device_info(&master, device.address)) {
                             // TODO: Leggi effettivamente il numero di serie
                             ESP_LOGW(TAG, "Device %i did not have address %i", device.serial_number, address);
+                        } else {
+                            confirmed_devices++;
                         }
 
                         starting_address = address;
                         address          = device_list_get_next_device_address(found_devices, starting_address);
                     }
 
-                    xEventGroupSetBits(events, MODBUS_AUTO_COMMISSIONING_DONE_BIT);
+                    response.code = MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION;
+                    response.devices_number = confirmed_devices;
+                    xQueueSend(responseq, &response, portMAX_DELAY);
                     break;
                 }
 
