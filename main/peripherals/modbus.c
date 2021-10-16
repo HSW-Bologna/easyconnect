@@ -86,7 +86,7 @@ static int  write_coil(ModbusMaster *master, uint8_t address, uint16_t index, in
 static int  get_device_info(ModbusMaster *master, uint8_t address);
 static void send_custom_function(ModbusMaster *master, uint8_t address, uint8_t function, uint8_t *data, size_t len);
 static int  confirm_device_address(ModbusMaster *master, uint8_t address);
-static int  configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number);
+static void configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number);
 
 
 static const char *       TAG       = "Modbus";
@@ -428,8 +428,21 @@ static void modbus_task(void *args) {
                         device_t device;
                         device_list_get_device(found_devices, &device, address);
                         ESP_LOGI(TAG, "Trying to configure device %i with address %i", device.serial_number, address);
-                        if (configure_device_with_serial_number(&master, address, device.serial_number)) {
-                            ESP_LOGW(TAG, "Could not assign address %i to device %i", address, device.serial_number);
+                        configure_device_with_serial_number(&master, address, device.serial_number);
+                        starting_address = address;
+                        address          = device_list_get_next_device_address(found_devices, starting_address);
+                    }
+
+                    starting_address = 0;
+                    address          = device_list_get_next_device_address(found_devices, starting_address);
+                    while (address != starting_address) {
+                        device_t device;
+                        device_list_get_device(found_devices, &device, address);
+                        ESP_LOGI(TAG, "Checking configuration for device %i with address %i", device.serial_number,
+                                 address);
+                        if (get_device_info(&master, device.address)) {
+                            // TODO: Leggi effettivamente il numero di serie
+                            ESP_LOGW(TAG, "Device %i did not have address %i", device.serial_number, address);
                         }
 
                         starting_address = address;
@@ -508,8 +521,8 @@ static LIGHTMODBUS_RET_ERROR random_serial_number_response(ModbusMaster *master,
 
 static int confirm_device_address(ModbusMaster *master, uint8_t address) {
     uint8_t buffer[MODBUS_RESPONSE_03_LEN(1)] = {0};
-    size_t  count                          = 0;
-    int     res                            = 0;
+    size_t  count                             = 0;
+    int     res                               = 0;
 
     do {
         ModbusErrorInfo err = modbusBuildRequest03RTU(master, address, MODBUS_SN_HOLDING_REGISTER_ADDRESS, 1);
@@ -557,13 +570,12 @@ static int configure_device_manually(ModbusMaster *master, uint8_t address) {
 }
 
 
-static int configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number) {
+static void configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number) {
     uint8_t data[] = {address, (serial_number >> 8) & 0xFF, serial_number & 0xFF};
     send_custom_function(master, MODBUS_BROADCAST_ADDRESS, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
     send_custom_function(master, MODBUS_BROADCAST_ADDRESS, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
-    vTaskDelay(pdMS_TO_TICKS(100));
-    return confirm_device_address(master, address);
+    vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
 }
 
 
