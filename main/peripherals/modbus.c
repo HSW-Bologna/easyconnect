@@ -16,18 +16,21 @@
 #include "gel/timer/timecheck.h"
 #include "utils/utils.h"
 #include "modbus.h"
+#include "model/device.h"
 
 
 #define MB_PORTNUM 1
 // Timeout threshold for UART = number of symbols (~10 tics) with unchanged state on receive pin
 #define ECHO_READ_TOUT (3)     // 3.5T * 8 = 28 ticks, TOUT=3 -> ~24..33 ticks
 
+#define MODBUS_RESPONSE_03_LEN(data_len) (5 + data_len * 2)
+
 #define MODBUS_MESSAGE_QUEUE_SIZE     512
 #define MODBUS_QUERY_INTERVAL         500
 #define MODBUS_TIMEOUT                20
 #define MODBUS_MAX_PACKET_SIZE        256
 #define MODBUS_BROADCAST_ADDRESS      0
-#define MODBUS_COMMUNICATION_ATTEMPTS 4
+#define MODBUS_COMMUNICATION_ATTEMPTS 3
 
 #define MODBUS_CONFIG_ADDRESS_FUNCTION 64
 #define MODBUS_NETWORK_INITIALIZATION  65
@@ -47,16 +50,19 @@ typedef enum {
     TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
     TASK_MESSAGE_CODE_SET_DEVICE_CLASS,
     TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING,
+    TASK_MESSAGE_CODE_SET_CLASS_OUTPUT,
     TASK_MESSAGE_CODE_SCAN,
 } task_message_code_t;
 
 
-struct task_message {
+struct __attribute__((packed)) task_message {
     task_message_code_t code;
     uint8_t             address;
     union {
-        int value;
-        uint16_t class;
+        struct {
+            int value;
+            uint16_t class;
+        };
     };
 };
 
@@ -78,6 +84,9 @@ static int  write_holding_registers(ModbusMaster *master, uint8_t address, uint1
                                     size_t num);
 static int  write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int value);
 static int  get_device_info(ModbusMaster *master, uint8_t address);
+static void send_custom_function(ModbusMaster *master, uint8_t address, uint8_t function, uint8_t *data, size_t len);
+static int  confirm_device_address(ModbusMaster *master, uint8_t address);
+static int  configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number);
 
 
 static const char *       TAG       = "Modbus";
@@ -159,7 +168,9 @@ void modbus_init(void) {
     events = xEventGroupCreate();
     xEventGroupSetBits(events, MODBUS_AUTO_COMMISSIONING_DONE_BIT);
 
-    xTaskCreate(modbus_task, TAG, BASE_TASK_SIZE * 3, NULL, 5, NULL);
+    static uint8_t      task_stack[BASE_TASK_SIZE * 4] = {0};
+    static StaticTask_t static_task;
+    xTaskCreateStatic(modbus_task, TAG, sizeof(task_stack), NULL, 5, task_stack, &static_task);
 }
 
 
@@ -182,6 +193,12 @@ void modbus_configure_device_address(uint8_t address) {
 
 void modbus_automatic_commissioning(void) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING};
+    xQueueSend(messageq, &message, portMAX_DELAY);
+}
+
+
+void modbus_set_class_output(uint16_t class, int value) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_SET_CLASS_OUTPUT, .class = class, .value = value};
     xQueueSend(messageq, &message, portMAX_DELAY);
 }
 
@@ -273,6 +290,8 @@ static void modbus_task(void *args) {
     modbus_response_t   error_resp                     = {.code = MODBUS_RESPONSE_ERROR};
 
     ESP_LOGI(TAG, "Task starting");
+    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, MODBUS_NETWORK_INITIALIZATION, NULL, 0);
+
     for (;;) {
         size_t counter = 0;
 
@@ -339,6 +358,7 @@ static void modbus_task(void *args) {
                 }
 
                 case TASK_MESSAGE_CODE_SCAN: {
+                    ESP_LOGI(TAG, "Scan start");
                     response.code = MODBUS_RESPONSE_CODE_INFO;
                     modbusMasterSetUserPointer(&master, &response);
 
@@ -360,18 +380,13 @@ static void modbus_task(void *args) {
                     uint8_t  data[] = {(period >> 8) & 0xFF, period & 0xFF};
 
                     xEventGroupClearBits(events, MODBUS_AUTO_COMMISSIONING_DONE_BIT);
+                    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, MODBUS_RANDOM_SERIAL_NUMBER, data,
+                                         sizeof(data));
+                    DEVICE_LIST(found_devices);
+                    device_list_init(found_devices);
+                    uint8_t found_address = 1;
 
-                    err = modbusBeginRequestRTU(&master);
-                    assert(modbusIsOk(err));
-                    err = build_custom_request(&master, MODBUS_RANDOM_SERIAL_NUMBER, data, sizeof(data));
-                    assert(modbusIsOk(err));
-                    err = modbusEndRequestRTU(&master, MODBUS_BROADCAST_ADDRESS);
-                    assert(modbusIsOk(err));
-                    /* Broadcast message, we expect no answer */
-                    uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(&master),
-                                     modbusMasterGetRequestLength(&master));
-                    vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
-
+                    ESP_LOGI(TAG, "Starting listening period");
                     unsigned long timestamp = get_millis();
                     while (!is_expired(timestamp, get_millis(), period * 1000UL)) {
                         // While waiting here messages are thrown away
@@ -380,19 +395,45 @@ static void modbus_task(void *args) {
                         while (xQueueReceive(messageq, &zero, 0) == pdTRUE && counter++ < MODBUS_MESSAGE_QUEUE_SIZE)
                             ;
 
-                        int len = uart_read_bytes(MB_PORTNUM, buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
-                        if (len > 0) {
-                            err = modbusParseResponseRTU(&master, modbusMasterGetRequest(&master),
-                                                         modbusMasterGetRequestLength(&master), buffer, len);
+                        uint8_t response[4] = {0};
+                        int     len =
+                            uart_read_bytes(MB_PORTNUM, response, sizeof(response), pdMS_TO_TICKS(MODBUS_TIMEOUT));
+                        if (len == 4) {
+                            uint16_t calc_crc = modbusCRC(response, 2);
+                            uint16_t read_crc = (response[2] << 8) | response[3];
+                            if (calc_crc == read_crc) {
+                                uint16_t serial_number = (response[0] << 8) | response[1];
+                                ESP_LOGI(TAG, "Found new device with sn %i, given address %i", serial_number,
+                                         found_address);
+                                device_list_new_device(found_devices, found_address);
+                                device_list_set_device_sn(found_devices, found_address, serial_number);
 
-                            if (modbusIsOk(err)) {
-                                ESP_LOGI(TAG, "correct");
-                            } else {
-                                ESP_LOG_BUFFER_HEX(TAG, buffer, len);
-                                ESP_LOGI(TAG, "wrong %i %i", err.source, err.error);
+                                if (found_address == 254) {
+                                    ESP_LOGW(TAG, "Network reached max capacity!");
+                                } else {
+                                    found_address++;
+                                }
                             }
-                            uart_flush(MB_PORTNUM);
                         }
+                        uart_flush(MB_PORTNUM);
+                    }
+
+                    ESP_LOGI(TAG, "Listening done, configuring...");
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                    uart_flush(MB_PORTNUM);
+
+                    uint8_t starting_address = 0;
+                    uint8_t address          = device_list_get_next_device_address(found_devices, starting_address);
+                    while (address != starting_address) {
+                        device_t device;
+                        device_list_get_device(found_devices, &device, address);
+                        ESP_LOGI(TAG, "Trying to configure device %i with address %i", device.serial_number, address);
+                        if (configure_device_with_serial_number(&master, address, device.serial_number)) {
+                            ESP_LOGW(TAG, "Could not assign address %i to device %i", address, device.serial_number);
+                        }
+
+                        starting_address = address;
+                        address          = device_list_get_next_device_address(found_devices, starting_address);
                     }
 
                     xEventGroupSetBits(events, MODBUS_AUTO_COMMISSIONING_DONE_BIT);
@@ -410,6 +451,13 @@ static void modbus_task(void *args) {
                     }
                     break;
                 }
+
+                case TASK_MESSAGE_CODE_SET_CLASS_OUTPUT: {
+                    uint8_t data[] = {(message.class >> 8) & 0xFF, message.class & 0xFF, message.value};
+                    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, MODBUS_SET_CLASS_OUTPUT, data,
+                                         sizeof(data));
+                    break;
+                }
             }
             vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
         }
@@ -425,8 +473,10 @@ static LIGHTMODBUS_RET_ERROR build_custom_request(ModbusMaster *status, uint8_t 
     }
 
     status->request.pdu[0] = function;
-    for (size_t i = 0; i < len; i++) {
-        status->request.pdu[1 + i] = data[i];
+    if (data != NULL) {
+        for (size_t i = 0; i < len; i++) {
+            status->request.pdu[1 + i] = data[i];
+        }
     }
 
     return MODBUS_NO_ERROR();
@@ -456,36 +506,64 @@ static LIGHTMODBUS_RET_ERROR random_serial_number_response(ModbusMaster *master,
 }
 
 
-static int configure_device_manually(ModbusMaster *master, uint8_t address) {
-    uint8_t buffer[MODBUS_MAX_PACKET_SIZE] = {0};
-    uint8_t data[]                         = {address};
+static int confirm_device_address(ModbusMaster *master, uint8_t address) {
+    uint8_t buffer[MODBUS_RESPONSE_03_LEN(1)] = {0};
+    size_t  count                          = 0;
+    int     res                            = 0;
 
+    do {
+        ModbusErrorInfo err = modbusBuildRequest03RTU(master, address, MODBUS_SN_HOLDING_REGISTER_ADDRESS, 1);
+        assert(modbusIsOk(err));
+        uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
+        ESP_LOG_BUFFER_HEX(TAG, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
+
+        res     = 0;
+        int len = uart_read_bytes(MB_PORTNUM, buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
+        err     = modbusParseResponseRTU(master, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master),
+                                     buffer, len);
+        if (!modbusIsOk(err)) {
+            ESP_LOGW(TAG, "Confirm address error %i %i (%i)", err.source, err.error, len);
+            ESP_LOG_BUFFER_HEX(TAG, buffer, len);
+            vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
+            res = 1;
+        } else {
+            ESP_LOGI(TAG, "Correct leng %i", len);
+        }
+    } while (res && count++ < MODBUS_COMMUNICATION_ATTEMPTS);
+    uart_flush(MB_PORTNUM);
+
+    return res;
+}
+
+
+static void send_custom_function(ModbusMaster *master, uint8_t address, uint8_t function, uint8_t *data, size_t len) {
     ModbusErrorInfo err = modbusBeginRequestRTU(master);
     assert(modbusIsOk(err));
-    err = build_custom_request(master, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
+    err = build_custom_request(master, function, data, len);
     assert(modbusIsOk(err));
     err = modbusEndRequestRTU(master, MODBUS_BROADCAST_ADDRESS);
     assert(modbusIsOk(err));
     /* Broadcast message, we expect no answer */
     uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
     vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
+}
 
-    err = modbusBuildRequest03RTU(master, address, MODBUS_SN_HOLDING_REGISTER_ADDRESS, 1);
-    assert(modbusIsOk(err));
-    uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 
-    // TODO: retry
-    int len = uart_read_bytes(MB_PORTNUM, buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
-    err = modbusParseResponseRTU(master, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master), buffer,
-                                 len);
-    if (!modbusIsOk(err)) {
-        ESP_LOG_BUFFER_HEX(TAG, buffer, len);
-        ESP_LOGW(TAG, "Error %i %i", err.source, err.error);
-        return 1;
-    } else {
-        ESP_LOGI(TAG, "Configured device %i", address);
-        return 0;
-    }
+static int configure_device_manually(ModbusMaster *master, uint8_t address) {
+    uint8_t data[] = {address};
+    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
+    vTaskDelay(pdMS_TO_TICKS(100));
+    return confirm_device_address(master, address);
+}
+
+
+static int configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number) {
+    uint8_t data[] = {address, (serial_number >> 8) & 0xFF, serial_number & 0xFF};
+    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
+    vTaskDelay(pdMS_TO_TICKS(100));
+    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
+    vTaskDelay(pdMS_TO_TICKS(100));
+    return confirm_device_address(master, address);
 }
 
 
@@ -548,9 +626,9 @@ static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int
 
 static int get_device_info(ModbusMaster *master, uint8_t address) {
     ModbusErrorInfo err;
-    uint8_t         buffer[MODBUS_MAX_PACKET_SIZE] = {0};
-    int             res                            = 0;
-    size_t          counter                        = 0;
+    uint8_t         buffer[MODBUS_RESPONSE_03_LEN(2)] = {0};
+    int             res                               = 0;
+    size_t          counter                           = 0;
 
     do {
         res = 0;

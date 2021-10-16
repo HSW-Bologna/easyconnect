@@ -14,6 +14,8 @@
 #define DEVICE_CLASS(class)    (((class) >> 8) & 0xFF)
 #define DEVICE_SUBCLASS(class) ((class) & 0xFF)
 
+#define DEVICE_LIST(name) device_t name[MODBUS_MAX_DEVICES]
+
 
 typedef enum {
     DEVICE_STATUS_NOT_CONFIGURED = 0,

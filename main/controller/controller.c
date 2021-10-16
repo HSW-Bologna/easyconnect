@@ -158,6 +158,8 @@ void controller_manage(model_t *pmodel) {
 
 
 void controller_update_class_output(model_t *pmodel, device_class_t class, int value) {
+    modbus_set_class_output(class, value);
+    
     uint8_t starting_address = 0;
     uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
     while (address != starting_address) {
