@@ -4,7 +4,16 @@
 #include "model/model.h"
 
 
-#define DEVICES_PER_PAGE 15
+LV_IMG_DECLARE(img_icona_luce_1);
+LV_IMG_DECLARE(img_icona_luce_2);
+LV_IMG_DECLARE(img_icona_luce_3);
+LV_IMG_DECLARE(img_icona_elettrostatico);
+LV_IMG_DECLARE(img_icona_uvc);
+LV_IMG_DECLARE(img_icona_aspirazione);
+LV_IMG_DECLARE(img_icona_immissione);
+
+
+#define DEVICES_PER_PAGE 12
 
 
 enum {
@@ -29,13 +38,53 @@ struct page_data {
 };
 
 
-static lv_obj_t *address_button(lv_obj_t *root, uint8_t address) {
+static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
     lv_obj_t *btn = lv_btn_create(root, NULL);
+    lv_btn_set_layout(btn, LV_LAYOUT_OFF);
     lv_obj_set_size(btn, 80, 48);
     lv_obj_t *lbl = lv_label_create(btn, NULL);
-    lv_label_set_text_fmt(lbl, "%i", address);
-    view_register_default_callback_number(btn, ADDRESS_BTN_ID, address);
+    lv_label_set_text_fmt(lbl, "%i", device.address);
+    lv_obj_t *img = lv_img_create(btn, NULL);
+    if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
+        lv_obj_set_hidden(img, 1);
+        lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT,
+                                        lv_color_lighten(LV_COLOR_RED, LV_OPA_30));
+    } else {
+        switch (device.class) {
+            case DEVICE_CLASS_LIGHT_1:
+                lv_img_set_src(img, &img_icona_luce_1);
+                break;
+            case DEVICE_CLASS_LIGHT_2:
+                lv_img_set_src(img, &img_icona_luce_2);
+                break;
+            case DEVICE_CLASS_LIGHT_3:
+                lv_img_set_src(img, &img_icona_luce_3);
+                break;
+            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+                lv_img_set_src(img, &img_icona_elettrostatico);
+                break;
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER:
+                lv_img_set_src(img, &img_icona_uvc);
+                break;
+            case DEVICE_CLASS_IMMISSION_FAN:
+                lv_img_set_src(img, &img_icona_immissione);
+                break;
+            case DEVICE_CLASS_SIPHONING_FAN:
+                lv_img_set_src(img, &img_icona_aspirazione);
+                break;
+
+            default:
+                lv_obj_set_hidden(img, 1);
+                break;
+        }
+        lv_obj_align(lbl, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
+    }
+    lv_obj_align(img, NULL, LV_ALIGN_IN_RIGHT_MID, -8, 0);
+
+    view_register_default_callback_number(btn, ADDRESS_BTN_ID, device.address);
     lv_page_glue_obj(btn, 1);
+
 
     return btn;
 }
@@ -102,7 +151,9 @@ static void update_device_list(model_t *pmodel, struct page_data *data) {
     uint8_t address      = data->starting_address;
     uint8_t prev_address = address;
     do {
-        address_button(data->cont, address);
+        device_t device;
+        model_get_device(pmodel, &device, address);
+        address_button(data->cont, device);
         prev_address = address;
         address      = model_get_next_device_address(pmodel, prev_address);
     } while (address != prev_address && ++i < DEVICES_PER_PAGE);

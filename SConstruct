@@ -104,6 +104,7 @@ CFLAGS = [
     "-DPC_SIMULATOR",
     '-DprojCOVERAGE_TEST=1',
     "-DLV_KCONFIG_IGNORE",
+    '-DGEL_PARAMETER_CONFIGURATION_HEADER="\\"gel_parameter_conf.h\\""',
     "-Wno-unused-parameter",
     "-static-libgcc",
     "-static-libstdc++",
@@ -140,7 +141,7 @@ def main():
     env.Tool('compilation_db')
 
     gel_env = env
-    gel_selected = ['pagemanager', 'collections', 'data_structures', "timer"]
+    gel_selected = ['pagemanager', 'collections', 'data_structures', "timer", "parameter"]
     (gel_objects, include) = SConscript(
         f'{COMPONENTS}/gel/SConscript', exports=['gel_env', 'gel_selected'])
     env['CPPPATH'] += [include]

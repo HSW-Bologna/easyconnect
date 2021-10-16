@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include "address_map.h"
 #include "device.h"
+#include "gel/parameter/parameter.h"
+
+
+#define NUM_PARAMETERS 3
 
 typedef enum {
     MODEL_FAN_STATE_OFF = 0,
@@ -16,6 +20,7 @@ typedef enum {
 
 typedef struct {
     int temperature;
+    int slider;
     int electrostatic_filter_on;
     int uvc_filter_on;
 
@@ -26,6 +31,7 @@ typedef struct {
     uint16_t standby_time;
 
     device_t devices[MODBUS_MAX_DEVICES];
+    parameter_handle_t parameters[NUM_PARAMETERS];
 } model_t;
 
 

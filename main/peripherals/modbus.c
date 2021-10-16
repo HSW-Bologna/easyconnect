@@ -328,8 +328,12 @@ static void modbus_task(void *args) {
                 }
 
                 case TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT: {
+                    response.code    = MODBUS_RESPONSE_CODE_DEVICE_OK;
+                    response.address = message.address;
                     if (write_coil(&master, message.address, 0, message.value)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
+                    } else {
+                        xQueueSend(responseq, &response, portMAX_DELAY);
                     }
                     break;
                 }

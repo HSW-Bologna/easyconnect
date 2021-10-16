@@ -119,6 +119,10 @@ void controller_manage(model_t *pmodel) {
     modbus_response_t response = {0};
     if (modbus_get_response(&response)) {
         switch (response.code) {
+            case MODBUS_RESPONSE_CODE_DEVICE_OK:
+                model_set_device_error(pmodel, response.address, 0);
+                break;
+
             case MODBUS_RESPONSE_ERROR:
                 ESP_LOGW(TAG, "Device %i did not respond!", response.address);
                 model_set_device_error(pmodel, response.address, 1);
@@ -135,11 +139,13 @@ void controller_manage(model_t *pmodel) {
                 break;
 
             case MODBUS_RESPONSE_CODE_CLASS:
+                model_set_device_error(pmodel, response.address, 0);
                 model_set_device_class(pmodel, response.address, response.class);
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address});
                 break;
 
             case MODBUS_RESPONSE_CODE_INFO:
+                model_set_device_error(pmodel, response.address, 0);
                 model_set_device_sn(pmodel, response.address, response.serial_number);
                 model_set_device_class(pmodel, response.address, response.class);
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address});

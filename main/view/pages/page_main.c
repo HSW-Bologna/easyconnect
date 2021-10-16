@@ -1,3 +1,4 @@
+#include <time.h>
 #include <stdlib.h>
 #include "src/lv_core/lv_obj.h"
 #include "src/lv_core/lv_obj_style_dec.h"
@@ -165,6 +166,8 @@ struct page_data {
     lv_obj_t *btn_fan;
     lv_obj_t *btn_filter;
     lv_obj_t *lbl_temperature;
+    lv_obj_t *lbl_time;
+    lv_obj_t *lbl_date;
     lv_obj_t *slider;
 
     lv_task_t *blink_task;
@@ -318,6 +321,18 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
 
 static void update_info(model_t *pmodel, struct page_data *data) {
     lv_label_set_text_fmt(data->lbl_temperature, "%i C", model_get_temperature(pmodel));
+
+    char   string[32] = {0};
+    time_t rawtime;
+    time(&rawtime);
+    struct tm *now = localtime(&rawtime);
+
+    strftime(string, sizeof(string), "%H:%M", now);
+    lv_label_set_text(data->lbl_time, string);
+
+    memset(string, 0, sizeof(string));
+    strftime(string, sizeof(string), "%d/%m/%Y", now);
+    lv_label_set_text(data->lbl_date, string);
 }
 
 
@@ -348,6 +363,18 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_set_auto_realign(lbl, 1);
     lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, CENTER_X_DELTA, 0);
     data->lbl_temperature = lbl;
+
+    lbl = lv_label_create(lv_scr_act(), NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_title());
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_align(lbl, data->lbl_temperature, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+    data->lbl_time = lbl;
+
+    lbl = lv_label_create(lv_scr_act(), NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_align(lbl, data->lbl_time, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+    data->lbl_date = lbl;
 
     lv_obj_t *cont = lv_cont_create(lv_scr_act(), NULL);
     lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_transparent_cont);
@@ -445,6 +472,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                 case TASK_BLINK_ID:
                     data->blink = !data->blink;
                     update_fan_buttons(model, data);
+                    update_info(model, data);
                     break;
             }
             break;

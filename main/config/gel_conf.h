@@ -5,12 +5,6 @@
 #include "view/view_types.h"
 
 /*
- * Parameter
- */
-
-#define GEL_PARAMETER_MAX_SIZE 8
-
-/*
  * Page manager
  */
 #define PMAN_NAVIGATION_DEPTH 4
@@ -51,11 +45,5 @@ typedef int pid_output_type_t;
 // funzione scrivi blocco
 // 1 no blocco
 // -1
-
-/*
- * Parameter
- */
-
-typedef int parameter_user_data_t;
 
 #endif

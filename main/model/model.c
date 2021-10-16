@@ -97,7 +97,6 @@ void model_set_device_class(model_t *pmodel, uint8_t address, uint8_t class) {
     device_list_set_device_class(pmodel->devices, address, class);
 }
 
-
 int model_get_light_class(model_t *pmodel, device_class_t *class) {
     assert(pmodel != NULL);
     int found = 0;
