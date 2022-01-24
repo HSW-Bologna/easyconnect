@@ -13,7 +13,7 @@ LV_IMG_DECLARE(img_icona_aspirazione);
 LV_IMG_DECLARE(img_icona_immissione);
 
 
-#define DEVICES_PER_PAGE 12
+#define DEVICES_PER_PAGE 15
 
 
 enum {
@@ -25,6 +25,7 @@ enum {
     ADDRESS_DD_ID,
     CONFIRM_ADDRESS_BTN_ID,
     CANCEL_ADDRESS_BTN_ID,
+    REFRESH_BTN_ID,
 };
 
 
@@ -191,7 +192,7 @@ static void open_page(model_t *pmodel, void *arg) {
     btn = lv_btn_create(lv_scr_act(), NULL);
     lbl = lv_label_create(btn, lbl);
     lv_label_set_text(lbl, LV_SYMBOL_LEFT);
-    lv_obj_set_size(btn, 100, 48);
+    lv_obj_set_size(btn, 80, 48);
     lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 4, -4);
     view_register_default_callback(btn, PREV_PAGE_BTN_ID);
     data->prev = btn;
@@ -202,6 +203,13 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -4, -4);
     view_register_default_callback(btn, NEXT_PAGE_BTN_ID);
     data->next = btn;
+
+    btn = lv_btn_create(lv_scr_act(), NULL);
+    lbl = lv_label_create(btn, NULL);
+    lv_label_set_text(lbl, LV_SYMBOL_REFRESH);
+    lv_obj_set_size(btn, 64, 48);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 100, -4);
+    view_register_default_callback(btn, REFRESH_BTN_ID);
 
     cont = lv_cont_create(lv_scr_act(), NULL);
     lv_cont_set_layout(cont, LV_LAYOUT_OFF);
@@ -244,6 +252,10 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
     view_message_t msg = {0};
 
     switch (event.code) {
+        case VIEW_EVENT_CODE_DEVICE_UPDATE:
+            update_device_list(pmodel, data);
+            break;
+
         case VIEW_EVENT_CODE_LVGL: {
             switch (event.lv_event) {
                 case LV_EVENT_CLICKED: {
@@ -259,6 +271,10 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
                         case CANCEL_ADDRESS_BTN_ID:
                             lv_obj_set_hidden(data->popup, 1);
+                            break;
+
+                        case REFRESH_BTN_ID:
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_REFRESH_DEVICES;
                             break;
 
                         case ADDRESS_BTN_ID:
@@ -286,7 +302,6 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             update_device_list(pmodel, data);
                             break;
                         }
-
 
                         case NEXT_PAGE_BTN_ID: {
                             size_t  i            = 0;

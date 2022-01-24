@@ -137,7 +137,6 @@ void device_list_set_device_sn(device_t *devices, uint8_t address, uint16_t seri
 
     size_t index = ADDR2INDEX(address);
     if (devices[index].status != DEVICE_STATUS_NOT_CONFIGURED) {
-        devices[index].status        = DEVICE_STATUS_OK;
         devices[index].serial_number = serial_number;
     }
 }
@@ -148,7 +147,6 @@ void device_list_set_device_class(device_t *devices, uint8_t address, uint8_t cl
     ASSERT_ADDRESS(address);
     size_t index = ADDR2INDEX(address);
     if (devices[index].status != DEVICE_STATUS_NOT_CONFIGURED) {
-        devices[index].status = DEVICE_STATUS_OK;
         devices[index].class  = class;
     }
 }

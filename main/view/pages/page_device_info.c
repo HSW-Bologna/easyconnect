@@ -117,11 +117,13 @@ static void open_page(model_t *pmodel, void *arg) {
         }
     }
     lv_dropdown_set_selected(dd, selected);
-    lv_obj_align(dd, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
+    lv_obj_set_width(dd, 160);
+    lv_obj_align(dd, NULL, LV_ALIGN_IN_TOP_MID, -lv_obj_get_width(dd)/2, 130);
     data->classdd = dd;
 
     lv_obj_t *btn = lv_btn_create(lv_scr_act(), NULL);
-    lbl           = lv_label_create(btn, NULL);
+    lv_obj_set_width(btn, 180);
+    lbl = lv_label_create(btn, NULL);
     lv_label_set_text(lbl, "imposta classe");
     lv_obj_align(btn, dd, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
     view_register_default_callback(btn, CLASS_BTN_ID);
@@ -135,7 +137,7 @@ static void open_page(model_t *pmodel, void *arg) {
     view_register_default_callback(btn, DELETE_BTN_ID);
 
     btn = lv_btn_create(lv_scr_act(), NULL);
-    lbl = lv_label_create(btn,NULL);
+    lbl = lv_label_create(btn, NULL);
     lv_label_set_text(lbl, LV_SYMBOL_REFRESH);
     lv_obj_set_size(btn, 48, 48);
     lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, 0, 0);
@@ -179,7 +181,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                         }
 
                         case REFRESH_BTN_ID: {
-                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO;
+                            msg.cmsg.code    = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO;
                             msg.cmsg.address = data->device.address;
                         }
 

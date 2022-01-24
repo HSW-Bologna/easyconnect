@@ -43,6 +43,8 @@ LV_IMG_DECLARE(img_tre_luci_gruppo_1_acceso);
 LV_IMG_DECLARE(img_tre_luci_gruppo_1_2_accesi);
 LV_IMG_DECLARE(img_tre_luci_spente);
 
+LV_IMG_DECLARE(img_logo);
+
 
 #define CENTER_X_DELTA 20
 #define DRAWER_HEIGHT  280
@@ -174,8 +176,9 @@ struct page_data {
 
     size_t demo_index;
 
-    int light_state;
-    int blink;
+    int    light_state;
+    int    blink;
+    size_t speed;
 };
 
 
@@ -342,6 +345,7 @@ static void *create_page(model_t *model, void *extra) {
     data->demo_index       = 0;
     data->light_state      = 0;
     data->blink            = 0;
+    data->speed            = 0;
     return data;
 }
 
@@ -350,13 +354,16 @@ static void open_page(model_t *model, void *arg) {
     struct page_data *data = arg;
     lv_task_set_prio(data->blink_task, LV_TASK_PRIO_MID);
 
-    lv_obj_t *title = lv_label_create(lv_scr_act(), NULL);
+    /*lv_obj_t *title = lv_label_create(lv_scr_act(), NULL);
     lv_obj_set_style_local_text_font(title, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &font_digital_64);
     lv_label_set_long_mode(title, LV_LABEL_LONG_BREAK);
     lv_obj_set_width(title, 240);
     lv_label_set_align(title, LV_LABEL_ALIGN_CENTER);
     lv_label_set_text(title, "Easy Connect");
-    lv_obj_align(title, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 8);
+    lv_obj_align(title, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 8);*/
+    lv_obj_t *logo = lv_img_create(lv_scr_act(), NULL);
+    lv_img_set_src(logo, &img_logo);
+    lv_obj_align(logo, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 8);
 
     lv_obj_t *lbl = lv_label_create(lv_scr_act(), NULL);
     lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
@@ -379,15 +386,15 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_t *cont = lv_cont_create(lv_scr_act(), NULL);
     lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_transparent_cont);
     lv_cont_set_layout(cont, LV_LAYOUT_CENTER);
-    lv_obj_set_size(cont, 100, 320);
-    lv_obj_align(cont, NULL, LV_ALIGN_IN_LEFT_MID, 0, 0);
+    lv_obj_set_size(cont, 92, 312);
+    lv_obj_align(cont, NULL, LV_ALIGN_IN_LEFT_MID, 4, 0);
 
     lv_obj_t *butn1 = lv_btn_create(cont, NULL);
     lv_obj_t *butn2 = lv_btn_create(cont, NULL);
     lv_obj_t *butn3 = lv_btn_create(cont, NULL);
-    lv_obj_set_size(butn1, 100, 100);
-    lv_obj_set_size(butn2, 100, 100);
-    lv_obj_set_size(butn3, 100, 100);
+    lv_obj_set_size(butn1, 92, 92);
+    lv_obj_set_size(butn2, 92, 92);
+    lv_obj_set_size(butn3, 92, 92);
 
     lv_img_create(butn1, NULL);
     lv_img_create(butn2, NULL);
@@ -405,8 +412,8 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_t *butn_minus = lv_btn_create(lv_scr_act(), NULL);
     lv_obj_set_size(butn_plus, 60, 60);
     lv_obj_set_size(butn_minus, 60, 60);
-    lv_obj_align(butn_plus, NULL, LV_ALIGN_IN_TOP_RIGHT, -20, 0);
-    lv_obj_align(butn_minus, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -20, 0);
+    lv_obj_align(butn_plus, NULL, LV_ALIGN_IN_TOP_RIGHT, -16, 4);
+    lv_obj_align(butn_minus, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -16, -4);
     lv_obj_t *lbl_plus  = lv_label_create(butn_plus, NULL);
     lv_obj_t *lbl_minus = lv_label_create(butn_minus, NULL);
     lv_label_set_text(lbl_plus, LV_SYMBOL_PLUS);
@@ -415,8 +422,8 @@ static void open_page(model_t *model, void *arg) {
     view_register_default_callback(butn_plus, BUTTON_PLUS_ID);
 
     lv_obj_t *sl = lv_slider_create(lv_scr_act(), NULL);
-    lv_obj_set_size(sl, 30, LV_VER_RES_MAX - lv_obj_get_height(butn_plus) * 2 - 50);
-    lv_obj_align(sl, NULL, LV_ALIGN_IN_RIGHT_MID, -20 - (lv_obj_get_width(butn_plus) / 2) + lv_obj_get_width(sl) / 2,
+    lv_obj_set_size(sl, 30, LV_VER_RES_MAX - lv_obj_get_height(butn_plus) * 2 - 58);
+    lv_obj_align(sl, NULL, LV_ALIGN_IN_RIGHT_MID, -16 - (lv_obj_get_width(butn_plus) / 2) + lv_obj_get_width(sl) / 2,
                  0);
     lv_slider_set_range(sl, 0, 4);
     data->slider = sl;
@@ -464,6 +471,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
     switch (event.code) {
         case VIEW_EVENT_CODE_OPEN:
         case VIEW_EVENT_CODE_STATE_UPDATE:
+            lv_slider_set_value(data->slider, data->speed, LV_ANIM_OFF);
             update_all_buttons(model, data);
             break;
 
@@ -482,16 +490,16 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                 case LV_EVENT_CLICKED: {
                     switch (event.data.id) {
                         case BUTTON_PLUS_ID: {
-                            if (model->slider < 4) {
-                                model->slider++;
-                                lv_slider_set_value(data->slider, model->slider, LV_ANIM_OFF);
+                            if (data->speed < 4) {
+                                data->speed++;
+                                lv_slider_set_value(data->slider, data->speed, LV_ANIM_OFF);
                             }
                             break;
                         }
                         case BUTTON_MINUS_ID: {
-                            if (model->slider > 0) {
-                                model->slider--;
-                                lv_slider_set_value(data->slider, model->slider, LV_ANIM_OFF);
+                            if (data->speed > 0) {
+                                data->speed--;
+                                lv_slider_set_value(data->slider, data->speed, LV_ANIM_OFF);
                             }
                             break;
                         }
@@ -597,7 +605,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                     case LV_EVENT_VALUE_CHANGED: {
                         switch (event.data.id) {
                             case SLIDER_ID: {
-                                model->slider = lv_slider_get_value(data->slider);
+                                data->speed = lv_slider_get_value(data->slider);
                                 break;
                             }
 

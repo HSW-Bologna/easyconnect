@@ -17,6 +17,8 @@ enum {
     NEXT_PAGE_BTN_ID,
     ADDRESS_DD_ID,
     SEARCH_BTN_ID,
+    CONFIRM_ADDRESS_BTN_ID,
+    CANCEL_ADDRESS_BTN_ID,
 };
 
 
@@ -28,8 +30,12 @@ struct page_data {
     lv_obj_t *scan;
     lv_obj_t *spinner;
     lv_obj_t *lbl_scan;
+    lv_obj_t *popup;
+    lv_obj_t *lbl_popup_message;
+    lv_obj_t *btn_confirm;
 
     device_t devices[MODBUS_MAX_DEVICES];
+    size_t   selected;
 };
 
 
@@ -167,10 +173,38 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_align(lbl, data->scan, LV_ALIGN_OUT_RIGHT_MID, 4, 0);
     data->lbl_scan = lbl;
 
+    cont = lv_cont_create(lv_scr_act(), NULL);
+    lv_cont_set_layout(cont, LV_LAYOUT_OFF);
+    lv_obj_set_size(cont, 240, 160);
+    lv_obj_align(cont, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    lbl = lv_label_create(cont, NULL);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_obj_set_width(lbl, 220);
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 8);
+    data->lbl_popup_message = lbl;
+
+    btn = lv_btn_create(cont, btn);
+    lbl = lv_label_create(btn, NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_label_set_text(lbl, LV_SYMBOL_PLUS);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -8);
+    view_register_default_callback(btn, CONFIRM_ADDRESS_BTN_ID);
+    data->btn_confirm = btn;
+
+    btn = lv_btn_create(cont, btn);
+    lbl = lv_label_create(btn, lbl);
+    lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 8, -8);
+    view_register_default_callback(btn, CANCEL_ADDRESS_BTN_ID);
+    data->popup = cont;
+
     update_device_list(data);
     lv_obj_set_hidden(data->spinner, 1);
     lv_obj_set_hidden(data->scan, 0);
     lv_obj_set_hidden(data->lbl_scan, 1);
+    lv_obj_set_hidden(data->popup, 1);
 }
 
 
@@ -184,7 +218,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                 device_list_new_device(data->devices, event.address);
                 device_list_set_device_error(data->devices, event.address, 0);
                 update_device_list(data);
-            } 
+            }
             if (lv_obj_get_hidden(data->lbl_scan)) {
                 lv_obj_set_hidden(data->lbl_scan, 0);
             }
@@ -212,10 +246,29 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_STOP_CURRENT_OPERATION;
                             break;
 
+                        case CONFIRM_ADDRESS_BTN_ID:
+                            model_new_device(pmodel, data->selected);
+                            lv_obj_set_hidden(data->popup, 1);
+                            msg.cmsg.code    = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO_AND_SAVE;
+                            msg.cmsg.address = data->selected;
+                            break;
+
+                        case CANCEL_ADDRESS_BTN_ID:
+                            lv_obj_set_hidden(data->popup, 1);
+                            break;
+
                         case ADDRESS_BTN_ID:
-                            //msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
-                            //msg.vmsg.page  = &page_device_info;
-                            //msg.vmsg.extra = (void *)(uintptr_t)event.data.number;
+                            if (model_is_address_configured(pmodel, event.data.number)) {
+                                lv_label_set_text_fmt(data->lbl_popup_message, "Il dispositivo %i e' gia' configurato",
+                                                      event.data.number);
+                                lv_obj_set_hidden(data->btn_confirm, 1);
+                            } else {
+                                lv_label_set_text_fmt(data->lbl_popup_message, "Configurare il dispositivo %i?",
+                                                      event.data.number);
+                                lv_obj_set_hidden(data->btn_confirm, 0);
+                            }
+                            lv_obj_set_hidden(data->popup, 0);
+                            data->selected = event.data.number;
                             break;
 
                         case PREV_PAGE_BTN_ID: {

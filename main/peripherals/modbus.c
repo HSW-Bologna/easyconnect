@@ -25,6 +25,7 @@
 #define ECHO_READ_TOUT (3)     // 3.5T * 8 = 28 ticks, TOUT=3 -> ~24..33 ticks
 
 #define MODBUS_RESPONSE_03_LEN(data_len) (5 + data_len * 2)
+#define MODBUS_RESPONSE_05_LEN           8
 
 #define MODBUS_MESSAGE_QUEUE_SIZE     512
 #define MODBUS_QUERY_INTERVAL         500
@@ -357,7 +358,8 @@ static void modbus_task(void *args) {
 
                 case TASK_MESSAGE_CODE_SCAN: {
                     ESP_LOGI(TAG, "Scan start");
-                    response.code = MODBUS_RESPONSE_CODE_INFO;
+                    response.code     = MODBUS_RESPONSE_CODE_INFO;
+                    response.scanning = 1;
                     modbusMasterSetUserPointer(&master, &response);
 
                     for (size_t i = 1; i < 256; i++) {
@@ -368,9 +370,8 @@ static void modbus_task(void *args) {
                         if (get_device_info(&master, i) == 0) {
                             response.error = 0;
                         } else {
-                            response.error    = 1;
-                            response.scanning = 1;
-                            response.address  = i;
+                            response.error   = 1;
+                            response.address = i;
                         }
                         xQueueSend(responseq, &response, portMAX_DELAY);
                         vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
@@ -461,7 +462,7 @@ static void modbus_task(void *args) {
                         address          = device_list_get_next_device_address(found_devices, starting_address);
                     }
 
-                    response.code = MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION;
+                    response.code           = MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION;
                     response.devices_number = confirmed_devices;
                     xQueueSend(responseq, &response, portMAX_DELAY);
                     break;
@@ -626,7 +627,7 @@ static int write_holding_register(ModbusMaster *master, uint8_t address, uint16_
 
 
 static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int value) {
-    uint8_t buffer[MODBUS_MAX_PACKET_SIZE] = {0};
+    uint8_t buffer[MODBUS_RESPONSE_05_LEN] = {0};
     int     res                            = 0;
     size_t  counter                        = 0;
 

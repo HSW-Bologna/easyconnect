@@ -20,7 +20,6 @@ typedef enum {
 
 typedef struct {
     int temperature;
-    int slider;
     int electrostatic_filter_on;
     int uvc_filter_on;
 

@@ -2,6 +2,7 @@ Template for esp32 projects
 
 # TODO
 
+ - Ottimizzare il salvataggio dei dati
  - Ottimizza la dimensione delle immagini (crop to content, composizioni varie)
  - Ottimizza l'impostazione delle immagini con una funzione che controllo se la sorgente e' cambiata
  - Prima di controllare deterministicamente ogni singola periferica manda un messaggio broadcast sperando che tutti lo ricevano per attivare tutte le uscite nello stesso momento.
