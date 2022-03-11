@@ -475,6 +475,10 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
             update_all_buttons(model, data);
             break;
 
+        case VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE:
+            update_info(model, data);
+            break;
+
         case VIEW_EVENT_CODE_TIMER:
             switch (event.timer_id) {
                 case TASK_BLINK_ID:

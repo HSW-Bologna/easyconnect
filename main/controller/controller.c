@@ -1,3 +1,5 @@
+#include <sys/time.h>
+#include <time.h>
 #include "controller.h"
 #include "model/model.h"
 #include "view/view.h"
@@ -9,7 +11,9 @@
 #include "state.h"
 #include "peripherals/storage.h"
 #include "esp_log.h"
-
+#include "peripherals/i2c_devices.h"
+#include "i2c_devices/rtc/DS1307/ds1307.h"
+#include "temperature.h"
 
 
 static const char *TAG             = "Controller";
@@ -17,9 +21,21 @@ static int         refresh_devices = 1;
 
 
 void controller_init(model_t *pmodel) {
+    temperature_init();
     log_init();
     configuration_load(pmodel);
     view_start(pmodel);
+
+    if (ds1307_is_clock_halted(rtc_driver)) {
+        rtc_time_t rtc_time = {.day = 6, .wday = 1, .month = 3, .year = 22};
+        ds1307_set_time(rtc_driver, rtc_time, 0);
+        ESP_LOGI(TAG, "RTC Clock started");
+    } else {
+        rtc_time_t rtc_time = {0};
+        ds1307_get_time(rtc_driver, &rtc_time);
+        struct tm tm = ds1307_tm_from_rtc(rtc_time);
+        utils_set_system_time(tm);
+    }
 }
 
 
@@ -27,6 +43,13 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
     switch (msg->code) {
         case VIEW_CONTROLLER_MESSAGE_NOTHING:
             break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_SET_RTC: {
+            struct tm tm;
+            utils_get_sys_time(&tm);
+            ds1307_set_time(rtc_driver, ds1307_rtc_from_tm(tm), 0);
+            break;
+        }
 
         case VIEW_CONTROLLER_MESSAGE_CODE_STOP_CURRENT_OPERATION: {
             modbus_stop_current_operation();
@@ -123,6 +146,13 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
 
 void controller_manage(model_t *pmodel) {
     static unsigned long refreshts = 0;
+    static unsigned long tempts    = 0;
+
+    if (is_expired(tempts, get_millis(), 500UL)) {
+        pmodel->temperature = (int)temperature_get();
+        view_event((view_event_t){.code = VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE});
+        tempts = get_millis();
+    }
 
     if (refresh_devices || is_expired(refreshts, get_millis(), 5UL * 60UL * 1000UL)) {
         uint8_t starting_address = 0;

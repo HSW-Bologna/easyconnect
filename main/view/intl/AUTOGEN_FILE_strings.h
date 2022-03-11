@@ -1,0 +1,28 @@
+#ifndef AUTOGEN_FILE_STRINGS_H_INCLUDED
+#define AUTOGEN_FILE_STRINGS_H_INCLUDED
+
+typedef enum {
+    STRINGS_MON = 0,
+    STRINGS_TUE,
+    STRINGS_WED,
+    STRINGS_THU,
+    STRINGS_FRI,
+    STRINGS_SAT,
+    STRINGS_SUN,
+    STRINGS_JEN,
+    STRINGS_FEB,
+    STRINGS_MAR,
+    STRINGS_APR,
+    STRINGS_MAY,
+    STRINGS_JUN,
+    STRINGS_JUL,
+    STRINGS_AUG,
+    STRINGS_SEP,
+    STRINGS_OCT,
+    STRINGS_NOV,
+    STRINGS_DEC,
+} strings_t;
+
+extern const char *strings[19][2];
+
+#endif

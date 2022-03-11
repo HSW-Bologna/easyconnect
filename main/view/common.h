@@ -11,5 +11,8 @@ lv_obj_t *view_common_address_picker(lv_obj_t *root, int id);
 lv_obj_t *view_common_default_menu_button(lv_obj_t *root, char *text, int id);
 lv_obj_t *view_common_menu_button(lv_obj_t *root, char *text, size_t width, int id);
 lv_obj_t *view_common_limit_address_picker(model_t *pmodel, lv_obj_t *dd);
+lv_obj_t *view_common_min_sec_rollers(lv_obj_t *parent, int visible, lv_obj_t **rethour, lv_obj_t **retmin);
+void      view_common_roller_set_option_from_to(lv_obj_t *roller, int from, int to, int mode);
+
 
 #endif

@@ -2,6 +2,7 @@ import kconfiglib
 import os
 import multiprocessing
 from pathlib import Path
+import tools.meta.csv2carray as csv2carray
 import platform
 import subprocess
 
@@ -92,6 +93,19 @@ LVGL = f"{COMPONENTS}/lvgl"
 FREERTOS = f'{SIMULATOR}/freertos-simulator'
 CJSON = f'{SIMULATOR}/cJSON'
 B64 = f'{SIMULATOR}/b64'
+ASSETS = "assets"
+
+
+STRING_TRANSLATIONS = f"{MAIN}/view/intl"
+
+TRANSLATIONS = [
+    {
+        "res": [f"{STRING_TRANSLATIONS}/AUTOGEN_FILE_strings.c", f"{STRING_TRANSLATIONS}/AUTOGEN_FILE_strings.h"],
+        "input": f"{ASSETS}/translations/strings",
+        "output": STRING_TRANSLATIONS
+    },
+]
+
 
 CFLAGS = [
     "-Wall",
@@ -100,6 +114,7 @@ CFLAGS = [
     "-g",
     "-O0",
     "-DLV_CONF_INCLUDE_SIMPLE",
+    "-DI2C_DEVICES_STRUCT_TM_CONVERSION",
     "-DLV_LVGL_H_INCLUDE_SIMPLE",
     "-DPC_SIMULATOR",
     '-DprojCOVERAGE_TEST=1',
@@ -140,10 +155,25 @@ def main():
     correct_spawn(env)
     env.Tool('compilation_db')
 
+    translations = []
+    for translation in TRANSLATIONS:
+        def operation(t):
+            return lambda target, source, env: csv2carray.main(t["input"], t["output"])
+
+        env.Command(
+            translation["res"], Glob(f"{translation['input']}/*.csv"), operation(translation))
+        translations += translation["res"]
+
     gel_env = env
     gel_selected = ['pagemanager', 'collections', 'data_structures', "timer", "parameter"]
     (gel_objects, include) = SConscript(
         f'{COMPONENTS}/gel/SConscript', exports=['gel_env', 'gel_selected'])
+    env['CPPPATH'] += [include]
+
+    i2c_env = env
+    i2c_selected = ["rtc/DS1307", "temperature/SHT21", "dummy"]
+    (i2c_objects, include) = SConscript(
+        f'{COMPONENTS}/I2C/SConscript', exports=['i2c_env', 'i2c_selected'])
     env['CPPPATH'] += [include]
 
     freertos_env = env
@@ -163,6 +193,8 @@ def main():
     sources += Glob(f'{SIMULATOR}/display/*.c')
     sources += [File(filename) for filename in Path('main/model').rglob('*.c')]
     sources += [File(filename)
+                for filename in Path('main/utils').rglob('*.c')]
+    sources += [File(filename)
                 for filename in Path('main/config').rglob('*.c')]
     sources += [File(filename) for filename in Path('main/view').rglob('*.c')]
     sources += [File(filename)
@@ -177,10 +209,11 @@ def main():
     sources += [File(f'{B64}/encode.c'),
                 File(f'{B64}/decode.c'), File(f'{B64}/buffer.c')]
 
-    prog = env.Program(PROGRAM, sources + freertos + gel_objects)
+    prog = env.Program(PROGRAM, sources + freertos + gel_objects + i2c_objects)
     PhonyTargets('run', './simulated', prog, env)
     env.Alias('mingw', prog)
     env.CompilationDatabase('build/compile_commands.json')
+    env.Alias("intl", translations)
 
 
 main()

@@ -1,0 +1,22 @@
+const char *strings[19][2] = {
+    {"LUN", "MON ", },
+    {"MAR", "TUE", },
+    {"MER", "WED", },
+    {"GIO", "THU", },
+    {"VEN", "FRI", },
+    {"SAB", "SAT", },
+    {"DOM", "SUN", },
+    {"GEN", "JEN", },
+    {"FEB", "FEB", },
+    {"MAR", "MAR", },
+    {"APR", "APR", },
+    {"MAG", "MAY", },
+    {"GIU", "JUN", },
+    {"LUG", "JUL", },
+    {"AGO", "AUG", },
+    {"SET", "SEP", },
+    {"OTT", "OCT", },
+    {"NOV", "NOV", },
+    {"DIC", "DEC", },
+};
+

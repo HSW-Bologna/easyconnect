@@ -6,7 +6,8 @@
 
 enum {
     BUTTON_BACK_ID,
-    DATETIME_BTN_ID,
+    DATE_BTN_ID,
+    TIME_BTN_ID,
 };
 
 struct page_data {};
@@ -22,10 +23,13 @@ static void open_page(model_t *model, void *arg) {
     struct page_data *data = arg;
     (void)data;
 
-    view_common_title(BUTTON_BACK_ID, "Impostazioni", NULL);
+    view_common_title(BUTTON_BACK_ID, "Data/Ora", NULL);
 
-    lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), "Data/Ora", DATETIME_BTN_ID);
+    lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), "Imposta data", DATE_BTN_ID);
     lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_MID, 0, 80);
+
+    btn = view_common_default_menu_button(lv_scr_act(), "Imposta ora", TIME_BTN_ID);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_MID, 0, 160);
 }
 
 
@@ -43,9 +47,14 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
                             break;
 
-                        case DATETIME_BTN_ID:
+                        case DATE_BTN_ID:
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
-                            msg.vmsg.page = &page_datetime;
+                            msg.vmsg.page = &page_date;
+                            break;
+
+                        case TIME_BTN_ID:
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_time;
                             break;
                     }
                     break;
@@ -64,7 +73,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 }
 
 
-const pman_page_t page_settings = {
+const pman_page_t page_datetime = {
     .create        = create_page,
     .destroy       = view_destroy_all,
     .open          = open_page,

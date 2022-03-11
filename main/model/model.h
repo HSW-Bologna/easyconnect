@@ -19,9 +19,10 @@ typedef enum {
 
 
 typedef struct {
-    int temperature;
-    int electrostatic_filter_on;
-    int uvc_filter_on;
+    int      temperature;
+    int      electrostatic_filter_on;
+    int      uvc_filter_on;
+    uint16_t language;
 
     model_fan_state_t state;
 
@@ -29,7 +30,7 @@ typedef struct {
     uint8_t  standby_backlight;
     uint16_t standby_time;
 
-    device_t devices[MODBUS_MAX_DEVICES];
+    device_t           devices[MODBUS_MAX_DEVICES];
     parameter_handle_t parameters[NUM_PARAMETERS];
 } model_t;
 
@@ -59,5 +60,6 @@ int               model_get_electrostatic_filter_state(model_t *pmodel);
 void              model_electrostatic_filter_toggle(model_t *pmodel);
 void              model_uvc_filter_toggle(model_t *pmodel);
 void              model_uvc_filter_on(model_t *pmodel);
+uint16_t          model_get_language(model_t *pmodel);
 
 #endif

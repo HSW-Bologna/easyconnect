@@ -2,6 +2,7 @@
 # in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.5)
 
+add_definitions(-DI2C_DEVICES_STRUCT_TM_CONVERSION)
 add_definitions(-DGEL_PARAMETER_CONFIGURATION_HEADER="gel_parameter_conf.h")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

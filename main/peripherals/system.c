@@ -9,7 +9,6 @@ int system_i2c_init(void) {
     int       sda_pin  = GPIO_NUM_18;
     int       scl_pin  = GPIO_NUM_19;
     int       speed_hz = 400000;
-    esp_err_t err;
 
     ESP_LOGI(TAG, "Initializing I2C master port %d...", port);
     ESP_LOGI(TAG, "SDA pin: %d, SCL pin: %d, Speed: %d (Hz)", sda_pin, scl_pin, speed_hz);
@@ -24,13 +23,12 @@ int system_i2c_init(void) {
     };
 
     ESP_LOGI(TAG, "Setting I2C master configuration...");
-    err = i2c_param_config(port, &conf);
-    assert(ESP_OK == err);
+    ESP_ERROR_CHECK(i2c_param_config(port, &conf));
 
     ESP_LOGI(TAG, "Installing I2C master driver...");
-    err = i2c_driver_install(port, I2C_MODE_MASTER, 0, 0 /*I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE */,
-                             0 /* intr_alloc_flags */);
-    assert(ESP_OK == err);
+    ESP_ERROR_CHECK(i2c_driver_install(port, I2C_MODE_MASTER, 0, 0 /*I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE */,
+                             0 /* intr_alloc_flags */));
+    ESP_ERROR_CHECK(i2c_set_timeout(port, 0xFFFFF));
 
-    return ESP_OK != err;
+    return ESP_OK;
 }

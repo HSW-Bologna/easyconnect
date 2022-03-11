@@ -17,6 +17,7 @@ void app_main(void *arg) {
     model_t model;
     (void)arg;
 
+    lv_init();
     monitor_init();
     mouse_init();
 
@@ -27,6 +28,8 @@ void app_main(void *arg) {
     ESP_LOGI(TAG, "Begin main loop");
     for (;;) {
         controller_gui_manage(&model);
+        controller_manage(&model);
+
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 

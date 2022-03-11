@@ -11,6 +11,13 @@ void model_init(model_t *pmodel) {
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature = 32;
     device_list_init(pmodel->devices);
+    pmodel->language = 0;
+}
+
+
+uint16_t model_get_language(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return pmodel->language;
 }
 
 
