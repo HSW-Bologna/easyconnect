@@ -16,8 +16,11 @@ int modbus_get_response(modbus_response_t *response) {
     return 0;
 }
 
+void modbus_set_fan_speed(uint8_t address, size_t speed) {}
 
-void modbus_set_device_class(uint8_t address, uint8_t class) {}
+void modbus_read_device_alarms(uint8_t address) {}
+
+void modbus_set_device_class(uint8_t address, uint16_t class) {}
 
 void modbus_read_device_info(uint8_t address) {}
 

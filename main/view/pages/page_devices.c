@@ -46,7 +46,7 @@ static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
     lv_obj_t *lbl = lv_label_create(btn, NULL);
     lv_label_set_text_fmt(lbl, "%i", device.address);
     lv_obj_t *img = lv_img_create(btn, NULL);
-    if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
+    if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR || device.alarms > 0) {
         lv_obj_set_hidden(img, 1);
         lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
         lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT,

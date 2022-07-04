@@ -1,4 +1,9 @@
-Template for esp32 projects
+# EasyConnect
+
+
+# Questions
+
+ - Non uso gli input delle periferiche al momento
 
 # TODO
 

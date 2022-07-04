@@ -16,10 +16,10 @@
 
 
 static const char *TAG = "Main";
+static model_t     model;
 
 
 void app_main(void) {
-    model_t model;
 
     /* Initialize SPI or I2C bus used by the drivers */
     system_i2c_init();

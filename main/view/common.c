@@ -158,3 +158,47 @@ lv_obj_t *view_common_min_sec_rollers(lv_obj_t *parent, int visible, lv_obj_t **
 
     return cont;
 }
+
+
+void view_common_set_hidden(lv_obj_t *obj, int hidden) {
+    if (lv_obj_get_hidden(obj) != hidden) {
+        lv_obj_set_hidden(obj, hidden);
+    }
+}
+
+
+void view_common_get_class_string(device_class_t class, char *string, size_t len) {
+    switch (class) {
+        case DEVICE_CLASS_LIGHT_1:
+            strncpy(string, "Luce 1", len);
+            break;
+
+        case DEVICE_CLASS_LIGHT_2:
+            strncpy(string, "Luce 2", len);
+            break;
+
+        case DEVICE_CLASS_LIGHT_3:
+            strncpy(string, "Luce 3", len);
+            break;
+
+        case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+            strncpy(string, "ESF", len);
+            break;
+
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER:
+            strncpy(string, "ULF", len);
+            break;
+
+        case DEVICE_CLASS_SIPHONING_FAN:
+            strncpy(string, "Aspirazione", len);
+            break;
+
+        case DEVICE_CLASS_IMMISSION_FAN:
+            strncpy(string, "Immissione", len);
+            break;
+
+        default:
+            strncpy(string, "Sconosciuta", len);
+            break;
+    }
+}

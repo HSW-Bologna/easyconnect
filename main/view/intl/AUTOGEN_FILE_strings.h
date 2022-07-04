@@ -21,8 +21,14 @@ typedef enum {
     STRINGS_OCT,
     STRINGS_NOV,
     STRINGS_DEC,
+    STRINGS_PROBLEMA_CON_IL_DISPOSITIVO,
+    STRINGS_ERRORE_DI_COMUNICAZIONE,
+    STRINGS_INDIRIZZO,
+    STRINGS_CLASSE,
+    STRINGS_NUMERO_DI_SERIE,
+    STRINGS_ALLARME_DI_SICUREZZA,
 } strings_t;
 
-extern const char *strings[19][2];
+extern const char *strings[25][2];
 
 #endif

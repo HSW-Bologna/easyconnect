@@ -4,6 +4,8 @@
 #include "model.h"
 
 
+QUEUE_DEFINITION(alarms_queue, uint8_t);
+
 
 void model_init(model_t *pmodel) {
     assert(pmodel != NULL);
@@ -11,7 +13,8 @@ void model_init(model_t *pmodel) {
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature = 32;
     device_list_init(pmodel->devices);
-    pmodel->language = 0;
+    pmodel->language  = 0;
+    pmodel->fan_speed = 0;
 }
 
 
@@ -69,6 +72,13 @@ address_map_t model_get_address_map(model_t *pmodel) {
 }
 
 
+address_map_t model_get_error_map(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return device_list_get_error_map(pmodel->devices);
+}
+
+
+
 size_t model_get_configured_devices(model_t *pmodel) {
     assert(pmodel != NULL);
     return device_list_get_configured_devices(pmodel->devices);
@@ -99,10 +109,23 @@ void model_set_device_sn(model_t *pmodel, uint8_t address, uint16_t serial_numbe
 }
 
 
-void model_set_device_class(model_t *pmodel, uint8_t address, uint8_t class) {
+void model_set_device_class(model_t *pmodel, uint8_t address, uint16_t class) {
     assert(pmodel != NULL);
     device_list_set_device_class(pmodel->devices, address, class);
 }
+
+
+uint8_t model_set_device_alarms(model_t *pmodel, uint8_t address, uint16_t alarms) {
+    assert(pmodel != NULL);
+    return device_list_set_device_alarms(pmodel->devices, address, alarms);
+}
+
+
+void model_add_new_alarm(model_t *pmodel, uint8_t address) {
+    assert(pmodel != NULL);
+    alarms_queue_enqueue(&pmodel->alarms, &address);
+}
+
 
 int model_get_light_class(model_t *pmodel, device_class_t *class) {
     assert(pmodel != NULL);

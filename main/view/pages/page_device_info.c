@@ -37,47 +37,11 @@ static const device_class_t classes[] = {
 };
 
 
-static void get_class_string(device_class_t class, char *string, size_t len) {
-    switch (class) {
-        case DEVICE_CLASS_LIGHT_1:
-            strncpy(string, "Luce 1", len);
-            break;
-
-        case DEVICE_CLASS_LIGHT_2:
-            strncpy(string, "Luce 2", len);
-            break;
-
-        case DEVICE_CLASS_LIGHT_3:
-            strncpy(string, "Luce 3", len);
-            break;
-
-        case DEVICE_CLASS_ELECTROSTATIC_FILTER:
-            strncpy(string, "ESF", len);
-            break;
-
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER:
-            strncpy(string, "ULF", len);
-            break;
-
-        case DEVICE_CLASS_SIPHONING_FAN:
-            strncpy(string, "Aspirazione", len);
-            break;
-
-        case DEVICE_CLASS_IMMISSION_FAN:
-            strncpy(string, "Immissione", len);
-            break;
-
-        default:
-            strncpy(string, "Sconosciuta", len);
-            break;
-    }
-}
-
-
 static void update_info(model_t *pmodel, struct page_data *data) {
     model_get_device(pmodel, &data->device, data->device.address);
-    lv_label_set_text_fmt(data->lbl_info, "Dispositivo %i, classe 0x%X, stato %i, SN %X", data->device.address,
-                          data->device.class, data->device.status, data->device.serial_number);
+    lv_label_set_text_fmt(data->lbl_info, "Dispositivo %i, classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
+                          data->device.address, data->device.class, data->device.status, data->device.serial_number,
+                          data->device.alarms);
 }
 
 
@@ -90,7 +54,7 @@ static void *create_page(model_t *model, void *extra) {
 
 static void open_page(model_t *pmodel, void *arg) {
     struct page_data *data  = arg;
-    lv_obj_t *        title = view_common_title(BACK_BTN_ID, "Info dispositivo", NULL);
+    lv_obj_t         *title = view_common_title(BACK_BTN_ID, "Info dispositivo", NULL);
     (void)title;
 
     lv_obj_t *lbl = lv_label_create(lv_scr_act(), NULL);
@@ -104,12 +68,12 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_dropdown_clear_options(dd);
     char string[32]       = {0};
     char device_class[32] = {0};
-    get_class_string(data->device.class, device_class, sizeof(device_class));
+    view_common_get_class_string(data->device.class, device_class, sizeof(device_class));
 
     size_t selected = 0;
     for (size_t i = 0; i < sizeof(classes) / sizeof(device_class_t); i++) {
         memset(string, 0, sizeof(string));
-        get_class_string(classes[i], string, sizeof(string));
+        view_common_get_class_string(classes[i], string, sizeof(string));
         lv_dropdown_add_option(dd, string, i);
 
         if (strcmp(string, device_class) == 0) {
@@ -118,7 +82,7 @@ static void open_page(model_t *pmodel, void *arg) {
     }
     lv_dropdown_set_selected(dd, selected);
     lv_obj_set_width(dd, 160);
-    lv_obj_align(dd, NULL, LV_ALIGN_IN_TOP_MID, -lv_obj_get_width(dd)/2, 130);
+    lv_obj_align(dd, NULL, LV_ALIGN_IN_TOP_MID, -lv_obj_get_width(dd) / 2, 130);
     data->classdd = dd;
 
     lv_obj_t *btn = lv_btn_create(lv_scr_act(), NULL);
@@ -154,6 +118,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
     switch (event.code) {
         case VIEW_EVENT_CODE_DEVICE_UPDATE:
+        case VIEW_EVENT_CODE_DEVICE_ALARM:
             if (event.address == data->device.address) {
                 update_info(pmodel, data);
             }

@@ -113,6 +113,7 @@ CFLAGS = [
     "-Wno-unused-function",
     "-g",
     "-O0",
+    "-DGEL_SIMPLE_CONFIG_INCLUSION",
     "-DLV_CONF_INCLUDE_SIMPLE",
     "-DI2C_DEVICES_STRUCT_TM_CONVERSION",
     "-DLV_LVGL_H_INCLUDE_SIMPLE",
@@ -165,7 +166,8 @@ def main():
         translations += translation["res"]
 
     gel_env = env
-    gel_selected = ['pagemanager', 'collections', 'data_structures', "timer", "parameter"]
+    gel_selected = ['pagemanager', 'collections',
+                    'data_structures', "timer", "parameter"]
     (gel_objects, include) = SConscript(
         f'{COMPONENTS}/gel/SConscript', exports=['gel_env', 'gel_selected'])
     env['CPPPATH'] += [include]

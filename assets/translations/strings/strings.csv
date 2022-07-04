@@ -18,3 +18,9 @@ SEP,SET, SEP
 OCT,OTT, OCT
 NOV,NOV, NOV
 DEC,DIC, DEC
+PROBLEMA_CON_IL_DISPOSITIVO, Problema con il dispositivo, Problem with the device
+ERRORE_DI_COMUNICAZIONE, errore di comunicazione, communication error
+INDIRIZZO, Indirizzo, Address
+CLASSE, Classe, Class
+NUMERO_DI_SERIE, numero di serie, serial number
+ALLARME_DI_SICUREZZA, allarme di sicurezza, safety alarm

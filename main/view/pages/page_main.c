@@ -1,19 +1,10 @@
 #include <time.h>
 #include <stdlib.h>
-#include "src/lv_core/lv_obj.h"
-#include "src/lv_core/lv_obj_style_dec.h"
-#include "src/lv_misc/lv_anim.h"
-#include "src/lv_misc/lv_area.h"
-#include "src/lv_misc/lv_color.h"
-#include "src/lv_misc/lv_types.h"
-#include "src/lv_widgets/lv_btn.h"
-#include "src/lv_widgets/lv_cont.h"
-#include "src/lv_widgets/lv_slider.h"
 #include "view/view.h"
+#include "view/intl/intl.h"
 #include "view/common.h"
 #include "model/model.h"
 #include "view/style.h"
-#include <assert.h>
 
 
 LV_IMG_DECLARE(img_aspirazione_accesa);
@@ -106,6 +97,7 @@ enum {
     ERRORS_BTN_ID,
     TECH_SETTINGS_BTN_ID,
     TASK_BLINK_ID,
+    BTN_ALARM_OK_ID,
 };
 
 
@@ -171,15 +163,22 @@ struct page_data {
     lv_obj_t *lbl_time;
     lv_obj_t *lbl_date;
     lv_obj_t *slider;
+    lv_obj_t *alarm_popup;
+    lv_obj_t *lbl_alarm_description;
 
     lv_task_t *blink_task;
 
     size_t demo_index;
 
-    int    light_state;
-    int    blink;
-    size_t speed;
+    int light_state;
+    int blink;
+
+    int shown_alarm;
 };
+
+
+static void new_alarm(model_t *pmodel, struct page_data *pdata);
+static void update_alarm_popup(model_t *pmodel, struct page_data *pdata);
 
 
 static void update_filter_buttons(model_t *pmodel, struct page_data *data) {
@@ -345,7 +344,8 @@ static void *create_page(model_t *model, void *extra) {
     data->demo_index       = 0;
     data->light_state      = 0;
     data->blink            = 0;
-    data->speed            = 0;
+    alarms_queue_init(&model->alarms);
+    data->shown_alarm = -1;
     return data;
 }
 
@@ -459,8 +459,33 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_t *tech = view_common_menu_button(drawer, "Menu' assistenza", 300, TECH_SETTINGS_BTN_ID);
     lv_obj_set_drag_parent(tech, true);
 
+    lv_obj_t *alarm_popup = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_set_size(alarm_popup, 320, 240);
+    lv_obj_align(alarm_popup, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_cont_set_layout(alarm_popup, LV_LAYOUT_OFF);
+    lv_obj_set_style_local_radius(alarm_popup, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, DRAWER_RADIUS);
+
+    lbl = lv_label_create(alarm_popup, NULL);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_obj_set_width(lbl, 300);
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, -32);
+    data->lbl_alarm_description = lbl;
+
+    lv_obj_t *btn = lv_btn_create(alarm_popup, NULL);
+    lbl           = lv_label_create(btn, NULL);
+    lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -16);
+    view_register_default_callback(btn, BTN_ALARM_OK_ID);
+
+    data->alarm_popup = alarm_popup;
+
     update_info(model, data);
     update_all_buttons(model, data);
+    lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
+    update_alarm_popup(model, data);
 }
 
 
@@ -471,12 +496,18 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
     switch (event.code) {
         case VIEW_EVENT_CODE_OPEN:
         case VIEW_EVENT_CODE_STATE_UPDATE:
-            lv_slider_set_value(data->slider, data->speed, LV_ANIM_OFF);
             update_all_buttons(model, data);
             break;
 
         case VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE:
             update_info(model, data);
+            break;
+
+        case VIEW_EVENT_CODE_DEVICE_ALARM:
+            if (data->shown_alarm < 0) {
+                new_alarm(model, data);
+                update_alarm_popup(model, data);
+            }
             break;
 
         case VIEW_EVENT_CODE_TIMER:
@@ -493,17 +524,32 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
             switch (event.lv_event) {
                 case LV_EVENT_CLICKED: {
                     switch (event.data.id) {
+                        case BTN_ALARM_OK_ID:
+                            data->shown_alarm = -1;
+                            new_alarm(model, data);
+                            update_alarm_popup(model, data);
+                            break;
+
                         case BUTTON_PLUS_ID: {
-                            if (data->speed < 4) {
-                                data->speed++;
-                                lv_slider_set_value(data->slider, data->speed, LV_ANIM_OFF);
+                            uint8_t speed = model_get_fan_speed(model);
+
+                            if (speed < MAX_FAN_SPEED) {
+                                speed++;
+                                model_set_fan_speed(model, speed);
+                                lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
+                                msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED;
                             }
                             break;
                         }
+
                         case BUTTON_MINUS_ID: {
-                            if (data->speed > 0) {
-                                data->speed--;
-                                lv_slider_set_value(data->slider, data->speed, LV_ANIM_OFF);
+                            uint8_t speed = model_get_fan_speed(model);
+
+                            if (speed > 0) {
+                                speed--;
+                                model_set_fan_speed(model, speed);
+                                lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
+                                msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED;
                             }
                             break;
                         }
@@ -609,7 +655,20 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                     case LV_EVENT_VALUE_CHANGED: {
                         switch (event.data.id) {
                             case SLIDER_ID: {
-                                data->speed = lv_slider_get_value(data->slider);
+                                model_set_fan_speed(model, lv_slider_get_value(data->slider));
+                                break;
+                            }
+
+                            default:
+                                break;
+                        }
+                        break;
+                    }
+
+                    case LV_EVENT_RELEASED: {
+                        switch (event.data.id) {
+                            case SLIDER_ID: {
+                                msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED;
                                 break;
                             }
 
@@ -645,6 +704,40 @@ void close_page(void *args) {
     struct page_data *data = args;
     lv_task_set_prio(data->blink_task, LV_TASK_PRIO_OFF);
     lv_obj_clean(lv_scr_act());
+}
+
+
+static void new_alarm(model_t *pmodel, struct page_data *pdata) {
+    uint8_t address = 0;
+    if (alarms_queue_dequeue(&pmodel->alarms, &address) == DEQUEUE_RESULT_SUCCESS) {
+        pdata->shown_alarm = address;
+        device_t device    = {0};
+        model_get_device(pmodel, &device, address);
+
+        char string[64] = {0};
+        view_common_get_class_string(device.class, string, sizeof(string));
+
+        if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
+            lv_label_set_text_fmt(pdata->lbl_alarm_description, "%s: %s\n\t%s %i\n\t%s 0x%X\n\t%s %s",
+                                  view_intl_get_string(pmodel, STRINGS_PROBLEMA_CON_IL_DISPOSITIVO),
+                                  view_intl_get_string(pmodel, STRINGS_ERRORE_DI_COMUNICAZIONE),
+                                  view_intl_get_string(pmodel, STRINGS_INDIRIZZO), device.address,
+                                  view_intl_get_string(pmodel, STRINGS_NUMERO_DI_SERIE), device.serial_number,
+                                  view_intl_get_string(pmodel, STRINGS_CLASSE), string);
+        } else if (device.alarms) {
+            lv_label_set_text_fmt(pdata->lbl_alarm_description, "%s: %s\n\t%s %i\n\t%s 0x%X\n\t%s %s",
+                                  view_intl_get_string(pmodel, STRINGS_PROBLEMA_CON_IL_DISPOSITIVO),
+                                  view_intl_get_string(pmodel, STRINGS_ALLARME_DI_SICUREZZA),
+                                  view_intl_get_string(pmodel, STRINGS_INDIRIZZO), device.address,
+                                  view_intl_get_string(pmodel, STRINGS_NUMERO_DI_SERIE), device.serial_number,
+                                  view_intl_get_string(pmodel, STRINGS_CLASSE), string);
+        }
+    }
+}
+
+
+static void update_alarm_popup(model_t *pmodel, struct page_data *pdata) {
+    view_common_set_hidden(pdata->alarm_popup, pdata->shown_alarm < 0);
 }
 
 

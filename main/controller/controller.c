@@ -133,20 +133,43 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_SET_CLASS:
-            ESP_LOGI(TAG, "Class %X", msg->class);
             modbus_set_device_class(msg->address, msg->class);
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_SAVE:
             configuration_save(pmodel);
             break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED:
+            switch (model_get_fan_state(pmodel)) {
+                case MODEL_FAN_STATE_SF_ENV_CLEANING:
+                case MODEL_FAN_STATE_IF_ENV_CLEANING:
+                    // Max speed, ignore
+                    break;
+
+                default:
+                    controller_update_fan_speed(pmodel, model_get_fan_speed(pmodel));
+                    break;
+            }
+            break;
     }
 }
 
 
 void controller_manage(model_t *pmodel) {
-    static unsigned long refreshts = 0;
-    static unsigned long tempts    = 0;
+    static unsigned long refreshts    = 0;
+    static unsigned long tempts       = 0;
+    static unsigned long poll_ts      = 0;
+    static uint8_t       poll_address = 0;
+
+    if (is_expired(poll_ts, get_millis(), 200UL)) {
+        if (poll_address == 0) {
+            poll_address = model_get_next_device_address(pmodel, poll_address);
+        } else {
+            modbus_read_device_alarms(poll_address);
+            poll_ts = get_millis();
+        }
+    }
 
     if (is_expired(tempts, get_millis(), 500UL)) {
         pmodel->temperature = (int)temperature_get();
@@ -173,11 +196,16 @@ void controller_manage(model_t *pmodel) {
                 model_set_device_error(pmodel, response.address, 0);
                 break;
 
-            case MODBUS_RESPONSE_ERROR:
+            case MODBUS_RESPONSE_CODE_ERROR:
                 ESP_LOGW(TAG, "Device %i did not respond!", response.address);
                 model_set_device_error(pmodel, response.address, 1);
                 view_event(
                     (view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = 1});
+                break;
+
+            case MODBUS_RESPONSE_CODE_ALARM:
+                modbus_read_device_alarms(response.address);
+                poll_ts = get_millis();
                 break;
 
             case MODBUS_RESPONSE_CODE_SCAN_DONE:
@@ -215,6 +243,16 @@ void controller_manage(model_t *pmodel) {
                 view_event((view_event_t){
                     .code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = response.error});
                 break;
+
+            case MODBUS_RESPONSE_CODE_ALARMS_REG:
+                ESP_LOGD(TAG, "Device %i alarm 0x%02X", response.address, response.alarms);
+                if (model_set_device_alarms(pmodel, response.address, response.alarms)) {
+                    if (response.alarms) {
+                        model_add_new_alarm(pmodel, response.address);
+                    }
+                    view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_ALARM, .address = response.address});
+                }
+                break;
         }
     }
 
@@ -231,5 +269,22 @@ void controller_update_class_output(model_t *pmodel, device_class_t class, int v
         modbus_set_device_output(address, value > 0);
         starting_address = address;
         address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
+    }
+}
+
+
+void controller_update_fan_speed(model_t *pmodel, size_t speed) {
+    device_class_t classes[] = {DEVICE_CLASS_IMMISSION_FAN, DEVICE_CLASS_SIPHONING_FAN};
+
+    for (size_t i = 0; i < sizeof(classes) / sizeof(classes[0]); i++) {
+        uint8_t starting_address = 0;
+        uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, classes[i]);
+
+
+        while (address != starting_address) {
+            modbus_set_fan_speed(address, speed);
+            starting_address = address;
+            address          = model_get_next_device_address_by_class(pmodel, starting_address, classes[i]);
+        }
     }
 }
