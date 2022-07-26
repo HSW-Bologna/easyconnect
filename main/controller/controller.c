@@ -14,6 +14,7 @@
 #include "peripherals/i2c_devices.h"
 #include "i2c_devices/rtc/DS1307/ds1307.h"
 #include "temperature.h"
+#include "peripherals/tft.h"
 
 
 static const char *TAG             = "Controller";
@@ -25,6 +26,8 @@ void controller_init(model_t *pmodel) {
     log_init();
     configuration_load(pmodel);
     view_start(pmodel);
+
+    tft_backlight_set(model_get_active_backlight(pmodel));
 
     if (ds1307_is_clock_halted(rtc_driver)) {
         rtc_time_t rtc_time = {.day = 6, .wday = 1, .month = 3, .year = 22};
@@ -128,14 +131,6 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
         }
 
-        case VIEW_CONTROLLER_MESSAGE_CODE_CONFIGURE_DEVICE_ADDRESS:
-            modbus_configure_device_address(msg->address);
-            break;
-
-        case VIEW_CONTROLLER_MESSAGE_CODE_SET_CLASS:
-            modbus_set_device_class(msg->address, msg->class);
-            break;
-
         case VIEW_CONTROLLER_MESSAGE_CODE_SAVE:
             configuration_save(pmodel);
             break;
@@ -161,6 +156,8 @@ void controller_manage(model_t *pmodel) {
     static unsigned long tempts       = 0;
     static unsigned long poll_ts      = 0;
     static uint8_t       poll_address = 0;
+
+    configuration_manage();
 
     if (is_expired(poll_ts, get_millis(), 200UL)) {
         if (poll_address == 0) {
@@ -197,10 +194,12 @@ void controller_manage(model_t *pmodel) {
                 break;
 
             case MODBUS_RESPONSE_CODE_ERROR:
-                ESP_LOGW(TAG, "Device %i did not respond!", response.address);
-                model_set_device_error(pmodel, response.address, 1);
-                view_event(
-                    (view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = 1});
+                if (model_set_device_error(pmodel, response.address, 1)) {
+                    ESP_LOGW(TAG, "Device %i did not respond!", response.address);
+                    model_add_new_alarm(pmodel, response.address);
+                    view_event(
+                        (view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = 1});
+                }
                 break;
 
             case MODBUS_RESPONSE_CODE_ALARM:
@@ -216,10 +215,6 @@ void controller_manage(model_t *pmodel) {
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_LISTENING_DONE});
 
                 break;
-            case MODBUS_RESPONSE_DEVICE_MANUAL_CONFIGURATION:
-                view_event((view_event_t){
-                    .code = VIEW_EVENT_CODE_DEVICE_CONFIGURED, .error = response.error, .address = response.address});
-                break;
 
             case MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION:
                 view_event((view_event_t){.code        = VIEW_EVENT_CODE_DEVICE_CONFIGURED,
@@ -228,17 +223,12 @@ void controller_manage(model_t *pmodel) {
                                           .data.number = response.devices_number});
                 break;
 
-            case MODBUS_RESPONSE_CODE_CLASS:
-                model_set_device_error(pmodel, response.address, 0);
-                model_set_device_class(pmodel, response.address, response.class);
-                view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address});
-                break;
-
             case MODBUS_RESPONSE_CODE_INFO:
                 if (!response.scanning && model_is_address_configured(pmodel, response.address)) {
                     model_set_device_error(pmodel, response.address, 0);
                     model_set_device_sn(pmodel, response.address, response.serial_number);
                     model_set_device_class(pmodel, response.address, response.class);
+                    model_set_device_firmware(pmodel, response.address, response.firmware_version);
                 }
                 view_event((view_event_t){
                     .code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = response.error});
@@ -246,11 +236,19 @@ void controller_manage(model_t *pmodel) {
 
             case MODBUS_RESPONSE_CODE_ALARMS_REG:
                 ESP_LOGD(TAG, "Device %i alarm 0x%02X", response.address, response.alarms);
+                model_set_device_error(pmodel, response.address, 0);
                 if (model_set_device_alarms(pmodel, response.address, response.alarms)) {
                     if (response.alarms) {
                         model_add_new_alarm(pmodel, response.address);
                     }
                     view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_ALARM, .address = response.address});
+                }
+                uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
+                if (new_poll_address == poll_address) {
+                    // Restart
+                    poll_address = 0;
+                } else {
+                    poll_address = new_poll_address;
                 }
                 break;
         }
@@ -260,7 +258,7 @@ void controller_manage(model_t *pmodel) {
 }
 
 
-void controller_update_class_output(model_t *pmodel, device_class_t class, int value) {
+void controller_update_class_output(model_t *pmodel, uint16_t class, int value) {
     modbus_set_class_output(class, value);
 
     uint8_t starting_address = 0;
@@ -274,7 +272,7 @@ void controller_update_class_output(model_t *pmodel, device_class_t class, int v
 
 
 void controller_update_fan_speed(model_t *pmodel, size_t speed) {
-    device_class_t classes[] = {DEVICE_CLASS_IMMISSION_FAN, DEVICE_CLASS_SIPHONING_FAN};
+    uint16_t classes[] = {DEVICE_CLASS_IMMISSION_FAN, DEVICE_CLASS_SIPHONING_FAN};
 
     for (size_t i = 0; i < sizeof(classes) / sizeof(classes[0]); i++) {
         uint8_t starting_address = 0;

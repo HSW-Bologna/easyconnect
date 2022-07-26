@@ -165,6 +165,7 @@ struct page_data {
     lv_obj_t *slider;
     lv_obj_t *alarm_popup;
     lv_obj_t *lbl_alarm_description;
+    lv_obj_t *lbl_num_alarms;
 
     lv_task_t *blink_task;
 
@@ -275,7 +276,7 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
         lv_btn_set_state(data->btn_light, LV_BTN_STATE_RELEASED);
     }
 
-    device_class_t class;
+    uint16_t class;
     if (model_get_light_class(pmodel, &class)) {
         lv_obj_set_hidden(data->btn_light, 0);
         switch (class) {
@@ -322,7 +323,8 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
 
 
 static void update_info(model_t *pmodel, struct page_data *data) {
-    lv_label_set_text_fmt(data->lbl_temperature, "%i C", model_get_temperature(pmodel));
+    lv_label_set_text_fmt(data->lbl_temperature, "%i %s", model_get_temperature(pmodel),
+                          model_get_degrees_symbol(pmodel));
 
     char   string[32] = {0};
     time_t rawtime;
@@ -429,6 +431,34 @@ static void open_page(model_t *model, void *arg) {
     data->slider = sl;
     view_register_default_callback(data->slider, SLIDER_ID);
 
+    lv_obj_t *alarm_popup = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_set_size(alarm_popup, 320, 240);
+    lv_obj_align(alarm_popup, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_cont_set_layout(alarm_popup, LV_LAYOUT_OFF);
+    lv_obj_set_style_local_radius(alarm_popup, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, DRAWER_RADIUS);
+
+    lbl = lv_label_create(alarm_popup, NULL);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_obj_set_width(lbl, 300);
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, -32);
+    data->lbl_alarm_description = lbl;
+
+    lbl = lv_label_create(alarm_popup, NULL);
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -16, -16);
+    data->lbl_num_alarms = lbl;
+
+    lv_obj_t *btn = lv_btn_create(alarm_popup, NULL);
+    lbl           = lv_label_create(btn, NULL);
+    lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -16);
+    view_register_default_callback(btn, BTN_ALARM_OK_ID);
+
+    data->alarm_popup = alarm_popup;
+
     lv_obj_t *drawer = lv_cont_create(lv_scr_act(), NULL);
     lv_obj_set_size(drawer, 400, DRAWER_HEIGHT);
     lv_obj_align(drawer, NULL, LV_ALIGN_OUT_TOP_MID, 0, 0);
@@ -459,29 +489,6 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_t *tech = view_common_menu_button(drawer, "Menu' assistenza", 300, TECH_SETTINGS_BTN_ID);
     lv_obj_set_drag_parent(tech, true);
 
-    lv_obj_t *alarm_popup = lv_cont_create(lv_scr_act(), NULL);
-    lv_obj_set_size(alarm_popup, 320, 240);
-    lv_obj_align(alarm_popup, NULL, LV_ALIGN_CENTER, 0, 0);
-    lv_cont_set_layout(alarm_popup, LV_LAYOUT_OFF);
-    lv_obj_set_style_local_radius(alarm_popup, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, DRAWER_RADIUS);
-
-    lbl = lv_label_create(alarm_popup, NULL);
-    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
-    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
-    lv_obj_set_width(lbl, 300);
-    lv_obj_set_auto_realign(lbl, 1);
-    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, -32);
-    data->lbl_alarm_description = lbl;
-
-    lv_obj_t *btn = lv_btn_create(alarm_popup, NULL);
-    lbl           = lv_label_create(btn, NULL);
-    lv_label_set_text(lbl, LV_SYMBOL_CLOSE);
-    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -16);
-    view_register_default_callback(btn, BTN_ALARM_OK_ID);
-
-    data->alarm_popup = alarm_popup;
-
     update_info(model, data);
     update_all_buttons(model, data);
     lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
@@ -503,11 +510,12 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
             update_info(model, data);
             break;
 
+        case VIEW_EVENT_CODE_DEVICE_UPDATE:
         case VIEW_EVENT_CODE_DEVICE_ALARM:
             if (data->shown_alarm < 0) {
                 new_alarm(model, data);
-                update_alarm_popup(model, data);
             }
+            update_alarm_popup(model, data);
             break;
 
         case VIEW_EVENT_CODE_TIMER:
@@ -565,7 +573,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_LIGHT_ID: {
-                            device_class_t class;
+                            uint16_t class;
                             if (!model_get_light_class(model, &class)) {
                                 break;
                             }
@@ -738,6 +746,7 @@ static void new_alarm(model_t *pmodel, struct page_data *pdata) {
 
 static void update_alarm_popup(model_t *pmodel, struct page_data *pdata) {
     view_common_set_hidden(pdata->alarm_popup, pdata->shown_alarm < 0);
+    lv_label_set_text_fmt(pdata->lbl_num_alarms, "n %2zu", alarms_queue_count(&pmodel->alarms) + 1);
 }
 
 

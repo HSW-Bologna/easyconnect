@@ -27,14 +27,11 @@ static void open_page(model_t *model, void *arg) {
 
     view_common_title(BUTTON_BACK_ID, "Menu' assistenza", NULL);
 
-    lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), "Stato rete", NETWORK_STATE_BTN_ID);
+    lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), "Dispositivi", DEVICES_BTN_ID);
     lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_LEFT, 8, 100);
 
-    lv_obj_t *btn1 = view_common_default_menu_button(lv_scr_act(), "Dispositivi", DEVICES_BTN_ID);
+    lv_obj_t *btn1 = view_common_default_menu_button(lv_scr_act(), "Configurazione", COMMISSIONING_BTN_ID);
     lv_obj_align(btn1, btn, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
-
-    lv_obj_t *btn2 = view_common_default_menu_button(lv_scr_act(), "Configurazione", COMMISSIONING_BTN_ID);
-    lv_obj_align(btn2, btn1, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
 
     btn = view_common_default_menu_button(lv_scr_act(), "Ricerca dispositivi", SEARCH_NETWORK_BTN_ID);
     lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_RIGHT, -8, 100);

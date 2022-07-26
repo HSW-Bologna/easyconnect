@@ -24,3 +24,11 @@ INDIRIZZO, Indirizzo, Address
 CLASSE, Classe, Class
 NUMERO_DI_SERIE, numero di serie, serial number
 ALLARME_DI_SICUREZZA, allarme di sicurezza, safety alarm
+IMPOSTAZIONI, Impostazioni, Settings
+DATA_ORA, Data/Ora, Date/Time
+LINGUA, Lingua, Language
+VOLUME, Volume, Volume
+LUMINOSITA, Luminosita', Brightness
+ITALIANO, Italiano, Italian
+INGLESE, Inglese, English
+GRADI, Gradi, Degrees

@@ -13,6 +13,8 @@
 #include "peripherals/storage.h"
 #include "gel/timer/timecheck.h"
 #include "utils/utils.h"
+#include "peripherals/tft.h"
+#include "peripherals/buzzer.h"
 
 
 static const char *TAG = "Main";
@@ -26,6 +28,8 @@ void app_main(void) {
     lvgl_driver_init();
     modbus_init();
     storage_init();
+    tft_init();
+    buzzer_init();
 
     model_init(&model);
     view_init(disp_driver_flush, ft6x36_read);

@@ -7,6 +7,7 @@
 
 void configuration_save(model_t *pmodel);
 void configuration_load(model_t *pmodel);
+void configuration_manage(void);
 
 
 #endif

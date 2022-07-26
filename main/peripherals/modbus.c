@@ -6,10 +6,8 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "hardwareprofile.h"
-#include "driver/uart.h"
 #include "esp_log.h"
 #include "config/app_config.h"
-#include "driver/gpio.h"
 #include "config/app_config.h"
 #include <sys/types.h>
 #include "lightmodbus/lightmodbus.h"
@@ -18,6 +16,9 @@
 #include "utils/utils.h"
 #include "modbus.h"
 #include "model/device.h"
+#include "easyconnect_interface.h"
+#include "driver/uart.h"
+#include "driver/gpio.h"
 
 
 #define MB_PORTNUM 1
@@ -33,25 +34,13 @@
 #define MODBUS_BROADCAST_ADDRESS      0
 #define MODBUS_COMMUNICATION_ATTEMPTS 3
 
-#define MODBUS_CONFIG_ADDRESS_FUNCTION 64
-#define MODBUS_NETWORK_INITIALIZATION  65
-#define MODBUS_RANDOM_SERIAL_NUMBER    66
-#define MODBUS_SET_CLASS_OUTPUT        70
-
-#define MODBUS_ADDRESS_HOLDING_REGISTER_ADDRESS 0
-#define MODBUS_CLASS_HOLDING_REGISTER_ADDRESS   1
-#define MODBUS_SN_HOLDING_REGISTER_ADDRESS      2
-#define MODBUS_ALARMS_HOLDING_REGISTER_ADDRESS  3
-
 #define MODBUS_AUTO_COMMISSIONING_DONE_BIT 0x01
 
 typedef enum {
-    TASK_MESSAGE_CODE_CONFIGURE_DEVICE_MANUALLY,
     TASK_MESSAGE_CODE_READ_DEVICE_INFO,
     TASK_MESSAGE_CODE_READ_DEVICE_ALARMS,
     TASK_MESSAGE_CODE_READ_DEVICE_INPUTS,
     TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
-    TASK_MESSAGE_CODE_SET_DEVICE_CLASS,
     TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING,
     TASK_MESSAGE_CODE_SET_CLASS_OUTPUT,
     TASK_MESSAGE_CODE_SET_FAN_SPEED,
@@ -67,6 +56,7 @@ struct __attribute__((packed)) task_message {
             int value;
             uint16_t class;
         };
+        uint16_t expected_devices;
     };
 };
 
@@ -136,7 +126,7 @@ static ModbusMasterFunctionHandler custom_functions[] = {
     {22, modbusParseResponse22},
 #endif
 
-    {MODBUS_RANDOM_SERIAL_NUMBER, random_serial_number_response},
+    {EASYCONNECT_FUNCTION_CODE_RANDOM_SERIAL_NUMBER, random_serial_number_response},
     // Guard - prevents 0 size array
     {0, NULL},
 };
@@ -144,7 +134,7 @@ static ModbusMasterFunctionHandler custom_functions[] = {
 
 void modbus_init(void) {
     uart_config_t uart_config = {
-        .baud_rate           = 115200,
+        .baud_rate           = EASYCONNECT_BAUDRATE,
         .data_bits           = UART_DATA_8_BITS,
         .parity              = UART_PARITY_DISABLE,
         .stop_bits           = UART_STOP_BITS_1,
@@ -180,12 +170,6 @@ int modbus_get_response(modbus_response_t *response) {
 }
 
 
-void modbus_configure_device_address(uint8_t address) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_CONFIGURE_DEVICE_MANUALLY, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
-}
-
-
 void modbus_automatic_commissioning(void) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING};
     xQueueSend(messageq, &message, portMAX_DELAY);
@@ -206,12 +190,6 @@ void modbus_set_fan_speed(uint8_t address, size_t speed) {
 
 void modbus_scan(void) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_SCAN};
-    xQueueSend(messageq, &message, portMAX_DELAY);
-}
-
-
-void modbus_set_device_class(uint8_t address, uint16_t class) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_SET_DEVICE_CLASS, .address = address, .class = class};
     xQueueSend(messageq, &message, portMAX_DELAY);
 }
 
@@ -255,11 +233,14 @@ static ModbusError data_callback(const ModbusMaster *master, const ModbusDataCal
                 response->address = args->address;
 
                 switch (args->index) {
-                    case MODBUS_SN_HOLDING_REGISTER_ADDRESS:
+                    case EASYCONNECT_HOLDING_REGISTER_SERIAL_NUMBER:
                         response->serial_number = args->value;
                         break;
-                    case MODBUS_CLASS_HOLDING_REGISTER_ADDRESS:
+                    case EASYCONNECT_HOLDING_REGISTER_CLASS:
                         response->class = args->value;
+                        break;
+                    case EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION:
+                        response->firmware_version = args->value;
                         break;
                 }
                 break;
@@ -269,7 +250,7 @@ static ModbusError data_callback(const ModbusMaster *master, const ModbusDataCal
                 response->address = args->address;
 
                 switch (args->index) {
-                    case MODBUS_ALARMS_HOLDING_REGISTER_ADDRESS:
+                    case EASYCONNECT_HOLDING_REGISTER_ALARMS:
                         response->alarms = args->value;
                         break;
                 }
@@ -326,7 +307,7 @@ static void modbus_task(void *args) {
     modbus_response_t   error_resp                     = {.code = MODBUS_RESPONSE_CODE_ERROR};
 
     ESP_LOGI(TAG, "Task starting");
-    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, MODBUS_NETWORK_INITIALIZATION, NULL, 0);
+    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_NETWORK_INITIALIZATION, NULL, 0);
 
     for (;;) {
         size_t counter = 0;
@@ -338,26 +319,12 @@ static void modbus_task(void *args) {
             modbusMasterSetUserPointer(&master, NULL);
 
             switch (message.code) {
-                case TASK_MESSAGE_CODE_CONFIGURE_DEVICE_MANUALLY: {
-                    int res = 0;
-                    do {
-                        res = configure_device_manually(&master, message.address);
-                        if (res) {
-                            vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
-                        }
-                    } while (res && counter++ < MODBUS_COMMUNICATION_ATTEMPTS);
-
-                    response.error = res;
-                    response.code  = MODBUS_RESPONSE_DEVICE_MANUAL_CONFIGURATION;
-                    xQueueSend(responseq, &response, portMAX_DELAY);
-                    break;
-                }
-
                 case TASK_MESSAGE_CODE_READ_DEVICE_INFO: {
                     response.code = MODBUS_RESPONSE_CODE_INFO;
                     modbusMasterSetUserPointer(&master, &response);
                     ESP_LOGI(TAG, "Reading info from %i", message.address);
-                    if (read_holding_registers(&master, message.address, MODBUS_CLASS_HOLDING_REGISTER_ADDRESS, 4)) {
+                    if (read_holding_registers(&master, message.address, EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION,
+                                               4)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         xQueueSend(responseq, &response, portMAX_DELAY);
@@ -368,7 +335,7 @@ static void modbus_task(void *args) {
                 case TASK_MESSAGE_CODE_READ_DEVICE_ALARMS: {
                     response.code = MODBUS_RESPONSE_CODE_ALARMS_REG;
                     modbusMasterSetUserPointer(&master, &response);
-                    if (read_holding_registers(&master, message.address, MODBUS_ALARMS_HOLDING_REGISTER_ADDRESS, 1)) {
+                    if (read_holding_registers(&master, message.address, EASYCONNECT_HOLDING_REGISTER_ALARMS, 1)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         xQueueSend(responseq, &response, portMAX_DELAY);
@@ -416,7 +383,7 @@ static void modbus_task(void *args) {
                             break;
                         }
 
-                        if (read_holding_registers(&master, i, MODBUS_CLASS_HOLDING_REGISTER_ADDRESS, 1) == 0) {
+                        if (read_holding_registers(&master, i, EASYCONNECT_HOLDING_REGISTER_ADDRESS, 1) == 0) {
                             response.error = 0;
                         } else {
                             response.error   = 1;
@@ -436,8 +403,8 @@ static void modbus_task(void *args) {
                     uint16_t period = 10;
                     uint8_t  data[] = {(period >> 8) & 0xFF, period & 0xFF};
 
-                    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, MODBUS_RANDOM_SERIAL_NUMBER, data,
-                                         sizeof(data));
+                    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS,
+                                         EASYCONNECT_FUNCTION_CODE_RANDOM_SERIAL_NUMBER, data, sizeof(data));
                     DEVICE_LIST(found_devices);
                     device_list_init(found_devices);
                     uint8_t found_address = 1;
@@ -500,7 +467,7 @@ static void modbus_task(void *args) {
                         device_list_get_device(found_devices, &device, address);
                         ESP_LOGI(TAG, "Checking configuration for device %i with address %i", device.serial_number,
                                  address);
-                        if (read_holding_registers(&master, device.address, MODBUS_CLASS_HOLDING_REGISTER_ADDRESS, 1)) {
+                        if (read_holding_registers(&master, device.address, EASYCONNECT_HOLDING_REGISTER_ADDRESS, 1)) {
                             // TODO: Leggi effettivamente il numero di serie
                             ESP_LOGW(TAG, "Device %i did not have address %i", device.serial_number, address);
                         } else {
@@ -517,27 +484,15 @@ static void modbus_task(void *args) {
                     break;
                 }
 
-                case TASK_MESSAGE_CODE_SET_DEVICE_CLASS: {
-                    if (write_holding_register(&master, message.address, MODBUS_CLASS_HOLDING_REGISTER_ADDRESS,
-                                               message.class)) {
-                        xQueueSend(responseq, &error_resp, portMAX_DELAY);
-                    } else {
-                        response.code  = MODBUS_RESPONSE_CODE_CLASS;
-                        response.class = message.class;
-                        xQueueSend(responseq, &response, portMAX_DELAY);
-                    }
-                    break;
-                }
-
                 case TASK_MESSAGE_CODE_SET_CLASS_OUTPUT: {
                     uint8_t data[] = {(message.class >> 8) & 0xFF, message.class & 0xFF, message.value};
-                    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, MODBUS_SET_CLASS_OUTPUT, data,
-                                         sizeof(data));
+                    send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_SET_CLASS_OUTPUT,
+                                         data, sizeof(data));
                     break;
                 }
 
                 case TASK_MESSAGE_CODE_SET_FAN_SPEED: {
-                    if (write_holding_register(&master, message.address, 4, message.value)) {
+                    if (write_holding_register(&master, message.address, 5, message.value)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
                     break;
@@ -595,7 +550,7 @@ static int confirm_device_address(ModbusMaster *master, uint8_t address) {
     int     res                               = 0;
 
     do {
-        ModbusErrorInfo err = modbusBuildRequest03RTU(master, address, MODBUS_SN_HOLDING_REGISTER_ADDRESS, 1);
+        ModbusErrorInfo err = modbusBuildRequest03RTU(master, address, EASYCONNECT_HOLDING_REGISTER_ADDRESS, 1);
         assert(modbusIsOk(err));
         uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
         ESP_LOG_BUFFER_HEX(TAG, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
@@ -634,7 +589,8 @@ static void send_custom_function(ModbusMaster *master, uint8_t address, uint8_t 
 
 static int configure_device_manually(ModbusMaster *master, uint8_t address) {
     uint8_t data[] = {address};
-    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
+    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_CONFIG_ADDRESS, data,
+                         sizeof(data));
     vTaskDelay(pdMS_TO_TICKS(100));
     return confirm_device_address(master, address);
 }
@@ -642,9 +598,11 @@ static int configure_device_manually(ModbusMaster *master, uint8_t address) {
 
 static void configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number) {
     uint8_t data[] = {address, (serial_number >> 8) & 0xFF, serial_number & 0xFF};
-    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
+    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_CONFIG_ADDRESS, data,
+                         sizeof(data));
     vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
-    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, MODBUS_CONFIG_ADDRESS_FUNCTION, data, sizeof(data));
+    send_custom_function(master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_CONFIG_ADDRESS, data,
+                         sizeof(data));
     vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
 }
 
@@ -708,13 +666,13 @@ static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int
 
 static int read_holding_registers(ModbusMaster *master, uint8_t address, uint16_t start, uint16_t count) {
     ModbusErrorInfo err;
-    uint8_t         buffer[MODBUS_RESPONSE_03_LEN(2)] = {0};
-    int             res                               = 0;
-    size_t          counter                           = 0;
+    uint8_t         buffer[MODBUS_RESPONSE_03_LEN(count)];
+    int             res     = 0;
+    size_t          counter = 0;
 
     do {
         res = 0;
-        err = modbusBuildRequest03RTU(master, address, start, 1);
+        err = modbusBuildRequest03RTU(master, address, start, count);
         assert(modbusIsOk(err));
         uart_write_bytes(MB_PORTNUM, modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 

@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include "lvgl.h"
 #include "view.h"
@@ -19,7 +20,19 @@ lv_obj_t *view_common_back_button(int id) {
 }
 
 
-lv_obj_t *view_common_title(int id, char *string, lv_obj_t **label) {
+slider_parameter_t *view_common_slider_parameter_create(const char *title, uint16_t value, uint16_t max,
+                                                        void (*setter)(model_t *pmodel, uint16_t)) {
+    slider_parameter_t *res = malloc(sizeof(slider_parameter_t));
+    assert(res != NULL);
+    res->title   = title;
+    res->initial = value;
+    res->max     = max;
+    res->setter  = setter;
+    return res;
+}
+
+
+lv_obj_t *view_common_title(int id, const char *string, lv_obj_t **label) {
     lv_obj_t *back = view_common_back_button(id);
 
     lv_obj_t  *_internal;
@@ -78,7 +91,7 @@ lv_obj_t *view_common_address_picker(lv_obj_t *root, int id) {
 }
 
 
-lv_obj_t *view_common_menu_button(lv_obj_t *root, char *text, size_t width, int id) {
+lv_obj_t *view_common_menu_button(lv_obj_t *root, const char *text, size_t width, int id) {
     lv_obj_t *btn = lv_btn_create(root, NULL);
     lv_obj_set_size(btn, width, 60);
     lv_obj_t *lbl = lv_label_create(btn, NULL);
@@ -93,7 +106,7 @@ lv_obj_t *view_common_menu_button(lv_obj_t *root, char *text, size_t width, int 
 }
 
 
-lv_obj_t *view_common_default_menu_button(lv_obj_t *root, char *text, int id) {
+lv_obj_t *view_common_default_menu_button(lv_obj_t *root, const char *text, int id) {
     return view_common_menu_button(root, text, 230, id);
 }
 
@@ -167,7 +180,7 @@ void view_common_set_hidden(lv_obj_t *obj, int hidden) {
 }
 
 
-void view_common_get_class_string(device_class_t class, char *string, size_t len) {
+void view_common_get_class_string(uint16_t class, char *string, size_t len) {
     switch (class) {
         case DEVICE_CLASS_LIGHT_1:
             strncpy(string, "Luce 1", len);
@@ -189,6 +202,10 @@ void view_common_get_class_string(device_class_t class, char *string, size_t len
             strncpy(string, "ULF", len);
             break;
 
+        case DEVICE_CLASS_PRESSURE_SAFETY:
+            strncpy(string, "PS", len);
+            break;
+
         case DEVICE_CLASS_SIPHONING_FAN:
             strncpy(string, "Aspirazione", len);
             break;
@@ -198,7 +215,7 @@ void view_common_get_class_string(device_class_t class, char *string, size_t len
             break;
 
         default:
-            strncpy(string, "Sconosciuta", len);
+            snprintf(string, len, "0x%X", class);
             break;
     }
 }

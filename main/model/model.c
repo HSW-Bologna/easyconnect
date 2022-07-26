@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <string.h>
 #include "model.h"
+#include "easyconnect_interface.h"
 
 
 QUEUE_DEFINITION(alarms_queue, uint8_t);
@@ -13,20 +14,31 @@ void model_init(model_t *pmodel) {
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature = 32;
     device_list_init(pmodel->devices);
-    pmodel->language  = 0;
-    pmodel->fan_speed = 0;
+    pmodel->configuration.language         = 0;
+    pmodel->fan_speed                      = 0;
+    pmodel->configuration.active_backlight = 100;
+    pmodel->configuration.buzzer_volume    = MAX_BUZZER_VOLUME;
+    pmodel->configuration.use_fahrenheit   = 0;
 }
 
 
-uint16_t model_get_language(model_t *pmodel) {
+const char *model_get_degrees_symbol(model_t *pmodel) {
     assert(pmodel != NULL);
-    return pmodel->language;
+    if (model_get_use_fahrenheit(pmodel)) {
+        return "°F";
+    } else {
+        return "°C";
+    }
 }
 
 
 int model_get_temperature(model_t *pmodel) {
     assert(pmodel != NULL);
-    return pmodel->temperature;
+    if (model_get_use_fahrenheit(pmodel)) {
+        return pmodel->temperature * 9 / 5 + 32;
+    } else {
+        return pmodel->temperature;
+    }
 }
 
 
@@ -42,7 +54,7 @@ uint8_t model_get_available_address(model_t *pmodel, uint8_t previous) {
 }
 
 
-uint8_t model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous, device_class_t class) {
+uint8_t model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous, uint16_t class) {
     assert(pmodel != NULL);
     return device_list_get_next_device_address_by_class(pmodel->devices, previous, class);
 }
@@ -97,21 +109,36 @@ void model_get_device(model_t *pmodel, device_t *device, uint8_t address) {
 }
 
 
-void model_set_device_error(model_t *pmodel, uint8_t address, int error) {
+uint8_t model_set_device_error(model_t *pmodel, uint8_t address, int error) {
     assert(pmodel != NULL);
-    device_list_set_device_error(pmodel->devices, address, error);
+    return device_list_set_device_error(pmodel->devices, address, error);
 }
 
 
 void model_set_device_sn(model_t *pmodel, uint8_t address, uint16_t serial_number) {
     assert(pmodel != NULL);
-    device_list_set_device_sn(pmodel->devices, address, serial_number);
+    device_t *device = device_list_get_device_mut(pmodel->devices, address);
+    if (device->status != DEVICE_STATUS_NOT_CONFIGURED) {
+        device->serial_number = serial_number;
+    }
 }
 
 
 void model_set_device_class(model_t *pmodel, uint8_t address, uint16_t class) {
     assert(pmodel != NULL);
-    device_list_set_device_class(pmodel->devices, address, class);
+    device_t *device = device_list_get_device_mut(pmodel->devices, address);
+    if (device->status != DEVICE_STATUS_NOT_CONFIGURED) {
+        device->class = class;
+    }
+}
+
+
+void model_set_device_firmware(model_t *pmodel, uint8_t address, uint16_t firmware_version) {
+    assert(pmodel != NULL);
+    device_t *device = device_list_get_device_mut(pmodel->devices, address);
+    if (device->status != DEVICE_STATUS_NOT_CONFIGURED) {
+        device->firmware_version = firmware_version;
+    }
 }
 
 
@@ -127,7 +154,7 @@ void model_add_new_alarm(model_t *pmodel, uint8_t address) {
 }
 
 
-int model_get_light_class(model_t *pmodel, device_class_t *class) {
+int model_get_light_class(model_t *pmodel, uint16_t *class) {
     assert(pmodel != NULL);
     int found = 0;
 
@@ -153,7 +180,7 @@ int model_get_light_class(model_t *pmodel, device_class_t *class) {
 }
 
 
-size_t model_get_class_count(model_t *pmodel, device_class_t class) {
+size_t model_get_class_count(model_t *pmodel, uint16_t class) {
     assert(pmodel != NULL);
     size_t count = 0;
 

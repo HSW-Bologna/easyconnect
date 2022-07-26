@@ -1,4 +1,4 @@
-const char *strings[25][2] = {
+const char *strings[33][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -24,5 +24,13 @@ const char *strings[25][2] = {
     {"Classe", "Class", },
     {"numero di serie", "serial number", },
     {"allarme di sicurezza", "safety alarm", },
+    {"Impostazioni", "Settings", },
+    {"Data/Ora", "Date/Time", },
+    {"Lingua", "Language", },
+    {"Volume", "Volume", },
+    {"Luminosita'", "Brightness", },
+    {"Italiano", "Italian", },
+    {"Inglese", "English", },
+    {"Gradi", "Degrees", },
 };
 

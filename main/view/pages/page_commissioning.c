@@ -7,7 +7,6 @@
 enum {
     BUTTON_BACK_ID,
     AUTOMATIC_BTN_ID,
-    MANUAL_BTN_ID,
 };
 
 struct page_data {};
@@ -24,11 +23,9 @@ static void open_page(model_t *model, void *arg) {
     (void)data;
 
     view_common_title(BUTTON_BACK_ID, "Configurazione", NULL);
-    lv_obj_t *btn1 = view_common_default_menu_button(lv_scr_act(), "Manuale", MANUAL_BTN_ID);
-    lv_obj_t *btn2 = view_common_default_menu_button(lv_scr_act(), "Automatico", AUTOMATIC_BTN_ID);
+    lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), "Automatico", AUTOMATIC_BTN_ID);
 
-    lv_obj_align(btn1, NULL, LV_ALIGN_IN_TOP_MID, 0, 100);
-    lv_obj_align(btn2, btn1, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_MID, 0, 100);
 }
 
 
@@ -49,11 +46,6 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case AUTOMATIC_BTN_ID:
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
                             msg.vmsg.page = &page_automatic_device_config;
-                            break;
-
-                        case MANUAL_BTN_ID:
-                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
-                            msg.vmsg.page = &page_manual_device_config;
                             break;
                     }
                     break;

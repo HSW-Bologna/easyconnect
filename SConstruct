@@ -94,6 +94,7 @@ FREERTOS = f'{SIMULATOR}/freertos-simulator'
 CJSON = f'{SIMULATOR}/cJSON'
 B64 = f'{SIMULATOR}/b64'
 ASSETS = "assets"
+EASYCONNECT = f"{COMPONENTS}/easyconnect-device"
 
 
 STRING_TRANSLATIONS = f"{MAIN}/view/intl"
@@ -134,6 +135,7 @@ CPPPATH = [
     f"#{FREERTOS}",
     f"#{LVGL}",
     f"#{LVGL}/lvgl",
+    f"#{EASYCONNECT}/config",
 ]
 
 

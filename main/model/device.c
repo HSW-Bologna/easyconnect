@@ -66,7 +66,7 @@ uint8_t device_list_get_available_address(device_t *devices, uint8_t previous) {
 
 
 
-uint8_t device_list_get_next_device_address_by_class(device_t *devices, uint8_t previous, device_class_t class) {
+uint8_t device_list_get_next_device_address_by_class(device_t *devices, uint8_t previous, uint16_t class) {
     assert(devices != NULL);
 
     for (size_t i = ADDR2INDEX(previous + 1); i < MODBUS_MAX_DEVICES; i++) {
@@ -139,32 +139,38 @@ void device_list_get_device(device_t *devices, device_t *device, uint8_t address
 }
 
 
-void device_list_set_device_error(device_t *devices, uint8_t address, int error) {
+uint8_t device_list_set_device_error(device_t *devices, uint8_t address, int error) {
     assert(devices != NULL);
     ASSERT_ADDRESS(address);
-    size_t index          = ADDR2INDEX(address);
-    devices[index].status = error ? DEVICE_STATUS_COMMUNICATION_ERROR : DEVICE_STATUS_OK;
+
+    uint16_t error_code = error ? DEVICE_STATUS_COMMUNICATION_ERROR : DEVICE_STATUS_OK;
+
+    size_t index = ADDR2INDEX(address);
+    if (devices[index].status != error_code) {
+        devices[index].status = error_code;
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 
 void device_list_set_device_sn(device_t *devices, uint8_t address, uint16_t serial_number) {
     assert(devices != NULL);
     ASSERT_ADDRESS(address);
-
     size_t index = ADDR2INDEX(address);
+
     if (devices[index].status != DEVICE_STATUS_NOT_CONFIGURED) {
         devices[index].serial_number = serial_number;
     }
 }
 
 
-void device_list_set_device_class(device_t *devices, uint8_t address, uint16_t class) {
+device_t *device_list_get_device_mut(device_t *devices, uint8_t address) {
     assert(devices != NULL);
     ASSERT_ADDRESS(address);
     size_t index = ADDR2INDEX(address);
-    if (devices[index].status != DEVICE_STATUS_NOT_CONFIGURED) {
-        devices[index].class = class;
-    }
+    return &devices[index];
 }
 
 

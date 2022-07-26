@@ -5,5 +5,7 @@
 #define MB_UART_RXD GPIO_NUM_27
 #define MB_DERE     GPIO_NUM_4
 
+#define HAP_BACKLIGHT GPIO_NUM_23
+#define HAP_BUZZER    GPIO_NUM_2
 
 #endif

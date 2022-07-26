@@ -46,40 +46,41 @@ static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
     lv_obj_t *lbl = lv_label_create(btn, NULL);
     lv_label_set_text_fmt(lbl, "%i", device.address);
     lv_obj_t *img = lv_img_create(btn, NULL);
+
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
+
+    switch (device.class) {
+        case DEVICE_CLASS_LIGHT_1:
+            lv_img_set_src(img, &img_icona_luce_1);
+            break;
+        case DEVICE_CLASS_LIGHT_2:
+            lv_img_set_src(img, &img_icona_luce_2);
+            break;
+        case DEVICE_CLASS_LIGHT_3:
+            lv_img_set_src(img, &img_icona_luce_3);
+            break;
+        case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+            lv_img_set_src(img, &img_icona_elettrostatico);
+            break;
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER:
+            lv_img_set_src(img, &img_icona_uvc);
+            break;
+        case DEVICE_CLASS_IMMISSION_FAN:
+            lv_img_set_src(img, &img_icona_immissione);
+            break;
+        case DEVICE_CLASS_SIPHONING_FAN:
+            lv_img_set_src(img, &img_icona_aspirazione);
+            break;
+
+        default:
+            lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+            lv_obj_set_hidden(img, 1);
+            break;
+    }
+
     if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR || device.alarms > 0) {
-        lv_obj_set_hidden(img, 1);
-        lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
         lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT,
                                         lv_color_lighten(LV_COLOR_RED, LV_OPA_30));
-    } else {
-        switch (device.class) {
-            case DEVICE_CLASS_LIGHT_1:
-                lv_img_set_src(img, &img_icona_luce_1);
-                break;
-            case DEVICE_CLASS_LIGHT_2:
-                lv_img_set_src(img, &img_icona_luce_2);
-                break;
-            case DEVICE_CLASS_LIGHT_3:
-                lv_img_set_src(img, &img_icona_luce_3);
-                break;
-            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
-                lv_img_set_src(img, &img_icona_elettrostatico);
-                break;
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER:
-                lv_img_set_src(img, &img_icona_uvc);
-                break;
-            case DEVICE_CLASS_IMMISSION_FAN:
-                lv_img_set_src(img, &img_icona_immissione);
-                break;
-            case DEVICE_CLASS_SIPHONING_FAN:
-                lv_img_set_src(img, &img_icona_aspirazione);
-                break;
-
-            default:
-                lv_obj_set_hidden(img, 1);
-                break;
-        }
-        lv_obj_align(lbl, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
     }
     lv_obj_align(img, NULL, LV_ALIGN_IN_RIGHT_MID, -8, 0);
 
@@ -252,6 +253,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
     view_message_t msg = {0};
 
     switch (event.code) {
+        case VIEW_EVENT_CODE_DEVICE_ALARM:
         case VIEW_EVENT_CODE_DEVICE_UPDATE:
             update_device_list(pmodel, data);
             break;
