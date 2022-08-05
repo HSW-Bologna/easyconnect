@@ -17,9 +17,8 @@
 static const char *TAG = "Log";
 
 void log_init(void) {
-#ifndef PC_SIMULATOR
     ESP_LOGI(TAG, "Initializing LittelFS");
-
+#ifndef PC_SIMULATOR
     esp_vfs_littlefs_conf_t conf = {
         .base_path              = "/littlefs",
         .partition_label        = "littlefs",

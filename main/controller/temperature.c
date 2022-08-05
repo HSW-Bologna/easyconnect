@@ -27,7 +27,7 @@ void temperature_init(void) {
     sem = xSemaphoreCreateMutexStatic(&static_sem);
 
     static StaticTask_t static_task;
-    static StackType_t  task_stack[1024];
+    static StackType_t  task_stack[1024 + 512];
     xTaskCreateStatic(temperature_task, TAG, sizeof(task_stack) / sizeof(StackType_t), NULL, 1, task_stack,
                       &static_task);
 }
@@ -57,7 +57,7 @@ static void temperature_task(void *args) {
 
     for (;;) {
         double temperature = 0;
-        
+
         if (sht21_read(sht21_driver, &temperature, NULL, DELAY) == 0) {
             xSemaphoreTake(sem, portMAX_DELAY);
             temperatures[average_index] = temperature;

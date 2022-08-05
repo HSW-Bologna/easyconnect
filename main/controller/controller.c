@@ -3,7 +3,7 @@
 #include "controller.h"
 #include "model/model.h"
 #include "view/view.h"
-#include "peripherals/modbus.h"
+#include "modbus.h"
 #include "log.h"
 #include "utils/utils.h"
 #include "gel/timer/timecheck.h"
@@ -15,6 +15,10 @@
 #include "i2c_devices/rtc/DS1307/ds1307.h"
 #include "temperature.h"
 #include "peripherals/tft.h"
+#include "peripherals/buzzer.h"
+
+
+static void error_condition_on_device(model_t *pmodel, uint8_t address);
 
 
 static const char *TAG             = "Controller";
@@ -22,6 +26,7 @@ static int         refresh_devices = 1;
 
 
 void controller_init(model_t *pmodel) {
+    modbus_init();
     temperature_init();
     log_init();
     configuration_load(pmodel);
@@ -82,6 +87,11 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER: {
+            if (model_is_there_a_filter_alarm(pmodel)) {
+                buzzer_beep(2, 100, 50, model_get_buzzer_volume(pmodel));
+                break;
+            }
+
             size_t esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
             size_t ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
 
@@ -117,7 +127,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_AUTOMATIC_COMMISSIONING:
-            modbus_automatic_commissioning();
+            modbus_automatic_commissioning(msg->expected_devices);
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO: {
@@ -196,7 +206,7 @@ void controller_manage(model_t *pmodel) {
             case MODBUS_RESPONSE_CODE_ERROR:
                 if (model_set_device_error(pmodel, response.address, 1)) {
                     ESP_LOGW(TAG, "Device %i did not respond!", response.address);
-                    model_add_new_alarm(pmodel, response.address);
+                    error_condition_on_device(pmodel, response.address);
                     view_event(
                         (view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = 1});
                 }
@@ -238,9 +248,7 @@ void controller_manage(model_t *pmodel) {
                 ESP_LOGD(TAG, "Device %i alarm 0x%02X", response.address, response.alarms);
                 model_set_device_error(pmodel, response.address, 0);
                 if (model_set_device_alarms(pmodel, response.address, response.alarms)) {
-                    if (response.alarms) {
-                        model_add_new_alarm(pmodel, response.address);
-                    }
+                    error_condition_on_device(pmodel, response.address);
                     view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_ALARM, .address = response.address});
                 }
                 uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
@@ -284,5 +292,38 @@ void controller_update_fan_speed(model_t *pmodel, size_t speed) {
             starting_address = address;
             address          = model_get_next_device_address_by_class(pmodel, starting_address, classes[i]);
         }
+    }
+}
+
+
+static void error_condition_on_device(model_t *pmodel, uint8_t address) {
+    device_t device = model_get_device(pmodel, address);
+
+    switch (device.class) {
+        case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+            if (model_get_electrostatic_filter_state(pmodel)) {
+                controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
+                model_electrostatic_filter_off(pmodel);
+            }
+            break;
+
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER:
+            if (model_get_uvc_filter_state(pmodel)) {
+                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER, 0);
+                model_uvc_filter_off(pmodel);
+            }
+            break;
+
+        case DEVICE_CLASS_SIPHONING_FAN:
+        case DEVICE_CLASS_IMMISSION_FAN:
+            if (model_get_electrostatic_filter_state(pmodel)) {
+                controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
+                model_electrostatic_filter_off(pmodel);
+            }
+            if (model_get_uvc_filter_state(pmodel)) {
+                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER, 0);
+                model_uvc_filter_off(pmodel);
+            }
+            break;
     }
 }

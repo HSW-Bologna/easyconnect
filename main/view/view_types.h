@@ -78,8 +78,9 @@ typedef struct {
             uint8_t address;
             uint16_t class;
         };
-        uint8_t light_value;
-        uint8_t speed;
+        uint8_t  light_value;
+        uint8_t  speed;
+        uint16_t expected_devices;
     };
 } view_controller_message_t;
 

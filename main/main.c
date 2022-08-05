@@ -9,7 +9,7 @@
 #include "controller/gui.h"
 #include "lvgl_helpers.h"
 #include "peripherals/system.h"
-#include "peripherals/modbus.h"
+#include "peripherals/rs485.h"
 #include "peripherals/storage.h"
 #include "gel/timer/timecheck.h"
 #include "utils/utils.h"
@@ -26,7 +26,7 @@ void app_main(void) {
     /* Initialize SPI or I2C bus used by the drivers */
     system_i2c_init();
     lvgl_driver_init();
-    modbus_init();
+    rs485_init();
     storage_init();
     tft_init();
     buzzer_init();

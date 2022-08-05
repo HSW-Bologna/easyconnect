@@ -1,4 +1,4 @@
-const char *strings[33][2] = {
+const char *strings[47][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -32,5 +32,19 @@ const char *strings[33][2] = {
     {"Italiano", "Italian", },
     {"Inglese", "English", },
     {"Gradi", "Degrees", },
+    {"Sto ascoltando", "I'm listening", },
+    {"Configuro", "Configuring", },
+    {"Configura", "Configure", },
+    {"Dispositivi configurati", "Configured devices", },
+    {"Errore", "Error", },
+    {"Configurazione automatica", "Automatic configuration", },
+    {"Configurazione", "Configuration", },
+    {"Automatica", "Automatic", },
+    {"Gestisci", "Manage", },
+    {"Rimuovere il dispositivo?", "Remove the device?", },
+    {"Aggiungere il dispositivo?", "Add the device?", },
+    {"Quanti dispositivi devono essere configurati?", "How many devices should be configured?", },
+    {"Configurazione completata; se non tutti i dispositivi sono stati rilevati ripetere la procedura", "Configuration complete; if there are missing devices repeat the procedure", },
+    {"Riprova", "Try again", },
 };
 

@@ -16,7 +16,26 @@ void device_list_init(device_t *devices) {
 }
 
 
-uint8_t device_list_get_next_device_address(device_t *devices, uint8_t previous) {
+uint8_t device_list_get_next_configured_device_address(device_t *devices, uint8_t previous) {
+    assert(devices != NULL);
+
+    for (size_t i = ADDR2INDEX(previous + 1); i < MODBUS_MAX_DEVICES; i++) {
+        switch (devices[i].status) {
+            case DEVICE_STATUS_OK:
+            case DEVICE_STATUS_CONFIGURED:
+            case DEVICE_STATUS_COMMUNICATION_ERROR:
+                return (uint8_t)INDEX2ADDR(i);
+
+            default:
+                break;
+        }
+    }
+
+    return previous;
+}
+
+
+uint8_t device_list_get_next_found_device_address(device_t *devices, uint8_t previous) {
     assert(devices != NULL);
 
     for (size_t i = ADDR2INDEX(previous + 1); i < MODBUS_MAX_DEVICES; i++) {
@@ -79,12 +98,26 @@ uint8_t device_list_get_next_device_address_by_class(device_t *devices, uint8_t 
 }
 
 
-int device_list_new_device(device_t *devices, uint8_t address) {
+int device_list_device_found(device_t *devices, uint8_t address) {
     assert(devices != NULL);
     ASSERT_ADDRESS(address);
     size_t index = ADDR2INDEX(address);
 
     if (devices[index].status != DEVICE_STATUS_NOT_CONFIGURED) {
+        return -1;
+    }
+
+    devices[index].status = DEVICE_STATUS_FOUND;
+    return 0;
+}
+
+
+int device_list_configure_device(device_t *devices, uint8_t address) {
+    assert(devices != NULL);
+    ASSERT_ADDRESS(address);
+    size_t index = ADDR2INDEX(address);
+
+    if (devices[index].status != DEVICE_STATUS_NOT_CONFIGURED && devices[index].status != DEVICE_STATUS_FOUND) {
         return -1;
     }
 
@@ -131,21 +164,24 @@ void device_list_delete_device(device_t *devices, uint8_t address) {
 }
 
 
-void device_list_get_device(device_t *devices, device_t *device, uint8_t address) {
+device_t device_list_get_device(device_t *devices, uint8_t address) {
     assert(devices != NULL);
     ASSERT_ADDRESS(address);
     size_t index = ADDR2INDEX(address);
-    *device      = devices[index];
+    return devices[index];
 }
 
 
 uint8_t device_list_set_device_error(device_t *devices, uint8_t address, int error) {
     assert(devices != NULL);
     ASSERT_ADDRESS(address);
+    size_t index = ADDR2INDEX(address);
+
+    if (devices[index].status == DEVICE_STATUS_NOT_CONFIGURED) {
+        return 0;
+    }
 
     uint16_t error_code = error ? DEVICE_STATUS_COMMUNICATION_ERROR : DEVICE_STATUS_OK;
-
-    size_t index = ADDR2INDEX(address);
     if (devices[index].status != error_code) {
         devices[index].status = error_code;
         return 1;
@@ -199,4 +235,30 @@ size_t device_list_get_configured_devices(device_t *devices) {
     }
 
     return count;
+}
+
+
+uint8_t device_list_is_there_an_alarm(device_t *devices) {
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
+        if (devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
+            if (devices[i].alarms > 0) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+
+uint8_t device_list_is_there_an_alarm_for_class(device_t *devices, uint16_t class) {
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
+        if (devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
+            if (devices[i].class == class && devices[i].alarms > 0) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
 }

@@ -5,9 +5,6 @@
 #include "easyconnect_interface.h"
 
 
-QUEUE_DEFINITION(alarms_queue, uint8_t);
-
-
 void model_init(model_t *pmodel) {
     assert(pmodel != NULL);
 
@@ -62,7 +59,7 @@ uint8_t model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous
 
 uint8_t model_get_next_device_address(model_t *pmodel, uint8_t previous) {
     assert(pmodel != NULL);
-    return device_list_get_next_device_address(pmodel->devices, previous);
+    return device_list_get_next_configured_device_address(pmodel->devices, previous);
 }
 
 
@@ -74,7 +71,7 @@ uint8_t model_get_prev_device_address(model_t *pmodel, uint8_t next) {
 
 int model_new_device(model_t *pmodel, uint8_t address) {
     assert(pmodel != NULL);
-    return device_list_new_device(pmodel->devices, address);
+    return device_list_configure_device(pmodel->devices, address);
 }
 
 
@@ -103,9 +100,9 @@ void model_delete_device(model_t *pmodel, uint8_t address) {
 }
 
 
-void model_get_device(model_t *pmodel, device_t *device, uint8_t address) {
+device_t model_get_device(model_t *pmodel, uint8_t address) {
     assert(pmodel != NULL);
-    device_list_get_device(pmodel->devices, device, address);
+    return device_list_get_device(pmodel->devices, address);
 }
 
 
@@ -145,12 +142,6 @@ void model_set_device_firmware(model_t *pmodel, uint8_t address, uint16_t firmwa
 uint8_t model_set_device_alarms(model_t *pmodel, uint8_t address, uint16_t alarms) {
     assert(pmodel != NULL);
     return device_list_set_device_alarms(pmodel->devices, address, alarms);
-}
-
-
-void model_add_new_alarm(model_t *pmodel, uint8_t address) {
-    assert(pmodel != NULL);
-    alarms_queue_enqueue(&pmodel->alarms, &address);
 }
 
 
@@ -233,6 +224,12 @@ void model_electrostatic_filter_toggle(model_t *pmodel) {
 }
 
 
+void model_electrostatic_filter_off(model_t *pmodel) {
+    assert(pmodel != NULL);
+    pmodel->electrostatic_filter_on = 0;
+}
+
+
 int model_get_uvc_filter_state(model_t *pmodel) {
     assert(pmodel != NULL);
     return pmodel->uvc_filter_on;
@@ -245,7 +242,37 @@ void model_uvc_filter_toggle(model_t *pmodel) {
 }
 
 
+void model_uvc_filter_off(model_t *pmodel) {
+    assert(pmodel != NULL);
+    pmodel->uvc_filter_on = 0;
+}
+
+
 void model_uvc_filter_on(model_t *pmodel) {
     assert(pmodel != NULL);
     pmodel->uvc_filter_on = 1;
+}
+
+
+uint8_t model_is_there_an_alarm(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return device_list_is_there_an_alarm(pmodel->devices);
+}
+
+
+uint8_t model_is_there_an_alarm_for_class(model_t *pmodel, uint16_t class) {
+    assert(pmodel != NULL);
+    return device_list_is_there_an_alarm_for_class(pmodel->devices, class);
+}
+
+
+uint8_t model_is_there_a_filter_alarm(model_t *pmodel) {
+    return model_is_there_an_alarm_for_class(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER) ||
+           model_is_there_an_alarm_for_class(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
+}
+
+
+uint8_t model_is_there_a_fan_alarm(model_t *pmodel) {
+    return model_is_there_an_alarm_for_class(pmodel, DEVICE_CLASS_SIPHONING_FAN) ||
+           model_is_there_an_alarm_for_class(pmodel, DEVICE_CLASS_IMMISSION_FAN);
 }

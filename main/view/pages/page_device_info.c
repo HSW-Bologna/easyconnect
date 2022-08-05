@@ -23,22 +23,9 @@ struct page_data {
 };
 
 
-
-static const uint16_t classes[] = {
-    DEVICE_CLASS_LIGHT_1,
-    DEVICE_CLASS_LIGHT_2,
-    DEVICE_CLASS_LIGHT_3,
-    DEVICE_CLASS_ELECTROSTATIC_FILTER,
-    DEVICE_CLASS_ULTRAVIOLET_FILTER,
-    DEVICE_CLASS_PRESSURE_SAFETY,
-    DEVICE_CLASS_SIPHONING_FAN,
-    DEVICE_CLASS_IMMISSION_FAN,
-};
-
-
 static void update_info(model_t *pmodel, struct page_data *data) {
-    model_get_device(pmodel, &data->device, data->device.address);
-    lv_label_set_text_fmt(data->lbl_info, "Dispositivo %i, classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
+    data->device = model_get_device(pmodel, data->device.address);
+    lv_label_set_text_fmt(data->lbl_info, "Dispositivo %i,\n classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
                           data->device.address, data->device.class, data->device.status, data->device.serial_number,
                           data->device.alarms);
 }
@@ -46,7 +33,7 @@ static void update_info(model_t *pmodel, struct page_data *data) {
 
 static void *create_page(model_t *model, void *extra) {
     struct page_data *data = malloc(sizeof(struct page_data));
-    model_get_device(model, &data->device, (uint8_t)(uintptr_t)extra);
+    data->device           = model_get_device(model, (uint8_t)(uintptr_t)extra);
     return data;
 }
 
@@ -68,14 +55,14 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_set_style_local_text_font(lbl, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
     lv_label_set_text(lbl, "Rimuovi");
     lv_obj_set_size(btn, 180, 48);
-    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -4);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -8);
     view_register_default_callback(btn, DELETE_BTN_ID);
 
     btn = lv_btn_create(lv_scr_act(), NULL);
     lbl = lv_label_create(btn, NULL);
     lv_label_set_text(lbl, LV_SYMBOL_REFRESH);
     lv_obj_set_size(btn, 48, 48);
-    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, 0, 0);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -8);
     view_register_default_callback(btn, REFRESH_BTN_ID);
 
     update_info(pmodel, data);

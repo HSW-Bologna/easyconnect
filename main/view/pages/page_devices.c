@@ -153,8 +153,7 @@ static void update_device_list(model_t *pmodel, struct page_data *data) {
     uint8_t address      = data->starting_address;
     uint8_t prev_address = address;
     do {
-        device_t device;
-        model_get_device(pmodel, &device, address);
+        device_t device = model_get_device(pmodel, address);
         address_button(data->cont, device);
         prev_address = address;
         address      = model_get_next_device_address(pmodel, prev_address);

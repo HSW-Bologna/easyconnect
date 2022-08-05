@@ -95,6 +95,7 @@ CJSON = f'{SIMULATOR}/cJSON'
 B64 = f'{SIMULATOR}/b64'
 ASSETS = "assets"
 EASYCONNECT = f"{COMPONENTS}/easyconnect-device"
+LIGHTMODBUS = f"{COMPONENTS}/liblightmodbus-esp"
 
 
 STRING_TRANSLATIONS = f"{MAIN}/view/intl"
@@ -125,6 +126,7 @@ CFLAGS = [
     "-Wno-unused-parameter",
     "-static-libgcc",
     "-static-libstdc++",
+    "-DLIGHTMODBUS_FULL",
 ]
 LDLIBS = ["-lmingw32", "-lwinmm", "-lSDL2main",
           "-lSDL2"] if MINGW else ["-lSDL2"] + ['-lpthread']
@@ -136,6 +138,7 @@ CPPPATH = [
     f"#{LVGL}",
     f"#{LVGL}/lvgl",
     f"#{EASYCONNECT}/config",
+    f"#{LIGHTMODBUS}/repo/include"
 ]
 
 
@@ -212,6 +215,7 @@ def main():
     sources += [File(f'{CJSON}/cJSON.c')]
     sources += [File(f'{B64}/encode.c'),
                 File(f'{B64}/decode.c'), File(f'{B64}/buffer.c')]
+    sources += [File(f"{LIGHTMODBUS}/src/impl.c")]
 
     prog = env.Program(PROGRAM, sources + freertos + gel_objects + i2c_objects)
     PhonyTargets('run', './simulated', prog, env)

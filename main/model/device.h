@@ -19,8 +19,9 @@
 
 typedef enum {
     DEVICE_STATUS_NOT_CONFIGURED = 0,
-    DEVICE_STATUS_OK,
     DEVICE_STATUS_CONFIGURED,
+    DEVICE_STATUS_OK,
+    DEVICE_STATUS_FOUND,
     DEVICE_STATUS_COMMUNICATION_ERROR,
 } device_status_t;
 
@@ -47,20 +48,24 @@ typedef struct {
 
 void          device_list_init(device_t *devices);
 uint8_t       device_list_get_prev_device_address(device_t *devices, uint8_t next);
-uint8_t       device_list_get_next_device_address(device_t *devices, uint8_t previous);
+uint8_t       device_list_get_next_configured_device_address(device_t *devices, uint8_t previous);
+uint8_t       device_list_get_next_found_device_address(device_t *devices, uint8_t previous);
 int           device_list_is_address_configured(device_t *devices, uint8_t address);
 uint8_t       device_list_get_available_address(device_t *devices, uint8_t previous);
 uint8_t       device_list_get_next_device_address_by_class(device_t *devices, uint8_t previous, uint16_t class);
-int           device_list_new_device(device_t *devices, uint8_t address);
+int           device_list_configure_device(device_t *devices, uint8_t address);
+int           device_list_device_found(device_t *devices, uint8_t address);
 address_map_t device_list_get_address_map(device_t *devices);
 address_map_t device_list_get_error_map(device_t *devices);
 void          device_list_delete_device(device_t *devices, uint8_t address);
-void          device_list_get_device(device_t *devices, device_t *device, uint8_t address);
 uint8_t       device_list_set_device_error(device_t *devices, uint8_t address, int error);
 uint8_t       device_list_set_device_alarms(device_t *devices, uint8_t address, uint16_t alarms);
 size_t        device_list_get_configured_devices(device_t *devices);
+device_t      device_list_get_device(device_t *devices, uint8_t address);
 device_t     *device_list_get_device_mut(device_t *devices, uint8_t address);
 void          device_list_set_device_sn(device_t *devices, uint8_t address, uint16_t serial_number);
+uint8_t       device_list_is_there_an_alarm(device_t *devices);
+uint8_t       device_list_is_there_an_alarm_for_class(device_t *devices, uint16_t class);
 
 
 #endif

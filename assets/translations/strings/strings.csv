@@ -32,3 +32,17 @@ LUMINOSITA, Luminosita', Brightness
 ITALIANO, Italiano, Italian
 INGLESE, Inglese, English
 GRADI, Gradi, Degrees
+STO_ASCOLTANDO, Sto ascoltando, I'm listening
+CONFIGURO, Configuro, Configuring
+CONFIGURA, Configura, Configure
+DISPOSITIVI_CONFIGURATI, Dispositivi configurati, Configured devices
+ERRORE, Errore, Error
+CONFIGURAZIONE_AUTOMATICA, Configurazione automatica, Automatic configuration
+CONFIGURAZIONE, Configurazione, Configuration
+AUTOMATICA, Automatica, Automatic
+GESTISCI, Gestisci, Manage
+RIMUOVERE_IL_DISPOSITIVO, Rimuovere il dispositivo?, Remove the device?
+AGGIUNGERE_IL_DISPOSITIVO, Aggiungere il dispositivo?, Add the device?
+QUANTI_DISPOSITIVI_DEVONO_ESSERE_CONFIGURATI, Quanti dispositivi devono essere configurati?, How many devices should be configured?
+CONFIGURAZIONE_COMPLETATA_SE_NON_TUTTI_I_DISPOSITIVI_SONO_STATI_RILEVATI_RIPETERE_LA_PROCEDURA, Configurazione completata; se non tutti i dispositivi sono stati rilevati ripetere la procedura, Configuration complete; if there are missing devices repeat the procedure
+RIPROVA, Riprova, Try again
