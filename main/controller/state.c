@@ -88,7 +88,7 @@ static int off_event_manager(model_t *pmodel, state_event_code_t event) {
 static int env_clean_sf_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, TEMP_PERIOD, get_millis());
-    controller_update_fan_speed(pmodel, MAX_FAN_SPEED);
+    controller_update_fan_speed(pmodel, TOP_FAN_SPEED);
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
     controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 0);
     return 0;
@@ -125,7 +125,7 @@ static int env_clean_sf_event_manager(model_t *pmodel, state_event_code_t event)
 static int env_clean_if_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, TEMP_PERIOD, get_millis());
-    controller_update_fan_speed(pmodel, MAX_FAN_SPEED);
+    controller_update_fan_speed(pmodel, TOP_FAN_SPEED);
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 0);
     controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
     return 0;
@@ -152,7 +152,7 @@ static int env_clean_if_event_manager(model_t *pmodel, state_event_code_t event)
 static int env_clean_sf_if_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, TEMP_PERIOD, get_millis());
-    controller_update_fan_speed(pmodel, MAX_FAN_SPEED);
+    controller_update_fan_speed(pmodel, TOP_FAN_SPEED);
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
     controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
     return 0;

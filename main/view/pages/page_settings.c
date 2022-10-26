@@ -12,6 +12,7 @@ enum {
     DEGREES_BTN_ID,
     VOLUME_BTN_ID,
     BRIGHTNESS_BTN_ID,
+    FILTRI_BTN_ID,
 };
 
 struct page_data {};
@@ -51,6 +52,10 @@ static void open_page(model_t *pmodel, void *arg) {
     btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_GRADI), DEGREES_BTN_ID);
     lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
     btn_previous = btn;
+
+    btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_FILTRI), FILTRI_BTN_ID);
+    lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
+    btn_previous = btn;
 }
 
 
@@ -81,6 +86,11 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                         case DEGREES_BTN_ID:
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
                             msg.vmsg.page = &page_degrees;
+                            break;
+
+                        case FILTRI_BTN_ID:
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_filters;
                             break;
 
                         case BRIGHTNESS_BTN_ID: {

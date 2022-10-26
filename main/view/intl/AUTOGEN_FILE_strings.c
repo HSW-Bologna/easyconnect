@@ -1,4 +1,4 @@
-const char *strings[47][2] = {
+const char *strings[50][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -46,5 +46,8 @@ const char *strings[47][2] = {
     {"Quanti dispositivi devono essere configurati?", "How many devices should be configured?", },
     {"Configurazione completata; se non tutti i dispositivi sono stati rilevati ripetere la procedura", "Configuration complete; if there are missing devices repeat the procedure", },
     {"Riprova", "Try again", },
+    {"Dispositivi", "Devices", },
+    {"Menu' assistenza", "Technical menu", },
+    {"Filtri", "Filters", },
 };
 

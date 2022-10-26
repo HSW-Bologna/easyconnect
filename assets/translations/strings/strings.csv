@@ -46,3 +46,6 @@ AGGIUNGERE_IL_DISPOSITIVO, Aggiungere il dispositivo?, Add the device?
 QUANTI_DISPOSITIVI_DEVONO_ESSERE_CONFIGURATI, Quanti dispositivi devono essere configurati?, How many devices should be configured?
 CONFIGURAZIONE_COMPLETATA_SE_NON_TUTTI_I_DISPOSITIVI_SONO_STATI_RILEVATI_RIPETERE_LA_PROCEDURA, Configurazione completata; se non tutti i dispositivi sono stati rilevati ripetere la procedura, Configuration complete; if there are missing devices repeat the procedure
 RIPROVA, Riprova, Try again
+DISPOSITIVI, Dispositivi, Devices
+MENU_ASSISTENZA, Menu' assistenza, Technical menu
+FILTRI, Filtri, Filters

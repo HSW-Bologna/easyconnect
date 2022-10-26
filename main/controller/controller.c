@@ -19,6 +19,7 @@
 
 
 static void error_condition_on_device(model_t *pmodel, uint8_t address);
+static void print_heap_status(void);
 
 
 static const char *TAG             = "Controller";
@@ -50,6 +51,10 @@ void controller_init(model_t *pmodel) {
 void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) {
     switch (msg->code) {
         case VIEW_CONTROLLER_MESSAGE_NOTHING:
+            break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_MESSAGES:
+            modbus_read_device_messages(msg->address, model_get_device(pmodel, msg->address).class);
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_SET_RTC: {
@@ -165,6 +170,7 @@ void controller_manage(model_t *pmodel) {
     static unsigned long refreshts    = 0;
     static unsigned long tempts       = 0;
     static unsigned long poll_ts      = 0;
+    static unsigned long heapts       = 0;
     static uint8_t       poll_address = 0;
 
     configuration_manage();
@@ -244,6 +250,16 @@ void controller_manage(model_t *pmodel) {
                     .code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = response.error});
                 break;
 
+            case MODBUS_RESPONSE_CODE_MESSAGES: {
+                view_event_t event = {.code = VIEW_EVENT_CODE_DEVICE_MESSAGES};
+                event.num_messages = response.num_messages;
+                for (size_t i = 0; i < response.num_messages; i++) {
+                    event.messages[i] = response.messages[i];
+                }
+                view_event(event);
+                break;
+            }
+
             case MODBUS_RESPONSE_CODE_ALARMS_REG:
                 ESP_LOGD(TAG, "Device %i alarm 0x%02X", response.address, response.alarms);
                 model_set_device_error(pmodel, response.address, 0);
@@ -260,6 +276,12 @@ void controller_manage(model_t *pmodel) {
                 }
                 break;
         }
+    }
+
+
+    if (is_expired(heapts, get_millis(), 5000UL)) {
+        print_heap_status();
+        heapts = get_millis();
     }
 
     controller_state_manage(pmodel);
@@ -326,4 +348,17 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address) {
             }
             break;
     }
+}
+
+
+static void print_heap_status(void) {
+    printf("[%s] - Internal RAM: LWM = %u, free = %u, biggest = %u\n", TAG,
+           heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL), heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+           heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    printf("[%s] - PSRAM       : LWM = %u, free = %u\n", TAG, heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM),
+           heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+
+    lv_mem_monitor_t monitor = {0};
+    lv_mem_monitor(&monitor);
+    printf("[%s] - LVGL        : free = %u, frag = %u%%\n", TAG, monitor.free_size, monitor.frag_pct);
 }

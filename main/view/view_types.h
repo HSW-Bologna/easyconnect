@@ -2,6 +2,7 @@
 #define VIEW_TYPES_H_INCLUDED
 
 #include <stdint.h>
+#include "model/device.h"
 
 typedef enum {
     VIEW_EVENT_CODE_LVGL,
@@ -9,6 +10,7 @@ typedef enum {
     VIEW_EVENT_CODE_TIMER,
     VIEW_EVENT_CODE_DEVICE_CONFIGURED,
     VIEW_EVENT_CODE_DEVICE_UPDATE,
+    VIEW_EVENT_CODE_DEVICE_MESSAGES,
     VIEW_EVENT_CODE_DEVICE_ALARM,
     VIEW_EVENT_CODE_DEVICE_SEARCH_DONE,
     VIEW_EVENT_CODE_DEVICE_LISTENING_DONE,
@@ -30,6 +32,10 @@ typedef struct {
         struct {
             uint8_t address;
             int     error;
+        };
+        struct {
+            size_t num_messages;
+            char  *messages[MAX_NUM_MESSAGES];
         };
     };
 } view_event_t;
@@ -64,11 +70,13 @@ typedef enum {
     VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER,
     VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_SCAN,
     VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO,
+    VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_MESSAGES,
     VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO_AND_SAVE,
     VIEW_CONTROLLER_MESSAGE_CODE_STOP_CURRENT_OPERATION,
     VIEW_CONTROLLER_MESSAGE_CODE_REFRESH_DEVICES,
     VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED,
 } view_controller_message_code_t;
+
 
 typedef struct {
     view_controller_message_code_t code;

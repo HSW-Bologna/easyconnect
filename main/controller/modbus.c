@@ -31,6 +31,7 @@
 
 typedef enum {
     TASK_MESSAGE_CODE_READ_DEVICE_INFO,
+    TASK_MESSAGE_CODE_READ_DEVICE_MESSAGES,
     TASK_MESSAGE_CODE_READ_DEVICE_ALARMS,
     TASK_MESSAGE_CODE_READ_DEVICE_INPUTS,
     TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
@@ -50,6 +51,7 @@ struct __attribute__((packed)) task_message {
             uint16_t class;
         };
         uint16_t expected_devices;
+        uint16_t num_messages;
     };
 };
 
@@ -185,6 +187,23 @@ void modbus_read_device_info(uint8_t address) {
 }
 
 
+void modbus_read_device_messages(uint8_t address, uint8_t device_model) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_MESSAGES, .address = address};
+
+    switch (device_model) {
+        case EASYCONNECT_DEVICE_RELE_PERIPHERAL:
+            message.num_messages = 2;
+            break;
+
+        default:
+            message.num_messages = 1;
+            break;
+    }
+
+    xQueueSend(messageq, &message, portMAX_DELAY);
+}
+
+
 void modbus_read_device_alarms(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_ALARMS, .address = address};
     xQueueSend(messageq, &message, portMAX_DELAY);
@@ -222,6 +241,16 @@ static ModbusError data_callback(const ModbusMaster *master, const ModbusDataCal
                         response->firmware_version = args->value;
                         break;
                 }
+                break;
+            }
+
+            case MODBUS_RESPONSE_CODE_MESSAGES: {
+                size_t   relative_index = args->index - EASYCONNECT_HOLDING_REGISTER_MESSAGE_1;
+                uint16_t num_message    = relative_index / EASYCONNECT_MESSAGE_NUM_REGISTERS;
+                uint16_t char_index     = (relative_index % EASYCONNECT_MESSAGE_NUM_REGISTERS) * 2;
+                ESP_LOGI(TAG, "%i %i %i %04X", args->index, num_message, char_index, args->value);
+                response->messages[num_message][char_index]     = (args->value >> 8) & 0xFF;
+                response->messages[num_message][char_index + 1] = args->value & 0xFF;
                 break;
             }
 
@@ -303,6 +332,29 @@ static void modbus_task(void *args) {
                     ESP_LOGI(TAG, "Reading info from %i", message.address);
                     if (read_holding_registers(&master, message.address, EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION,
                                                4)) {
+                        xQueueSend(responseq, &error_resp, portMAX_DELAY);
+                    } else {
+                        xQueueSend(responseq, &response, portMAX_DELAY);
+                    }
+                    break;
+                }
+
+                case TASK_MESSAGE_CODE_READ_DEVICE_MESSAGES: {
+                    response.code = MODBUS_RESPONSE_CODE_MESSAGES;
+                    modbusMasterSetUserPointer(&master, &response);
+
+                    response.num_messages = message.num_messages;
+                    for (size_t i = 0; i < response.num_messages; i++) {
+                        response.messages[i] = malloc(EASYCONNECT_MESSAGE_SIZE);
+                        assert(response.messages[i]);
+                    }
+
+                    uint16_t num_registers = message.num_messages * EASYCONNECT_MESSAGE_NUM_REGISTERS;
+                    if (read_holding_registers(&master, message.address, EASYCONNECT_HOLDING_REGISTER_MESSAGE_1,
+                                               num_registers)) {
+                        for (size_t i = 0; i < response.num_messages; i++) {
+                            free(response.messages[i]);
+                        }
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         xQueueSend(responseq, &response, portMAX_DELAY);
@@ -561,6 +613,8 @@ static int write_holding_registers(ModbusMaster *master, uint8_t address, uint16
     int     res                            = 0;
     size_t  counter                        = 0;
 
+    rs485_flush();
+
     do {
         res                 = 0;
         ModbusErrorInfo err = modbusBuildRequest16RTU(master, address, starting_address, num, data);
@@ -592,6 +646,8 @@ static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int
     int     res                            = 0;
     size_t  counter                        = 0;
 
+    rs485_flush();
+
     do {
         ModbusErrorInfo err = modbusBuildRequest05RTU(master, address, index, value);
         assert(modbusIsOk(err));
@@ -618,6 +674,8 @@ static int read_holding_registers(ModbusMaster *master, uint8_t address, uint16_
     int             res     = 0;
     size_t          counter = 0;
 
+    rs485_flush();
+
     do {
         res = 0;
         err = modbusBuildRequest03RTU(master, address, start, count);
@@ -629,7 +687,14 @@ static int read_holding_registers(ModbusMaster *master, uint8_t address, uint16_
                                          buffer, len);
 
         if (!modbusIsOk(err)) {
+            ESP_LOGW(TAG, "Read holding registers for %i error %zu: %i %i", address, counter, err.source, err.error);
+            if (len == 0) {
+                ESP_LOGW(TAG, "Empty packet!");
+            } else {
+                ESP_LOG_BUFFER_HEX(TAG, buffer, len);
+            }
             res = 1;
+            vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
         }
     } while (res && counter++ < MODBUS_COMMUNICATION_ATTEMPTS);
 

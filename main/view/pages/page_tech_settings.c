@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "view/view.h"
 #include "view/common.h"
+#include "view/intl/intl.h"
 #include "model/model.h"
 
 
@@ -14,22 +15,24 @@ enum {
 struct page_data {};
 
 
-static void *create_page(model_t *model, void *extra) {
+static void *create_page(model_t *pmodel, void *extra) {
     struct page_data *data = malloc(sizeof(struct page_data));
     return data;
 }
 
 
-static void open_page(model_t *model, void *arg) {
+static void open_page(model_t *pmodel, void *arg) {
     struct page_data *data = arg;
     (void)data;
 
-    view_common_title(BUTTON_BACK_ID, "Menu' assistenza", NULL);
+    view_common_title(BUTTON_BACK_ID, view_intl_get_string(pmodel, STRINGS_MENU_ASSISTENZA), NULL);
 
-    lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), "Dispositivi", DEVICES_BTN_ID);
-    lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_LEFT, 8, 100);
+    lv_obj_t *btn =
+        view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_DISPOSITIVI), 300, DEVICES_BTN_ID);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_MID, 0, 100);
 
-    lv_obj_t *btn1 = view_common_default_menu_button(lv_scr_act(), "Configurazione", COMMISSIONING_BTN_ID);
+    lv_obj_t *btn1 = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_CONFIGURAZIONE), 300,
+                                             COMMISSIONING_BTN_ID);
     lv_obj_align(btn1, btn, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
 }
 

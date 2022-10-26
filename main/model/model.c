@@ -16,6 +16,34 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.active_backlight = 100;
     pmodel->configuration.buzzer_volume    = MAX_BUZZER_VOLUME;
     pmodel->configuration.use_fahrenheit   = 0;
+
+    for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
+        pmodel->configuration.filters_for_speed[i] = 0;
+    }
+}
+
+
+uint8_t model_get_filters_for_speed(model_t *pmodel, uint8_t speed) {
+    assert(pmodel != NULL);
+    assert(speed < MAX_FAN_SPEED);
+    return pmodel->configuration.filters_for_speed[speed];
+}
+
+
+void model_modify_filters_for_speed(model_t *pmodel, uint8_t speed, int op) {
+    assert(pmodel != NULL);
+    if (op > 0 && pmodel->configuration.filters_for_speed[speed] < 2) {
+        pmodel->configuration.filters_for_speed[speed]++;
+    } else if (op < 0 && pmodel->configuration.filters_for_speed[speed] > 0) {
+        pmodel->configuration.filters_for_speed[speed]--;
+    }
+}
+
+
+uint8_t model_set_filters_for_speed(model_t *pmodel, uint8_t speed, uint8_t filters) {
+    assert(pmodel != NULL);
+    assert(speed < MAX_FAN_SPEED);
+    return pmodel->configuration.filters_for_speed[speed];
 }
 
 

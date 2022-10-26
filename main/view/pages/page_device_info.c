@@ -20,6 +20,9 @@ enum {
 struct page_data {
     device_t  device;
     lv_obj_t *lbl_info;
+    lv_obj_t *lbl_alarms[MAX_NUM_MESSAGES];
+    size_t    num_messages;
+    char     *messages[MAX_NUM_MESSAGES];
 };
 
 
@@ -28,12 +31,25 @@ static void update_info(model_t *pmodel, struct page_data *data) {
     lv_label_set_text_fmt(data->lbl_info, "Dispositivo %i,\n classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
                           data->device.address, data->device.class, data->device.status, data->device.serial_number,
                           data->device.alarms);
+
+    for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
+        if ((data->device.alarms & (1 << i)) > 0 && data->messages[i] != NULL) {
+            lv_label_set_text(data->lbl_alarms[i], data->messages[i]);
+            lv_obj_set_hidden(data->lbl_alarms[i], 0);
+        } else {
+            lv_obj_set_hidden(data->lbl_alarms[i], 1);
+        }
+    }
 }
 
 
 static void *create_page(model_t *model, void *extra) {
     struct page_data *data = malloc(sizeof(struct page_data));
     data->device           = model_get_device(model, (uint8_t)(uintptr_t)extra);
+    data->num_messages     = 0;
+    for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
+        data->messages[i] = NULL;
+    }
     return data;
 }
 
@@ -46,9 +62,17 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_t *lbl = lv_label_create(lv_scr_act(), NULL);
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
     lv_obj_set_auto_realign(lbl, 1);
-    lv_obj_set_width(lbl, 400);
+    lv_obj_set_width(lbl, 420);
     lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 80);
     data->lbl_info = lbl;
+
+    for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
+        lbl = lv_label_create(lv_scr_act(), NULL);
+        lv_obj_set_auto_realign(lbl, 1);
+        lv_obj_set_style_local_text_color(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
+        lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 130 + 24 * i);
+        data->lbl_alarms[i] = lbl;
+    }
 
     lv_obj_t *btn = lv_btn_create(lv_scr_act(), NULL);
     lbl           = lv_label_create(btn, NULL);
@@ -75,6 +99,19 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
     view_message_t msg = {0};
 
     switch (event.code) {
+        case VIEW_EVENT_CODE_OPEN:
+            msg.cmsg.code    = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_MESSAGES;
+            msg.cmsg.address = data->device.address;
+            break;
+
+        case VIEW_EVENT_CODE_DEVICE_MESSAGES:
+            data->num_messages = event.num_messages;
+            for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
+                data->messages[i] = event.messages[i];
+            }
+            update_info(pmodel, data);
+            break;
+
         case VIEW_EVENT_CODE_DEVICE_UPDATE:
         case VIEW_EVENT_CODE_DEVICE_ALARM:
             if (event.address == data->device.address) {
@@ -120,7 +157,12 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
 
 void destroy_page(void *args, void *extra) {
-    free(args);
+    struct page_data *pdata = args;
+
+    for (size_t i = 0; i < pdata->num_messages; i++) {
+        free(pdata->messages[i]);
+    }
+    free(pdata);
 }
 
 

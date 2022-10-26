@@ -33,8 +33,7 @@ typedef int pid_output_type_t;
 /*
  *  Watcher
  */
-#define GEL_MALLOC_AVAILABLE  0
-#define GEL_STATIC_BLOCK_SIZE 16
+#define GEL_MALLOC_AVAILABLE  1
 
 /*
  * Wear leveling

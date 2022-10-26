@@ -9,6 +9,8 @@
 #define DEVICE_CLASS_DEFAULT     DEVICE_CLASS_LIGHT_1
 #define NUMBER_OF_DEVICE_CLASSES 3
 
+#define MAX_NUM_MESSAGES 2
+
 #define MODBUS_MAX_DEVICES 100
 
 #define DEVICE_CLASS(class)    (((class) >> 8) & 0xFF)
@@ -18,11 +20,11 @@
 
 
 typedef enum {
-    DEVICE_STATUS_NOT_CONFIGURED = 0,
-    DEVICE_STATUS_CONFIGURED,
-    DEVICE_STATUS_OK,
-    DEVICE_STATUS_FOUND,
-    DEVICE_STATUS_COMMUNICATION_ERROR,
+    DEVICE_STATUS_NOT_CONFIGURED = 0,      // Device address is unused
+    DEVICE_STATUS_CONFIGURED,              // Device is configured
+    DEVICE_STATUS_OK,                      // Device has been queried and communicates correctly
+    DEVICE_STATUS_FOUND,                   // Device is not configured, but is on the network nonetheless
+    DEVICE_STATUS_COMMUNICATION_ERROR,     // There is a communication issue with the device
 } device_status_t;
 
 

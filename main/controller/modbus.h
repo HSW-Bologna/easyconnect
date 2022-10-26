@@ -3,11 +3,13 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include "model/device.h"
 
 typedef enum {
     MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION,
     MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION_LISTENING_DONE,
     MODBUS_RESPONSE_CODE_INFO,
+    MODBUS_RESPONSE_CODE_MESSAGES,
     MODBUS_RESPONSE_CODE_ALARMS_REG,
     MODBUS_RESPONSE_CODE_SCAN_DONE,
     MODBUS_RESPONSE_CODE_DEVICE_OK,
@@ -28,11 +30,16 @@ typedef struct {
             uint16_t firmware_version;
         };
         uint16_t alarms;
+        struct {
+            size_t num_messages;
+            char  *messages[MAX_NUM_MESSAGES];
+        };
     };
 } modbus_response_t;
 
 void modbus_init(void);
 void modbus_read_device_info(uint8_t address);
+void modbus_read_device_messages(uint8_t address, uint8_t device_model);
 void modbus_read_device_inputs(uint8_t address);
 void modbus_set_device_output(uint8_t address, int value);
 void modbus_automatic_commissioning(uint16_t expected_devices);

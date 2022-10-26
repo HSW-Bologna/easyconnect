@@ -8,10 +8,11 @@
 #include "utils/utils.h"
 
 
-#define NUM_CONFIGURATION_PARAMETERS 4
+#define NUM_CONFIGURATION_PARAMETERS 5
 
 
 static void save_backlight(void *mem, void *arg);
+static void save_filters(void *mem, void *arg);
 
 
 static const char *DEVICE_MAP_KEY = "DMAP";
@@ -19,6 +20,7 @@ static const char *LANGUAGE_KEY   = "LANGUAGE";
 static const char *BACKLIGHT_KEY  = "BACKLIGHT";
 static const char *BUZZER_KEY     = "BUZZER";
 static const char *DEGREES_KEY    = "DEGREES";
+static const char *FILTERS_KEY    = "FILT";
 
 static const char *TAG = "Devices";
 
@@ -43,6 +45,7 @@ void configuration_load(model_t *pmodel) {
     storage_load_uint16(&pmodel->configuration.active_backlight, (char *)BACKLIGHT_KEY);
     storage_load_uint16(&pmodel->configuration.buzzer_volume, (char *)BUZZER_KEY);
     storage_load_uint8(&pmodel->configuration.use_fahrenheit, (char *)DEGREES_KEY);
+    storage_load_blob(&pmodel->configuration.filters_for_speed, MAX_FAN_SPEED, (char *)FILTERS_KEY);
 
     size_t i       = 0;
     watchlist[i++] = WATCHER(&pmodel->configuration.language, storage_save_uint16, (void *)LANGUAGE_KEY);
@@ -50,6 +53,8 @@ void configuration_load(model_t *pmodel) {
         WATCHER_DELAYED(&pmodel->configuration.active_backlight, save_backlight, (void *)BACKLIGHT_KEY, 1000UL);
     watchlist[i++] = WATCHER(&pmodel->configuration.buzzer_volume, storage_save_uint16, (void *)BUZZER_KEY);
     watchlist[i++] = WATCHER(&pmodel->configuration.use_fahrenheit, storage_save_uint8, (void *)DEGREES_KEY);
+    watchlist[i++] =
+        WATCHER_DELAYED_ARRAY(&pmodel->configuration.filters_for_speed, MAX_FAN_SPEED, save_filters, (void *)FILTERS_KEY, 2000UL);
     assert(i == NUM_CONFIGURATION_PARAMETERS);
     watchlist[i++] = WATCHER_NULL;
     watcher_list_init(watchlist);
@@ -71,4 +76,9 @@ static void save_backlight(void *mem, void *arg) {
     storage_save_uint16(mem, arg);
     uint16_t value = *(uint16_t *)mem;
     tft_backlight_set(value);
+}
+
+
+static void save_filters(void *mem, void *arg) {
+    storage_save_blob(mem, MAX_FAN_SPEED, arg);
 }

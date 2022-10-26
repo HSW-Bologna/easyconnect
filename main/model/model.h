@@ -9,7 +9,8 @@
 
 
 #define NUM_PARAMETERS    3
-#define MAX_FAN_SPEED     4
+#define MAX_FAN_SPEED     5
+#define TOP_FAN_SPEED     4
 #define MAX_BUZZER_VOLUME 3
 
 #define GETTER(name, field)                                                                                            \
@@ -52,6 +53,7 @@ typedef struct {
         uint16_t active_backlight;
         uint16_t buzzer_volume;
         uint8_t  use_fahrenheit;
+        uint8_t  filters_for_speed[MAX_FAN_SPEED];
     } configuration;
     uint8_t fan_speed;
 
@@ -94,6 +96,8 @@ uint8_t           model_is_there_an_alarm(model_t *pmodel);
 uint8_t           model_is_there_an_alarm_for_class(model_t *pmodel, uint16_t class);
 uint8_t           model_is_there_a_filter_alarm(model_t *pmodel);
 uint8_t           model_is_there_a_fan_alarm(model_t *pmodel);
+uint8_t           model_get_filters_for_speed(model_t *pmodel, uint8_t speed);
+void              model_modify_filters_for_speed(model_t *pmodel, uint8_t speed, int op);
 
 GETTERNSETTER(fan_speed, fan_speed);
 GETTERNSETTER(active_backlight, configuration.active_backlight);
