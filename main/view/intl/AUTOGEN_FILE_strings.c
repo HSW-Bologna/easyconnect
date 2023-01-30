@@ -1,4 +1,4 @@
-const char *strings[50][2] = {
+const char *strings[53][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -19,7 +19,7 @@ const char *strings[50][2] = {
     {"NOV", "NOV", },
     {"DIC", "DEC", },
     {"Problema con il dispositivo", "Problem with the device", },
-    {"errore di comunicazione", "communication error", },
+    {"Errore di comunicazione", "Communication error", },
     {"Indirizzo", "Address", },
     {"Classe", "Class", },
     {"numero di serie", "serial number", },
@@ -37,6 +37,7 @@ const char *strings[50][2] = {
     {"Configura", "Configure", },
     {"Dispositivi configurati", "Configured devices", },
     {"Errore", "Error", },
+    {"Errori", "Errors", },
     {"Configurazione automatica", "Automatic configuration", },
     {"Configurazione", "Configuration", },
     {"Automatica", "Automatic", },
@@ -49,5 +50,7 @@ const char *strings[50][2] = {
     {"Dispositivi", "Devices", },
     {"Menu' assistenza", "Technical menu", },
     {"Filtri", "Filters", },
+    {"Dispositivo", "Device", },
+    {"Luce", "Light", },
 };
 

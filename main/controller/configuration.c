@@ -62,6 +62,7 @@ void configuration_load(model_t *pmodel) {
 
 
 void configuration_save(model_t *pmodel) {
+    ESP_LOGI(TAG, "Saving address map");
     address_map_t map = model_get_address_map(pmodel);
     storage_save_blob(&map, sizeof(map), (char *)DEVICE_MAP_KEY);
 }

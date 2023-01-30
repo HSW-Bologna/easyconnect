@@ -18,12 +18,13 @@
 #include "peripherals/buzzer.h"
 
 
-static void error_condition_on_device(model_t *pmodel, uint8_t address);
+static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t alarms, uint8_t communication);
 static void print_heap_status(void);
 
 
 static const char *TAG             = "Controller";
-static int         refresh_devices = 1;
+static uint8_t     refresh_devices = 1;
+static uint8_t     update_time     = 1;
 
 
 void controller_init(model_t *pmodel) {
@@ -92,13 +93,15 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER: {
-            if (model_is_there_a_filter_alarm(pmodel)) {
+            if (model_is_filter_alarm_on(pmodel, EASYCONNECT_SAFETY_ALARM)) {
+                ESP_LOGI(TAG, "Attempt failed due to alarm");
                 buzzer_beep(2, 100, 50, model_get_buzzer_volume(pmodel));
                 break;
             }
 
-            size_t esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
-            size_t ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
+            size_t  esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
+            size_t  ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
+            uint8_t update    = 0;
 
             if (ulf_count > 0) {
                 if (model_get_fan_state(pmodel) == MODEL_FAN_STATE_FAN_RUNNING || model_get_uvc_filter_state(pmodel)) {
@@ -108,7 +111,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                     if (model_get_uvc_filter_state(pmodel)) {
                         controller_state_event(pmodel, STATE_EVENT_FAN_START);
                     }
-                    view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
+                    update = 1;
                 } else {
                     controller_state_event(pmodel, STATE_EVENT_FAN_UVC_START);
                 }
@@ -121,9 +124,12 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                 if (model_get_electrostatic_filter_state(pmodel)) {
                     controller_state_event(pmodel, STATE_EVENT_FAN_START);
                 }
-                view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
+                //update = 1;
             }
 
+            if (update) {
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
+            }
             break;
         }
 
@@ -171,6 +177,7 @@ void controller_manage(model_t *pmodel) {
     static unsigned long tempts       = 0;
     static unsigned long poll_ts      = 0;
     static unsigned long heapts       = 0;
+    static unsigned long time_ts      = 0;
     static uint8_t       poll_address = 0;
 
     configuration_manage();
@@ -180,6 +187,11 @@ void controller_manage(model_t *pmodel) {
             poll_address = model_get_next_device_address(pmodel, poll_address);
         } else {
             modbus_read_device_alarms(poll_address);
+
+            if (model_get_device(pmodel, poll_address).class == DEVICE_CLASS_PRESSURE_SAFETY) {
+                modbus_read_device_pressure(poll_address);
+            }
+
             poll_ts = get_millis();
         }
     }
@@ -190,7 +202,7 @@ void controller_manage(model_t *pmodel) {
         tempts = get_millis();
     }
 
-    if (refresh_devices || is_expired(refreshts, get_millis(), 5UL * 60UL * 1000UL)) {
+    if (refresh_devices || is_expired(refreshts, get_millis(), 1UL * 60UL * 1000UL)) {
         uint8_t starting_address = 0;
         uint8_t address          = model_get_next_device_address(pmodel, starting_address);
         while (address != starting_address) {
@@ -200,6 +212,12 @@ void controller_manage(model_t *pmodel) {
         }
         refresh_devices = 0;
         refreshts       = get_millis();
+    }
+
+    if (update_time || is_expired(time_ts, get_millis(), 10UL * 60UL * 1000UL)) {
+        modbus_update_time();
+        update_time = 0;
+        time_ts     = get_millis();
     }
 
     modbus_response_t response = {0};
@@ -212,10 +230,24 @@ void controller_manage(model_t *pmodel) {
             case MODBUS_RESPONSE_CODE_ERROR:
                 if (model_set_device_error(pmodel, response.address, 1)) {
                     ESP_LOGW(TAG, "Device %i did not respond!", response.address);
-                    error_condition_on_device(pmodel, response.address);
+                    error_condition_on_device(pmodel, response.address, 0, 1);
                     view_event(
                         (view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = 1});
                 }
+
+                if (response.address == poll_address) {
+                    uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
+                    if (new_poll_address == poll_address) {
+                        // Restart
+                        poll_address = 0;
+                    } else {
+                        poll_address = new_poll_address;
+                    }
+                }
+                break;
+
+            case MODBUS_RESPONSE_CODE_EVENTS:
+                // TODO:
                 break;
 
             case MODBUS_RESPONSE_CODE_ALARM:
@@ -264,7 +296,7 @@ void controller_manage(model_t *pmodel) {
                 ESP_LOGD(TAG, "Device %i alarm 0x%02X", response.address, response.alarms);
                 model_set_device_error(pmodel, response.address, 0);
                 if (model_set_device_alarms(pmodel, response.address, response.alarms)) {
-                    error_condition_on_device(pmodel, response.address);
+                    error_condition_on_device(pmodel, response.address, response.alarms, 0);
                     view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_ALARM, .address = response.address});
                 }
                 uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
@@ -274,6 +306,11 @@ void controller_manage(model_t *pmodel) {
                 } else {
                     poll_address = new_poll_address;
                 }
+                break;
+
+            case MODBUS_RESPONSE_CODE_PRESSURE:
+                model_set_device_pressure(pmodel, response.address, response.pressure);
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE});
                 break;
         }
     }
@@ -308,7 +345,6 @@ void controller_update_fan_speed(model_t *pmodel, size_t speed) {
         uint8_t starting_address = 0;
         uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, classes[i]);
 
-
         while (address != starting_address) {
             modbus_set_fan_speed(address, speed);
             starting_address = address;
@@ -318,19 +354,22 @@ void controller_update_fan_speed(model_t *pmodel, size_t speed) {
 }
 
 
-static void error_condition_on_device(model_t *pmodel, uint8_t address) {
+static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t alarms, uint8_t communication) {
     device_t device = model_get_device(pmodel, address);
+    ESP_LOGW(TAG, "error condition on device %i, comm %i, class 0x%X, alarms 0x%X", address, communication,
+             device.class, alarms);
 
     switch (device.class) {
         case DEVICE_CLASS_ELECTROSTATIC_FILTER:
-            if (model_get_electrostatic_filter_state(pmodel)) {
+            if (model_get_electrostatic_filter_state(pmodel) &&
+                (communication || (alarms & EASYCONNECT_SAFETY_ALARM))) {
                 controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
                 model_electrostatic_filter_off(pmodel);
             }
             break;
 
         case DEVICE_CLASS_ULTRAVIOLET_FILTER:
-            if (model_get_uvc_filter_state(pmodel)) {
+            if (model_get_uvc_filter_state(pmodel) && (communication || (alarms & EASYCONNECT_SAFETY_ALARM))) {
                 controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER, 0);
                 model_uvc_filter_off(pmodel);
             }
@@ -352,6 +391,7 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address) {
 
 
 static void print_heap_status(void) {
+#ifndef PC_SIMULATOR
     printf("[%s] - Internal RAM: LWM = %u, free = %u, biggest = %u\n", TAG,
            heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL), heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
            heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
@@ -361,4 +401,5 @@ static void print_heap_status(void) {
     lv_mem_monitor_t monitor = {0};
     lv_mem_monitor(&monitor);
     printf("[%s] - LVGL        : free = %u, frag = %u%%\n", TAG, monitor.free_size, monitor.frag_pct);
+#endif
 }

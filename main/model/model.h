@@ -93,11 +93,14 @@ void              model_electrostatic_filter_off(model_t *pmodel);
 void              model_set_device_firmware(model_t *pmodel, uint8_t address, uint16_t firmware_version);
 const char       *model_get_degrees_symbol(model_t *pmodel);
 uint8_t           model_is_there_an_alarm(model_t *pmodel);
-uint8_t           model_is_there_an_alarm_for_class(model_t *pmodel, uint16_t class);
-uint8_t           model_is_there_a_filter_alarm(model_t *pmodel);
+uint8_t           model_is_there_any_alarm_for_class(model_t *pmodel, uint16_t class);
+uint8_t           model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms);
+uint8_t           model_is_any_filter_alarm_on(model_t *pmodel);
 uint8_t           model_is_there_a_fan_alarm(model_t *pmodel);
 uint8_t           model_get_filters_for_speed(model_t *pmodel, uint8_t speed);
 void              model_modify_filters_for_speed(model_t *pmodel, uint8_t speed, int op);
+void              model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressure);
+device_t         *model_get_device_mut(model_t *pmodel, uint8_t address);
 
 GETTERNSETTER(fan_speed, fan_speed);
 GETTERNSETTER(active_backlight, configuration.active_backlight);

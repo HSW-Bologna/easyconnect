@@ -1224,8 +1224,11 @@ CONFIG_WPA_MBEDTLS_CRYPTO=y
 #
 # Temperature sensors
 #
+# CONFIG_I2C_DEVICES_MS5837 is not set
 CONFIG_I2C_DEVICES_SHT21=y
 CONFIG_I2C_DEVICES_SHT3=y
+CONFIG_I2C_DEVICES_SHTC3=y
+# CONFIG_I2C_DEVICES_SHT4 is not set
 CONFIG_I2C_DEVICES_ZS05=y
 # end of Temperature sensors
 
@@ -1234,19 +1237,34 @@ CONFIG_I2C_DEVICES_ZS05=y
 #
 # CONFIG_I2C_DEVICES_EEPROM_24LC16 is not set
 # CONFIG_I2C_DEVICES_EEPROM_24LC1025 is not set
+# CONFIG_I2C_DEVICES_EEPROM_24AA32 is not set
 # end of Eeproms
 
 #
 # Real time clocks
 #
 CONFIG_I2C_DEVICES_STRUCT_TM_CONVERSION=y
+# CONFIG_I2C_DEVICES_RTC_PCF8523 is not set
 # CONFIG_I2C_DEVICES_RTC_PCF85063A is not set
 # CONFIG_I2C_DEVICES_RTC_M41T81 is not set
 CONFIG_I2C_DEVICES_RTC_DS1307=y
+# CONFIG_I2C_DEVICES_RTC_RX8010 is not set
 # end of Real time clocks
 
 # CONFIG_I2C_DEVICES_MCP4018 is not set
+
+#
+# IO expanders
+#
+# CONFIG_I2C_DEVICES_MCP23008 is not set
+# end of IO expanders
+
+#
+# Proximity and Ambient Light Sensors
+#
 # CONFIG_I2C_DEVICES_LTR559ALS is not set
+# CONFIG_I2C_DEVICES_VCNL4010 is not set
+# end of Proximity and Ambient Light Sensors
 
 #
 # Ports

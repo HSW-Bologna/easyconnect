@@ -178,7 +178,7 @@ def main():
     env['CPPPATH'] += [include]
 
     i2c_env = env
-    i2c_selected = ["rtc/DS1307", "temperature/SHT21", "dummy"]
+    i2c_selected = ["rtc/DS1307", "temperature/SHT21", "temperature/SHTC3", "dummy"]
     (i2c_objects, include) = SConscript(
         f'{COMPONENTS}/I2C/SConscript', exports=['i2c_env', 'i2c_selected'])
     env['CPPPATH'] += [include]

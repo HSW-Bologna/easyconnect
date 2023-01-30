@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
 #include "view/view.h"
@@ -5,6 +6,7 @@
 #include "view/common.h"
 #include "model/model.h"
 #include "view/style.h"
+#include "esp_log.h"
 
 
 LV_IMG_DECLARE(img_aspirazione_accesa);
@@ -97,7 +99,8 @@ enum {
 };
 
 
-static lv_style_t style_alarm_btn;
+static lv_style_t  style_alarm_btn;
+static const char *TAG = "MainPage";
 
 
 static lv_res_t drawer_drag_cb(lv_obj_t *obj, lv_signal_t signal, void *arg) {
@@ -163,10 +166,9 @@ struct page_data {
     lv_obj_t *lbl_date;
     lv_obj_t *slider;
     lv_obj_t *img_warning;
+    lv_obj_t *lbl_pressure;
 
     lv_task_t *blink_task;
-
-    size_t demo_index;
 
     int light_state;
     int blink;
@@ -198,7 +200,7 @@ static void update_filter_buttons(model_t *pmodel, struct page_data *data) {
         lv_obj_set_hidden(data->btn_filter, 1);
     }
 
-    if (model_is_there_a_filter_alarm(pmodel)) {
+    if (model_is_any_filter_alarm_on(pmodel)) {
         lv_obj_add_style(data->btn_filter, LV_OBJ_PART_MAIN, &style_alarm_btn);
     } else {
         lv_obj_remove_style(data->btn_filter, LV_OBJ_PART_MAIN, &style_alarm_btn);
@@ -286,7 +288,7 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
         uint8_t  alarm     = 0;
         uint16_t classes[] = {DEVICE_CLASS_LIGHT_1, DEVICE_CLASS_LIGHT_2, DEVICE_CLASS_LIGHT_3};
         for (size_t i = 0; i < 3; i++) {
-            alarm = alarm || model_is_there_an_alarm_for_class(pmodel, classes[i]);
+            alarm = alarm || model_is_there_any_alarm_for_class(pmodel, classes[i]);
         }
 
         if (alarm) {
@@ -329,12 +331,34 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
                 assert(0);
         }
     } else {
+        ESP_LOGI(TAG, "no light class");
         lv_obj_set_hidden(data->btn_light, 1);
     }
 
     update_filter_buttons(pmodel, data);
 
     update_fan_buttons(pmodel, data);
+}
+
+
+static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
+    float pressures[3] = {0};
+
+    uint8_t starting_address = 0;
+    uint8_t address = model_get_next_device_address_by_class(pmodel, starting_address, DEVICE_CLASS_PRESSURE_SAFETY);
+    size_t  i       = 0;
+
+    while (address != starting_address && i < 3) {
+        pressures[i] = ((float)model_get_device(pmodel, address).pressure) / 10.;
+
+        starting_address = address;
+        address = model_get_next_device_address_by_class(pmodel, starting_address, DEVICE_CLASS_PRESSURE_SAFETY);
+        i++;
+    }
+
+    char string[64] = {0};
+    snprintf(string, sizeof(string), "%.1f %.1f %.1f", pressures[0], pressures[1], pressures[2]);
+    lv_label_set_text(pdata->lbl_pressure, string);
 }
 
 
@@ -364,7 +388,6 @@ static void update_warning(model_t *pmodel, struct page_data *pdata) {
 static void *create_page(model_t *model, void *extra) {
     struct page_data *data = malloc(sizeof(struct page_data));
     data->blink_task       = view_register_periodic_task(500UL, LV_TASK_PRIO_OFF, TASK_BLINK_ID);
-    data->demo_index       = 0;
     data->light_state      = 0;
     data->blink            = 0;
 
@@ -380,13 +403,6 @@ static void open_page(model_t *model, void *arg) {
     struct page_data *data = arg;
     lv_task_set_prio(data->blink_task, LV_TASK_PRIO_MID);
 
-    /*lv_obj_t *title = lv_label_create(lv_scr_act(), NULL);
-    lv_obj_set_style_local_text_font(title, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &font_digital_64);
-    lv_label_set_long_mode(title, LV_LABEL_LONG_BREAK);
-    lv_obj_set_width(title, 240);
-    lv_label_set_align(title, LV_LABEL_ALIGN_CENTER);
-    lv_label_set_text(title, "Easy Connect");
-    lv_obj_align(title, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 8);*/
     lv_obj_t *logo = lv_img_create(lv_scr_act(), NULL);
     lv_img_set_src(logo, &img_logo);
     lv_obj_align(logo, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 8);
@@ -494,6 +510,12 @@ static void open_page(model_t *model, void *arg) {
     update_all_buttons(model, data);
     update_warning(model, data);
     lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
+
+    lbl = lv_label_create(lv_scr_act(), NULL);
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -4);
+    data->lbl_pressure = lbl;
+
+    update_device_sensors(model, data);
 }
 
 
@@ -515,6 +537,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
         case VIEW_EVENT_CODE_DEVICE_ALARM:
             update_warning(model, data);
             update_all_buttons(model, data);
+            update_device_sensors(model, data);
             break;
 
         case VIEW_EVENT_CODE_TIMER:
@@ -554,6 +577,11 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             }
                             break;
                         }
+
+                        case ERRORS_BTN_ID:
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_errors;
+                            break;
 
                         case SETTINGS_BTN_ID:
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;

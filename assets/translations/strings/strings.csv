@@ -37,6 +37,7 @@ CONFIGURO, Configuro, Configuring
 CONFIGURA, Configura, Configure
 DISPOSITIVI_CONFIGURATI, Dispositivi configurati, Configured devices
 ERRORE, Errore, Error
+ERRORI, Errori, Errors
 CONFIGURAZIONE_AUTOMATICA, Configurazione automatica, Automatic configuration
 CONFIGURAZIONE, Configurazione, Configuration
 AUTOMATICA, Automatica, Automatic
@@ -49,3 +50,6 @@ RIPROVA, Riprova, Try again
 DISPOSITIVI, Dispositivi, Devices
 MENU_ASSISTENZA, Menu' assistenza, Technical menu
 FILTRI, Filtri, Filters
+ERRORE_DI_COMUNICAZIONE, Errore di comunicazione, Communication error
+DISPOSITIVO, Dispositivo, Device
+LUCE, Luce, Light

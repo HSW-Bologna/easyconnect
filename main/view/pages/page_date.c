@@ -45,15 +45,15 @@ static void update_days_roller(model_t *pmodel, struct page_data *data) {
 
     char day_options[10 * 31] = {0};
     for (int i = 0; i < days_by_month[month]; i++) {
-        char      tmp[10] = {0};
+        char      tmp[16] = {0};
         struct tm tm_info = {.tm_year = year - 1900, .tm_mon = month, .tm_mday = i};
         time_t    t       = mktime(&tm_info);
         int       wday    = localtime(&t)->tm_wday;
 
         if (i == days_by_month[month] - 1) {
-            snprintf(tmp, 10, "%s %i", view_intl_get_string(pmodel, weekdays[wday]), i + 1);
+            snprintf(tmp, sizeof(tmp), "%s %i", view_intl_get_string(pmodel, weekdays[wday]), i + 1);
         } else {
-            snprintf(tmp, 10, "%s %i\n", view_intl_get_string(pmodel, weekdays[wday]), i + 1);
+            snprintf(tmp, sizeof(tmp), "%s %i\n", view_intl_get_string(pmodel, weekdays[wday]), i + 1);
         }
         strcat(day_options, tmp);
     }

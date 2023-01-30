@@ -262,6 +262,13 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
     switch (event.code) {
         case VIEW_EVENT_CODE_DEVICE_UPDATE: {
+            if (event.address == 0) {
+                #warning "Why does address 0 arrive here?"
+                ESP_LOGW(TAG, "Address 0?");
+                break;
+            }
+
+            ESP_LOGI(TAG, "Address %i", event.address);
             device_t device = device_list_get_device(pdata->devices, event.address);
             ESP_LOGI(TAG, "%i %i %i", device.address, device.status, event.error);
 

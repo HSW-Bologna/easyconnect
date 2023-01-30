@@ -63,6 +63,7 @@ void controller_state_manage(model_t *pmodel) {
 static int off_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 0);
+    controller_update_class_output(pmodel, DEVICE_CLASS_GAS, 0);
     return 0;
 }
 
@@ -185,6 +186,7 @@ static int fan_running_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     controller_update_fan_speed(pmodel, model_get_fan_speed(pmodel));
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
+    controller_update_class_output(pmodel, DEVICE_CLASS_GAS, 1);
     return 0;
 }
 

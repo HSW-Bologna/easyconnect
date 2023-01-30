@@ -1,17 +1,21 @@
 #include <assert.h>
 #include "model.h"
+#include "esp_log.h"
 
 
 #define ADDR2INDEX(addr)     (addr - 1)
 #define INDEX2ADDR(addr)     (addr + 1)
-#define ASSERT_ADDRESS(addr) assert(addr != 0 && ADDR2INDEX(addr) < MODBUS_MAX_DEVICES);
+#define ASSERT_ADDRESS(addr) assert(addr != 0 && ADDR2INDEX(addr) <= MODBUS_MAX_DEVICES);
 
+
+static const char *TAG = "Device";
 
 
 void device_list_init(device_t *devices) {
     for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
-        devices[i].address = INDEX2ADDR(i);
-        devices[i].status  = DEVICE_STATUS_NOT_CONFIGURED;
+        devices[i].address     = INDEX2ADDR(i);
+        devices[i].status      = DEVICE_STATUS_NOT_CONFIGURED;
+        devices[i].event_count = 0;
     }
 }
 
@@ -251,14 +255,19 @@ uint8_t device_list_is_there_an_alarm(device_t *devices) {
 }
 
 
-uint8_t device_list_is_there_an_alarm_for_class(device_t *devices, uint16_t class) {
+uint8_t device_list_is_class_alarms_on(device_t *devices, uint16_t class, uint8_t alarms) {
     for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
         if (devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
-            if (devices[i].class == class && devices[i].alarms > 0) {
+            if (devices[i].class == class && (devices[i].alarms & alarms) > 0) {
                 return 1;
             }
         }
     }
 
     return 0;
+}
+
+
+uint8_t device_list_is_there_any_alarm_for_class(device_t *devices, uint16_t class) {
+    return device_list_is_class_alarms_on(devices, class, 0xFF);
 }

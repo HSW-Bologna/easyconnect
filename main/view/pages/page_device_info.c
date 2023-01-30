@@ -6,6 +6,7 @@
 #include "src/lv_widgets/lv_label.h"
 #include "view/view.h"
 #include "view/common.h"
+#include "view/intl/intl.h"
 #include "model/model.h"
 
 
@@ -32,12 +33,22 @@ static void update_info(model_t *pmodel, struct page_data *data) {
                           data->device.address, data->device.class, data->device.status, data->device.serial_number,
                           data->device.alarms);
 
-    for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
-        if ((data->device.alarms & (1 << i)) > 0 && data->messages[i] != NULL) {
-            lv_label_set_text(data->lbl_alarms[i], data->messages[i]);
-            lv_obj_set_hidden(data->lbl_alarms[i], 0);
-        } else {
-            lv_obj_set_hidden(data->lbl_alarms[i], 1);
+    if (data->device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
+        lv_label_set_text(data->lbl_alarms[0], view_intl_get_string(pmodel, STRINGS_ERRORE_DI_COMUNICAZIONE));
+        lv_obj_set_hidden(data->lbl_alarms[0], 0);
+        lv_obj_set_hidden(data->lbl_alarms[1], 1);
+    } else {
+        for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
+            if ((data->device.alarms & (1 << i)) > 0) {
+                lv_obj_set_hidden(data->lbl_alarms[i], 0);
+                if (data->messages[i] == NULL || strlen(data->messages[i]) == 0) {
+                    lv_label_set_text(data->lbl_alarms[i], "----");
+                } else {
+                    lv_label_set_text(data->lbl_alarms[i], data->messages[i]);
+                }
+            } else {
+                lv_obj_set_hidden(data->lbl_alarms[i], 1);
+            }
         }
     }
 }

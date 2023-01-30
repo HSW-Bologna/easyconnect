@@ -6,6 +6,7 @@
 
 
 extern i2c_driver_t sht21_driver;
+extern i2c_driver_t shtc3_driver;
 extern i2c_driver_t rtc_driver;
 
 

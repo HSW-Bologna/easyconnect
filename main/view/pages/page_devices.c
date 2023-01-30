@@ -11,6 +11,7 @@ LV_IMG_DECLARE(img_icona_elettrostatico);
 LV_IMG_DECLARE(img_icona_uvc);
 LV_IMG_DECLARE(img_icona_aspirazione);
 LV_IMG_DECLARE(img_icona_immissione);
+LV_IMG_DECLARE(img_icona_pressione);
 
 
 #define DEVICES_PER_PAGE 15
@@ -70,6 +71,9 @@ static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
             break;
         case DEVICE_CLASS_SIPHONING_FAN:
             lv_img_set_src(img, &img_icona_aspirazione);
+            break;
+        case DEVICE_CLASS_PRESSURE_SAFETY:
+            lv_img_set_src(img, &img_icona_pressione);
             break;
 
         default:

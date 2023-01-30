@@ -15,6 +15,8 @@
 #include "utils/utils.h"
 #include "peripherals/tft.h"
 #include "peripherals/buzzer.h"
+#include <driver/i2c.h>
+#include "i2c_ports/esp-idf/esp_idf_i2c_port.h"
 
 
 static const char *TAG = "Main";
@@ -30,6 +32,7 @@ void app_main(void) {
     storage_init();
     tft_init();
     buzzer_init();
+    esp_idf_i2c_scanner(I2C_NUM_0);
 
     model_init(&model);
     view_init(disp_driver_flush, ft6x36_read);

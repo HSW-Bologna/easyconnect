@@ -40,6 +40,7 @@ typedef enum {
     STRINGS_CONFIGURA,
     STRINGS_DISPOSITIVI_CONFIGURATI,
     STRINGS_ERRORE,
+    STRINGS_ERRORI,
     STRINGS_CONFIGURAZIONE_AUTOMATICA,
     STRINGS_CONFIGURAZIONE,
     STRINGS_AUTOMATICA,
@@ -52,8 +53,10 @@ typedef enum {
     STRINGS_DISPOSITIVI,
     STRINGS_MENU_ASSISTENZA,
     STRINGS_FILTRI,
+    STRINGS_DISPOSITIVO,
+    STRINGS_LUCE,
 } strings_t;
 
-extern const char *strings[50][2];
+extern const char *strings[53][2];
 
 #endif

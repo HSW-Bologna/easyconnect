@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
@@ -134,6 +135,12 @@ device_t model_get_device(model_t *pmodel, uint8_t address) {
 }
 
 
+device_t *model_get_device_mut(model_t *pmodel, uint8_t address) {
+    assert(pmodel != NULL);
+    return device_list_get_device_mut(pmodel->devices, address);
+}
+
+
 uint8_t model_set_device_error(model_t *pmodel, uint8_t address, int error) {
     assert(pmodel != NULL);
     return device_list_set_device_error(pmodel->devices, address, error);
@@ -170,6 +177,16 @@ void model_set_device_firmware(model_t *pmodel, uint8_t address, uint16_t firmwa
 uint8_t model_set_device_alarms(model_t *pmodel, uint8_t address, uint16_t alarms) {
     assert(pmodel != NULL);
     return device_list_set_device_alarms(pmodel->devices, address, alarms);
+}
+
+
+void model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressure) {
+    assert(pmodel != NULL);
+
+    device_t *device = model_get_device_mut(pmodel, address);
+    if (device->status == DEVICE_STATUS_OK && device->class == DEVICE_CLASS_PRESSURE_SAFETY) {
+        device->pressure = pressure;
+    }
 }
 
 
@@ -288,19 +305,30 @@ uint8_t model_is_there_an_alarm(model_t *pmodel) {
 }
 
 
-uint8_t model_is_there_an_alarm_for_class(model_t *pmodel, uint16_t class) {
+uint8_t model_is_there_any_alarm_for_class(model_t *pmodel, uint16_t class) {
     assert(pmodel != NULL);
-    return device_list_is_there_an_alarm_for_class(pmodel->devices, class);
+    return device_list_is_there_any_alarm_for_class(pmodel->devices, class);
 }
 
 
-uint8_t model_is_there_a_filter_alarm(model_t *pmodel) {
-    return model_is_there_an_alarm_for_class(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER) ||
-           model_is_there_an_alarm_for_class(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
+uint8_t model_is_class_alarms_on(model_t *pmodel, uint16_t class, uint8_t alarms) {
+    assert(pmodel != NULL);
+    return device_list_is_class_alarms_on(pmodel->devices, class, alarms);
+}
+
+
+uint8_t model_is_any_filter_alarm_on(model_t *pmodel) {
+    return model_is_filter_alarm_on(pmodel, 0xFF);
+}
+
+
+uint8_t model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms) {
+    return model_is_class_alarms_on(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, alarms) ||
+           model_is_class_alarms_on(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER, alarms);
 }
 
 
 uint8_t model_is_there_a_fan_alarm(model_t *pmodel) {
-    return model_is_there_an_alarm_for_class(pmodel, DEVICE_CLASS_SIPHONING_FAN) ||
-           model_is_there_an_alarm_for_class(pmodel, DEVICE_CLASS_IMMISSION_FAN);
+    return model_is_there_any_alarm_for_class(pmodel, DEVICE_CLASS_SIPHONING_FAN) ||
+           model_is_there_any_alarm_for_class(pmodel, DEVICE_CLASS_IMMISSION_FAN);
 }

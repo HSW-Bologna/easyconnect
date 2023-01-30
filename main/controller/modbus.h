@@ -15,6 +15,8 @@ typedef enum {
     MODBUS_RESPONSE_CODE_DEVICE_OK,
     MODBUS_RESPONSE_CODE_ERROR,
     MODBUS_RESPONSE_CODE_ALARM,
+    MODBUS_RESPONSE_CODE_EVENTS,
+    MODBUS_RESPONSE_CODE_PRESSURE,
 } modbus_response_code_t;
 
 typedef struct {
@@ -30,12 +32,17 @@ typedef struct {
             uint16_t firmware_version;
         };
         uint16_t alarms;
+        uint16_t pressure;
+        struct {
+            uint16_t event_count;
+        };
         struct {
             size_t num_messages;
             char  *messages[MAX_NUM_MESSAGES];
         };
     };
 } modbus_response_t;
+
 
 void modbus_init(void);
 void modbus_read_device_info(uint8_t address);
@@ -50,5 +57,7 @@ void modbus_scan(void);
 void modbus_stop_current_operation(void);
 void modbus_set_fan_speed(uint8_t address, size_t speed);
 void modbus_read_device_alarms(uint8_t address);
+void modbus_read_device_pressure(uint8_t address);
+void modbus_update_time(void);
 
 #endif

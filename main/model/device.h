@@ -33,6 +33,7 @@ typedef enum {
 #define DEVICE_CLASS_LIGHT_3              (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_3))
 #define DEVICE_CLASS_ULTRAVIOLET_FILTER   (CLASS(DEVICE_MODE_UVC, DEVICE_GROUP_1))
 #define DEVICE_CLASS_ELECTROSTATIC_FILTER (CLASS(DEVICE_MODE_ESF, DEVICE_GROUP_1))
+#define DEVICE_CLASS_GAS                  (CLASS(DEVICE_MODE_GAS, DEVICE_GROUP_1))
 #define DEVICE_CLASS_PRESSURE_SAFETY      (CLASS(DEVICE_MODE_PRESSURE_SAFETY, DEVICE_GROUP_1))
 #define DEVICE_CLASS_SIPHONING_FAN        (CLASS(DEVICE_MODE_SIPHONING_FAN, DEVICE_GROUP_1))
 #define DEVICE_CLASS_IMMISSION_FAN        (CLASS(DEVICE_MODE_IMMISSION_FAN, DEVICE_GROUP_1))
@@ -41,10 +42,15 @@ typedef enum {
 typedef struct {
     uint8_t  status;
     uint8_t  address;
+    uint16_t event_count;
     uint16_t firmware_version;
     uint16_t class;
     uint16_t serial_number;
     uint16_t alarms;
+
+    union {
+        int16_t pressure;
+    };
 } device_t;
 
 
@@ -67,7 +73,8 @@ device_t      device_list_get_device(device_t *devices, uint8_t address);
 device_t     *device_list_get_device_mut(device_t *devices, uint8_t address);
 void          device_list_set_device_sn(device_t *devices, uint8_t address, uint16_t serial_number);
 uint8_t       device_list_is_there_an_alarm(device_t *devices);
-uint8_t       device_list_is_there_an_alarm_for_class(device_t *devices, uint16_t class);
+uint8_t       device_list_is_there_any_alarm_for_class(device_t *devices, uint16_t class);
+uint8_t       device_list_is_class_alarms_on(device_t *devices, uint16_t class, uint8_t alarms);
 
 
 #endif
