@@ -63,7 +63,9 @@ static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
         case DEVICE_CLASS_ELECTROSTATIC_FILTER:
             lv_img_set_src(img, &img_icona_elettrostatico);
             break;
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER:
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
             lv_img_set_src(img, &img_icona_uvc);
             break;
         case DEVICE_CLASS_IMMISSION_FAN:

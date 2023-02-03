@@ -177,7 +177,9 @@ struct page_data {
 
 static void update_filter_buttons(model_t *pmodel, struct page_data *data) {
     size_t esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
-    size_t ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
+    size_t ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1)) +
+                       model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2)) +
+                       model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3));
 
     if (esf_count > 0 && ulf_count > 0) {
         if (model_get_electrostatic_filter_state(pmodel) && model_get_uvc_filter_state(pmodel)) {

@@ -55,8 +55,10 @@ typedef enum {
     STRINGS_FILTRI,
     STRINGS_DISPOSITIVO,
     STRINGS_LUCE,
+    STRINGS_TEMPO_PULIZIA,
+    STRINGS_IMMISSIONE,
 } strings_t;
 
-extern const char *strings[53][2];
+extern const char *strings[55][2];
 
 #endif

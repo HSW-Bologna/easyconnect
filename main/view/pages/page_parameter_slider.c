@@ -128,7 +128,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
 static void update_page(model_t *pmodel, struct page_data *pdata) {
     lv_slider_set_value(pdata->slider, pdata->parameter->initial, LV_ANIM_OFF);
-    lv_label_set_text_fmt(pdata->lbl, "%i", pdata->parameter->initial);
+    lv_label_set_text_fmt(pdata->lbl, "%i%s", pdata->parameter->initial, pdata->parameter->um);
 }
 
 

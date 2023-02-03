@@ -29,9 +29,11 @@ struct page_data {
 
 static void update_info(model_t *pmodel, struct page_data *data) {
     data->device = model_get_device(pmodel, data->device.address);
-    lv_label_set_text_fmt(data->lbl_info, "Dispositivo %i,\n classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
-                          data->device.address, data->device.class, data->device.status, data->device.serial_number,
-                          data->device.alarms);
+    lv_label_set_text_fmt(data->lbl_info,
+                          "Dispositivo %i,\n versione %i.%i.%i\n classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
+                          data->device.address, (data->device.firmware_version >> 10) & 0x3F,
+                          (data->device.firmware_version >> 6) & 0x3F, (data->device.firmware_version >> 0) & 0x3F,
+                          data->device.class, data->device.status, data->device.serial_number, data->device.alarms);
 
     if (data->device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
         lv_label_set_text(data->lbl_alarms[0], view_intl_get_string(pmodel, STRINGS_ERRORE_DI_COMUNICAZIONE));

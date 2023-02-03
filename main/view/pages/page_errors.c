@@ -78,7 +78,6 @@ static void update_page(model_t *pmodel, struct page_data *pdata) {
 
     lv_obj_clean(pdata->cont);
 
-    size_t  i            = 0;
     uint8_t address      = 1;
     uint8_t prev_address = address;
     do {

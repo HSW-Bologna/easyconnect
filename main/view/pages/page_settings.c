@@ -12,7 +12,7 @@ enum {
     DEGREES_BTN_ID,
     VOLUME_BTN_ID,
     BRIGHTNESS_BTN_ID,
-    FILTRI_BTN_ID,
+    CLEANING_BTN_ID,
 };
 
 struct page_data {};
@@ -53,7 +53,8 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
     btn_previous = btn;
 
-    btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_FILTRI), FILTRI_BTN_ID);
+    btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_TEMPO_PULIZIA),
+                                          CLEANING_BTN_ID);
     lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
     btn_previous = btn;
 }
@@ -88,15 +89,22 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             msg.vmsg.page = &page_degrees;
                             break;
 
-                        case FILTRI_BTN_ID:
-                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
-                            msg.vmsg.page = &page_filters;
+                        case CLEANING_BTN_ID: {
+                            slider_parameter_t *args =
+                                view_common_slider_parameter_create(view_intl_get_string(pmodel, STRINGS_TEMPO_PULIZIA),
+                                                                    " s", model_get_environment_cleaning_period(pmodel),
+                                                                    30, model_set_environment_cleaning_period);
+
+                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
+                            msg.vmsg.page  = &page_parameter_slider;
+                            msg.vmsg.extra = args;
                             break;
+                        }
 
                         case BRIGHTNESS_BTN_ID: {
                             slider_parameter_t *args = view_common_slider_parameter_create(
-                                view_intl_get_string(pmodel, STRINGS_LUMINOSITA), model_get_active_backlight(pmodel),
-                                100, model_set_active_backlight);
+                                view_intl_get_string(pmodel, STRINGS_LUMINOSITA), "%",
+                                model_get_active_backlight(pmodel), 100, model_set_active_backlight);
 
                             msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
                             msg.vmsg.page  = &page_parameter_slider;
@@ -106,7 +114,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
                         case VOLUME_BTN_ID: {
                             slider_parameter_t *args = view_common_slider_parameter_create(
-                                view_intl_get_string(pmodel, STRINGS_VOLUME), model_get_buzzer_volume(pmodel),
+                                view_intl_get_string(pmodel, STRINGS_VOLUME), "", model_get_buzzer_volume(pmodel),
                                 MAX_BUZZER_VOLUME, model_set_buzzer_volume);
 
                             msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;

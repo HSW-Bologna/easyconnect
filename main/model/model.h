@@ -54,6 +54,8 @@ typedef struct {
         uint16_t buzzer_volume;
         uint8_t  use_fahrenheit;
         uint8_t  filters_for_speed[MAX_FAN_SPEED];
+        uint16_t environment_cleaning_period;     // In seconds
+        uint16_t immission_percentage;
     } configuration;
     uint8_t fan_speed;
 
@@ -107,5 +109,7 @@ GETTERNSETTER(active_backlight, configuration.active_backlight);
 GETTERNSETTER(language, configuration.language);
 GETTERNSETTER(buzzer_volume, configuration.buzzer_volume);
 GETTERNSETTER(use_fahrenheit, configuration.use_fahrenheit);
+GETTERNSETTER(environment_cleaning_period, configuration.environment_cleaning_period);
+GETTERNSETTER(immission_percentage, configuration.immission_percentage);
 
 #endif

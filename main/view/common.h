@@ -10,6 +10,7 @@ typedef struct {
     uint16_t    initial;
     uint16_t    max;
     const char *title;
+    const char *um;
 } slider_parameter_t;
 
 
@@ -23,7 +24,7 @@ lv_obj_t           *view_common_min_sec_rollers(lv_obj_t *parent, int visible, l
 void                view_common_roller_set_option_from_to(lv_obj_t *roller, int from, int to, int mode);
 void                view_common_set_hidden(lv_obj_t *obj, int hidden);
 void                view_common_get_class_string(uint16_t class, char *string, size_t len);
-slider_parameter_t *view_common_slider_parameter_create(const char *title, uint16_t value, uint16_t max,
+slider_parameter_t *view_common_slider_parameter_create(const char *title, const char *um, uint16_t value, uint16_t max,
                                                         void (*setter)(model_t *pmodel, uint16_t));
 
 

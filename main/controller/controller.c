@@ -99,15 +99,16 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                 break;
             }
 
+            uint16_t ulf_class =
+                DEVICE_CLASS_ULTRAVIOLET_FILTER(model_get_filters_for_speed(pmodel, model_get_fan_speed(pmodel)));
             size_t  esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
-            size_t  ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER);
+            size_t  ulf_count = model_get_class_count(pmodel, ulf_class);
             uint8_t update    = 0;
 
             if (ulf_count > 0) {
                 if (model_get_fan_state(pmodel) == MODEL_FAN_STATE_FAN_RUNNING || model_get_uvc_filter_state(pmodel)) {
                     model_uvc_filter_toggle(pmodel);
-                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER,
-                                                   model_get_uvc_filter_state(pmodel));
+                    controller_update_class_output(pmodel, ulf_class, model_get_uvc_filter_state(pmodel));
                     if (model_get_uvc_filter_state(pmodel)) {
                         controller_state_event(pmodel, STATE_EVENT_FAN_START);
                     }
@@ -124,7 +125,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                 if (model_get_electrostatic_filter_state(pmodel)) {
                     controller_state_event(pmodel, STATE_EVENT_FAN_START);
                 }
-                //update = 1;
+                // update = 1;
             }
 
             if (update) {
@@ -368,9 +369,11 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
             }
             break;
 
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER:
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
             if (model_get_uvc_filter_state(pmodel) && (communication || (alarms & EASYCONNECT_SAFETY_ALARM))) {
-                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER, 0);
+                controller_update_class_output(pmodel, device.class, 0);
                 model_uvc_filter_off(pmodel);
             }
             break;
@@ -382,7 +385,9 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
                 model_electrostatic_filter_off(pmodel);
             }
             if (model_get_uvc_filter_state(pmodel)) {
-                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER, 0);
+                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
+                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
+                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
                 model_uvc_filter_off(pmodel);
             }
             break;

@@ -12,11 +12,13 @@ void model_init(model_t *pmodel) {
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature = 32;
     device_list_init(pmodel->devices);
-    pmodel->configuration.language         = 0;
-    pmodel->fan_speed                      = 0;
-    pmodel->configuration.active_backlight = 100;
-    pmodel->configuration.buzzer_volume    = MAX_BUZZER_VOLUME;
-    pmodel->configuration.use_fahrenheit   = 0;
+    pmodel->configuration.language                    = 0;
+    pmodel->fan_speed                                 = 0;
+    pmodel->configuration.active_backlight            = 100;
+    pmodel->configuration.buzzer_volume               = MAX_BUZZER_VOLUME;
+    pmodel->configuration.use_fahrenheit              = 0;
+    pmodel->configuration.environment_cleaning_period = 4;
+    pmodel->configuration.immission_percentage        = 100;
 
     for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
         pmodel->configuration.filters_for_speed[i] = 0;
@@ -324,7 +326,9 @@ uint8_t model_is_any_filter_alarm_on(model_t *pmodel) {
 
 uint8_t model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms) {
     return model_is_class_alarms_on(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, alarms) ||
-           model_is_class_alarms_on(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER, alarms);
+           model_is_class_alarms_on(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), alarms) ||
+           model_is_class_alarms_on(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), alarms) ||
+           model_is_class_alarms_on(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), alarms);
 }
 
 

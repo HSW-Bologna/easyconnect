@@ -20,7 +20,7 @@ lv_obj_t *view_common_back_button(int id) {
 }
 
 
-slider_parameter_t *view_common_slider_parameter_create(const char *title, uint16_t value, uint16_t max,
+slider_parameter_t *view_common_slider_parameter_create(const char *title, const char *um, uint16_t value, uint16_t max,
                                                         void (*setter)(model_t *pmodel, uint16_t)) {
     slider_parameter_t *res = malloc(sizeof(slider_parameter_t));
     assert(res != NULL);
@@ -28,6 +28,7 @@ slider_parameter_t *view_common_slider_parameter_create(const char *title, uint1
     res->initial = value;
     res->max     = max;
     res->setter  = setter;
+    res->um      = um;
     return res;
 }
 
@@ -198,7 +199,9 @@ void view_common_get_class_string(uint16_t class, char *string, size_t len) {
             strncpy(string, "ESF", len);
             break;
 
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER:
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
             strncpy(string, "ULF", len);
             break;
 

@@ -10,6 +10,8 @@ enum {
     NETWORK_STATE_BTN_ID,
     DEVICES_BTN_ID,
     COMMISSIONING_BTN_ID,
+    FILTERS_BTN_ID,
+    IMMISSION_BTN_ID,
 };
 
 struct page_data {};
@@ -27,17 +29,25 @@ static void open_page(model_t *pmodel, void *arg) {
 
     view_common_title(BUTTON_BACK_ID, view_intl_get_string(pmodel, STRINGS_MENU_ASSISTENZA), NULL);
 
-    lv_obj_t *btn =
-        view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_DISPOSITIVI), 300, DEVICES_BTN_ID);
-    lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_MID, 0, 100);
+    lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_DISPOSITIVI),
+                                                    DEVICES_BTN_ID);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_LEFT, 8, 100);
 
-    lv_obj_t *btn1 = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_CONFIGURAZIONE), 300,
-                                             COMMISSIONING_BTN_ID);
+    lv_obj_t *btn1 = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_CONFIGURAZIONE),
+                                                     COMMISSIONING_BTN_ID);
     lv_obj_align(btn1, btn, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
+
+    lv_obj_t *btn2 =
+        view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_FILTRI), FILTERS_BTN_ID);
+    lv_obj_align(btn2, btn1, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
+
+    lv_obj_t *btn3 = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_IMMISSIONE),
+                                                     IMMISSION_BTN_ID);
+    lv_obj_align(btn3, NULL, LV_ALIGN_IN_TOP_RIGHT, -8, 100);
 }
 
 
-static view_message_t process_page_event(model_t *model, void *arg, view_event_t event) {
+static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_t event) {
     struct page_data *data = arg;
     (void)data;
     view_message_t msg = {0};
@@ -59,6 +69,21 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case COMMISSIONING_BTN_ID:
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
                             msg.vmsg.page = &page_commissioning;
+                            break;
+
+                        case FILTERS_BTN_ID:
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_filters;
+                            break;
+
+                        case IMMISSION_BTN_ID:
+                            slider_parameter_t *args = view_common_slider_parameter_create(
+                                view_intl_get_string(pmodel, STRINGS_IMMISSIONE), "%",
+                                model_get_active_backlight(pmodel), 100, model_set_immission_percentage);
+
+                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
+                            msg.vmsg.page  = &page_parameter_slider;
+                            msg.vmsg.extra = args;
                             break;
                     }
                     break;
