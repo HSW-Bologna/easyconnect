@@ -12,41 +12,92 @@ void model_init(model_t *pmodel) {
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature = 32;
     device_list_init(pmodel->devices);
-    pmodel->configuration.language                    = 0;
-    pmodel->fan_speed                                 = 0;
-    pmodel->configuration.active_backlight            = 100;
-    pmodel->configuration.buzzer_volume               = MAX_BUZZER_VOLUME;
-    pmodel->configuration.use_fahrenheit              = 0;
-    pmodel->configuration.environment_cleaning_period = 4;
-    pmodel->configuration.immission_percentage        = 100;
+    pmodel->configuration.language                           = 0;
+    pmodel->fan_speed                                        = 0;
+    pmodel->light_state                                      = LIGHT_STATE_OFF;
+    pmodel->configuration.active_backlight                   = 100;
+    pmodel->configuration.buzzer_volume                      = MAX_BUZZER_VOLUME;
+    pmodel->configuration.use_fahrenheit                     = 0;
+    pmodel->configuration.environment_cleaning_start_period  = 4;
+    pmodel->configuration.environment_cleaning_finish_period = 4;
+
+    pmodel->configuration.siphoning_percentages[0] = 0;
+    pmodel->configuration.siphoning_percentages[1] = 20;
+    pmodel->configuration.siphoning_percentages[2] = 30;
+    pmodel->configuration.siphoning_percentages[3] = 80;
+    pmodel->configuration.siphoning_percentages[4] = 100;
+
+    pmodel->configuration.immission_percentages[0] = 0;
+    pmodel->configuration.immission_percentages[1] = 5;
+    pmodel->configuration.immission_percentages[2] = 20;
+    pmodel->configuration.immission_percentages[3] = 60;
+    pmodel->configuration.immission_percentages[4] = 80;
 
     for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
-        pmodel->configuration.filters_for_speed[i] = 0;
+        pmodel->configuration.uvc_filters_for_speed[i] = 0;
+        pmodel->configuration.esf_filters_for_speed[i] = 0;
     }
+
+    pmodel->configuration.pressure_threshold_mb = 0;
+
+    pmodel->configuration.passive_filters_hours_warning_threshold = 1000;
+    pmodel->configuration.passive_filters_hours_stop_threshold    = 2000;
 }
 
 
-uint8_t model_get_filters_for_speed(model_t *pmodel, uint8_t speed) {
+uint8_t model_get_siphoning_percentage(model_t *pmodel, uint8_t fan_speed) {
     assert(pmodel != NULL);
-    assert(speed < MAX_FAN_SPEED);
-    return pmodel->configuration.filters_for_speed[speed];
+    assert(fan_speed < MAX_FAN_SPEED);
+    return pmodel->configuration.siphoning_percentages[fan_speed];
 }
 
 
-void model_modify_filters_for_speed(model_t *pmodel, uint8_t speed, int op) {
+void model_set_siphoning_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t percentage) {
     assert(pmodel != NULL);
-    if (op > 0 && pmodel->configuration.filters_for_speed[speed] < 2) {
-        pmodel->configuration.filters_for_speed[speed]++;
-    } else if (op < 0 && pmodel->configuration.filters_for_speed[speed] > 0) {
-        pmodel->configuration.filters_for_speed[speed]--;
-    }
+    assert(fan_speed < MAX_FAN_SPEED);
+    pmodel->configuration.siphoning_percentages[fan_speed] = percentage;
 }
 
 
-uint8_t model_set_filters_for_speed(model_t *pmodel, uint8_t speed, uint8_t filters) {
+uint8_t model_get_immission_percentage(model_t *pmodel, uint8_t fan_speed) {
     assert(pmodel != NULL);
-    assert(speed < MAX_FAN_SPEED);
-    return pmodel->configuration.filters_for_speed[speed];
+    assert(fan_speed < MAX_FAN_SPEED);
+    return pmodel->configuration.immission_percentages[fan_speed];
+}
+
+
+void model_set_immission_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t percentage) {
+    assert(pmodel != NULL);
+    assert(fan_speed < MAX_FAN_SPEED);
+    pmodel->configuration.immission_percentages[fan_speed] = percentage;
+}
+
+
+uint8_t model_get_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed) {
+    assert(pmodel != NULL);
+    assert(fan_speed < MAX_FAN_SPEED);
+    return pmodel->configuration.uvc_filters_for_speed[fan_speed];
+}
+
+
+void model_set_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters) {
+    assert(pmodel != NULL);
+    assert(fan_speed < MAX_FAN_SPEED);
+    pmodel->configuration.uvc_filters_for_speed[fan_speed] = filters;
+}
+
+
+uint8_t model_get_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed) {
+    assert(pmodel != NULL);
+    assert(fan_speed < MAX_FAN_SPEED);
+    return pmodel->configuration.esf_filters_for_speed[fan_speed];
+}
+
+
+void model_set_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters) {
+    assert(pmodel != NULL);
+    assert(fan_speed < MAX_FAN_SPEED);
+    pmodel->configuration.esf_filters_for_speed[fan_speed] = filters;
 }
 
 
@@ -335,4 +386,35 @@ uint8_t model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms) {
 uint8_t model_is_there_a_fan_alarm(model_t *pmodel) {
     return model_is_there_any_alarm_for_class(pmodel, DEVICE_CLASS_SIPHONING_FAN) ||
            model_is_there_any_alarm_for_class(pmodel, DEVICE_CLASS_IMMISSION_FAN);
+}
+
+
+void model_light_switch(model_t *model) {
+    uint16_t class;
+    if (!model_get_light_class(model, &class)) {
+        return;
+    }
+
+    switch (class) {
+        case DEVICE_CLASS_LIGHT_1:
+            if (model_get_light_state(model) == LIGHT_STATE_OFF) {
+                model_set_light_state(model, LIGHT_STATE_SINGLE_ON);
+            } else {
+                model_set_light_state(model, LIGHT_STATE_OFF);
+            }
+            break;
+
+        case DEVICE_CLASS_LIGHT_2: {
+            model_set_light_state(model, (model_get_light_state(model) + 1) % (LIGHT_STATE_DOUBLE_ON + 1));
+            break;
+        }
+
+        case DEVICE_CLASS_LIGHT_3: {
+            model_set_light_state(model, (model_get_light_state(model) + 1) % (LIGHT_STATE_TRIPLE_ON + 1));
+            break;
+        }
+
+        default:
+            assert(0);
+    }
 }

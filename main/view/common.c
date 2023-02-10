@@ -108,7 +108,7 @@ lv_obj_t *view_common_menu_button(lv_obj_t *root, const char *text, size_t width
 
 
 lv_obj_t *view_common_default_menu_button(lv_obj_t *root, const char *text, int id) {
-    return view_common_menu_button(root, text, 230, id);
+    return view_common_menu_button(root, text, 340, id);
 }
 
 

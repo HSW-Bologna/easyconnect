@@ -12,6 +12,7 @@ static const char *TAG = "Device";
 
 
 void device_list_init(device_t *devices) {
+    (void)TAG;
     for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
         devices[i].address     = INDEX2ADDR(i);
         devices[i].status      = DEVICE_STATUS_NOT_CONFIGURED;

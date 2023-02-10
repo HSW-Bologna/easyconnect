@@ -8,19 +8,28 @@
 #include "utils/utils.h"
 
 
-#define NUM_CONFIGURATION_PARAMETERS 5
+#define NUM_CONFIGURATION_PARAMETERS 13
 
 
 static void save_backlight(void *mem, void *arg);
-static void save_filters(void *mem, void *arg);
+static void save_byte_array(void *mem, void *arg);
+static void save_double_byte_array(void *mem, void *arg);
 
 
-static const char *DEVICE_MAP_KEY = "DMAP";
-static const char *LANGUAGE_KEY   = "LANGUAGE";
-static const char *BACKLIGHT_KEY  = "BACKLIGHT";
-static const char *BUZZER_KEY     = "BUZZER";
-static const char *DEGREES_KEY    = "DEGREES";
-static const char *FILTERS_KEY    = "FILT";
+static const char *DEVICE_MAP_KEY                           = "DMAP";
+static const char *LANGUAGE_KEY                             = "LANGUAGE";
+static const char *BACKLIGHT_KEY                            = "BACKLIGHT";
+static const char *BUZZER_KEY                               = "BUZZER";
+static const char *DEGREES_KEY                              = "DEGREES";
+static const char *UVC_FILTERS_KEY                          = "UVCFILT";
+static const char *ESF_FILTERS_KEY                          = "ESFFILT";
+static const char *SIPHONING_PERCENTAGES_KEY                = "SIPPERC";
+static const char *IMMISSION_PERCENTAGES_KEY                = "IMMPERC";
+static const char *CLEANING_START_PERIOD_KEY                = "CLEANSTART";
+static const char *CLEANING_FINISH_PERIOD_KEY               = "CLEANFINISH";
+static const char *NUM_PASSIVE_FILTERS_KEY                  = "PASSIVENUM";
+static const char *PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_KEY = "PASSTHRESWARN";
+static const char *PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_KEY = "PASSTHRESSTOP";
 
 static const char *TAG = "Devices";
 
@@ -44,8 +53,20 @@ void configuration_load(model_t *pmodel) {
     storage_load_uint16(&pmodel->configuration.language, (char *)LANGUAGE_KEY);
     storage_load_uint16(&pmodel->configuration.active_backlight, (char *)BACKLIGHT_KEY);
     storage_load_uint16(&pmodel->configuration.buzzer_volume, (char *)BUZZER_KEY);
+    storage_load_uint16(&pmodel->configuration.environment_cleaning_start_period, (char *)CLEANING_START_PERIOD_KEY);
+    storage_load_uint16(&pmodel->configuration.environment_cleaning_finish_period, (char *)CLEANING_START_PERIOD_KEY);
+    storage_load_uint16(&pmodel->configuration.num_passive_filters, (char *)NUM_PASSIVE_FILTERS_KEY);
+    storage_load_uint16(&pmodel->configuration.passive_filters_hours_warning_threshold,
+                        (char *)PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_KEY);
+    storage_load_uint16(&pmodel->configuration.passive_filters_hours_stop_threshold,
+                        (char *)PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_KEY);
     storage_load_uint8(&pmodel->configuration.use_fahrenheit, (char *)DEGREES_KEY);
-    storage_load_blob(&pmodel->configuration.filters_for_speed, MAX_FAN_SPEED, (char *)FILTERS_KEY);
+    storage_load_blob(&pmodel->configuration.uvc_filters_for_speed, MAX_FAN_SPEED, (char *)UVC_FILTERS_KEY);
+    storage_load_blob(&pmodel->configuration.esf_filters_for_speed, MAX_FAN_SPEED, (char *)ESF_FILTERS_KEY);
+    storage_load_blob(&pmodel->configuration.siphoning_percentages, MAX_FAN_SPEED * 2,
+                      (char *)SIPHONING_PERCENTAGES_KEY);
+    storage_load_blob(&pmodel->configuration.immission_percentages, MAX_FAN_SPEED * 2,
+                      (char *)IMMISSION_PERCENTAGES_KEY);
 
     size_t i       = 0;
     watchlist[i++] = WATCHER(&pmodel->configuration.language, storage_save_uint16, (void *)LANGUAGE_KEY);
@@ -53,8 +74,24 @@ void configuration_load(model_t *pmodel) {
         WATCHER_DELAYED(&pmodel->configuration.active_backlight, save_backlight, (void *)BACKLIGHT_KEY, 1000UL);
     watchlist[i++] = WATCHER(&pmodel->configuration.buzzer_volume, storage_save_uint16, (void *)BUZZER_KEY);
     watchlist[i++] = WATCHER(&pmodel->configuration.use_fahrenheit, storage_save_uint8, (void *)DEGREES_KEY);
-    watchlist[i++] =
-        WATCHER_DELAYED_ARRAY(&pmodel->configuration.filters_for_speed, MAX_FAN_SPEED, save_filters, (void *)FILTERS_KEY, 2000UL);
+    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.num_passive_filters, storage_save_uint16,
+                                     (void *)NUM_PASSIVE_FILTERS_KEY, 4000UL);
+    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.passive_filters_hours_warning_threshold,
+                                     storage_save_uint16, (void *)PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_KEY, 4000UL);
+    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.passive_filters_hours_stop_threshold, storage_save_uint16,
+                                     (void *)PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_KEY, 4000UL);
+    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.environment_cleaning_start_period, storage_save_uint16,
+                                     (void *)CLEANING_START_PERIOD_KEY, 4000UL);
+    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.environment_cleaning_finish_period, storage_save_uint16,
+                                     (void *)CLEANING_FINISH_PERIOD_KEY, 4000UL);
+    watchlist[i++] = WATCHER_DELAYED_ARRAY(&pmodel->configuration.uvc_filters_for_speed, MAX_FAN_SPEED, save_byte_array,
+                                           (void *)UVC_FILTERS_KEY, 4000UL);
+    watchlist[i++] = WATCHER_DELAYED_ARRAY(&pmodel->configuration.esf_filters_for_speed, MAX_FAN_SPEED, save_byte_array,
+                                           (void *)ESF_FILTERS_KEY, 4000UL);
+    watchlist[i++] = WATCHER_DELAYED_ARRAY(&pmodel->configuration.siphoning_percentages, MAX_FAN_SPEED,
+                                           save_double_byte_array, (void *)SIPHONING_PERCENTAGES_KEY, 4000UL);
+    watchlist[i++] = WATCHER_DELAYED_ARRAY(&pmodel->configuration.siphoning_percentages, MAX_FAN_SPEED,
+                                           save_double_byte_array, (void *)IMMISSION_PERCENTAGES_KEY, 4000UL);
     assert(i == NUM_CONFIGURATION_PARAMETERS);
     watchlist[i++] = WATCHER_NULL;
     watcher_list_init(watchlist);
@@ -80,6 +117,11 @@ static void save_backlight(void *mem, void *arg) {
 }
 
 
-static void save_filters(void *mem, void *arg) {
+static void save_byte_array(void *mem, void *arg) {
     storage_save_blob(mem, MAX_FAN_SPEED, arg);
+}
+
+
+static void save_double_byte_array(void *mem, void *arg) {
+    storage_save_blob(mem, MAX_FAN_SPEED * 2, arg);
 }

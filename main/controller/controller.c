@@ -100,7 +100,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             }
 
             uint16_t ulf_class =
-                DEVICE_CLASS_ULTRAVIOLET_FILTER(model_get_filters_for_speed(pmodel, model_get_fan_speed(pmodel)));
+                DEVICE_CLASS_ULTRAVIOLET_FILTER(model_get_uvc_filters_for_speed(pmodel, model_get_fan_speed(pmodel)));
             size_t  esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
             size_t  ulf_count = model_get_class_count(pmodel, ulf_class);
             uint8_t update    = 0;

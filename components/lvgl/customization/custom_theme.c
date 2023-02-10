@@ -40,6 +40,11 @@
 #define COLOR_BG_PR_CHK lv_color_darken(theme.color_primary, LV_OPA_20)
 #define COLOR_BG_DIS    COLOR_BG
 
+#define CONT_BG_BORDER (lv_color_hex(0x050505)) /*dfe7ed*/
+
+#define CUSTOM_BORDER_WIDTH     4
+#define CUSTOM_BTN_BORDER_WIDTH 2
+
 #define COLOR_BG_BORDER        (IS_LIGHT ? lv_color_hex(0xd6dde3) : lv_color_hex(0x808a97)) /*dfe7ed*/
 #define COLOR_BG_BORDER_PR     (IS_LIGHT ? lv_color_hex3(0xccc) : lv_color_hex(0x5f656e))
 #define COLOR_BG_BORDER_CHK    (IS_LIGHT ? lv_color_hex(0x3b3e42) : lv_color_hex(0x5f656e))
@@ -76,6 +81,8 @@ typedef struct {
     lv_style_t btn;
     lv_style_t pad_inner;
     lv_style_t pad_small;
+
+    lv_style_t cont;
 
 #if LV_USE_ARC
     lv_style_t arc_indic;
@@ -181,9 +188,9 @@ static void theme_apply(lv_theme_t *th, lv_obj_t *obj, lv_theme_style_t name);
 /**********************
  *  STATIC VARIABLES
  **********************/
-static lv_theme_t     theme;
-static theme_styles_t _styles = {0};
-static theme_styles_t *styles = &_styles;
+static lv_theme_t      theme;
+static theme_styles_t  _styles = {0};
+static theme_styles_t *styles  = &_styles;
 
 /**********************
  *      MACROS
@@ -202,6 +209,14 @@ static void basic_init(void) {
     lv_style_set_text_sel_color(&styles->scr, LV_STATE_DEFAULT, COLOR_SCR_TEXT);
     lv_style_set_text_sel_bg_color(&styles->scr, LV_STATE_DEFAULT, theme.color_primary);
     lv_style_set_value_font(&styles->scr, LV_STATE_DEFAULT, theme.font_normal);
+
+    lv_style_reset(&styles->cont);
+    lv_style_set_radius(&styles->cont, LV_STATE_DEFAULT, 24);
+    lv_style_set_bg_opa(&styles->cont, LV_STATE_DEFAULT, LV_OPA_COVER);
+    lv_style_set_bg_color(&styles->cont, LV_STATE_DEFAULT, COLOR_BG);
+    lv_style_set_border_color(&styles->cont, LV_STATE_DEFAULT, CONT_BG_BORDER);
+    lv_style_set_border_width(&styles->cont, LV_STATE_DEFAULT, CUSTOM_BORDER_WIDTH);
+    lv_style_set_border_post(&styles->cont, LV_STATE_DEFAULT, true);
 
     lv_style_reset(&styles->bg);
     lv_style_set_radius(&styles->bg, LV_STATE_DEFAULT, LV_DPX(8));
@@ -222,7 +237,8 @@ static void basic_init(void) {
     lv_style_set_line_width(&styles->bg, LV_STATE_DEFAULT, 1);
     lv_style_set_pad_left(&styles->bg, LV_STATE_DEFAULT, PAD_DEF + BORDER_WIDTH);
     lv_style_set_pad_right(&styles->bg, LV_STATE_DEFAULT, PAD_DEF + BORDER_WIDTH);
-    lv_style_set_pad_top(&styles->bg, LV_STATE_DEFAULT, PAD_DEF + BORDER_WIDTH);;
+    lv_style_set_pad_top(&styles->bg, LV_STATE_DEFAULT, PAD_DEF + BORDER_WIDTH);
+    ;
     lv_style_set_pad_bottom(&styles->bg, LV_STATE_DEFAULT, PAD_DEF + BORDER_WIDTH);
     lv_style_set_pad_inner(&styles->bg, LV_STATE_DEFAULT, PAD_DEF);
     lv_style_set_transition_time(&styles->bg, LV_STATE_DEFAULT, TRANSITION_TIME);
@@ -271,11 +287,11 @@ static void basic_init(void) {
     lv_style_set_bg_color(&styles->btn, LV_STATE_CHECKED | LV_STATE_PRESSED, COLOR_BTN_CHK_PR);
     lv_style_set_bg_color(&styles->btn, LV_STATE_DISABLED, COLOR_BTN);
     lv_style_set_bg_color(&styles->btn, LV_STATE_DISABLED | LV_STATE_CHECKED, COLOR_BTN_DIS);
-    lv_style_set_border_color(&styles->btn, LV_STATE_DEFAULT, COLOR_BTN_BORDER);
-    lv_style_set_border_color(&styles->btn, LV_STATE_PRESSED, COLOR_BTN_BORDER_PR);
-    lv_style_set_border_color(&styles->btn, LV_STATE_DISABLED, COLOR_BTN_BORDER_INA);
-    lv_style_set_border_width(&styles->btn, LV_STATE_DEFAULT, BORDER_WIDTH);
-    //lv_style_set_border_opa(&styles->btn, LV_STATE_CHECKED, LV_OPA_TRANSP);
+    lv_style_set_border_color(&styles->btn, LV_STATE_DEFAULT, CONT_BG_BORDER);
+    lv_style_set_border_color(&styles->btn, LV_STATE_PRESSED, CONT_BG_BORDER);
+    lv_style_set_border_color(&styles->btn, LV_STATE_DISABLED, CONT_BG_BORDER);
+    lv_style_set_border_width(&styles->btn, LV_STATE_DEFAULT, CUSTOM_BTN_BORDER_WIDTH);
+    // lv_style_set_border_opa(&styles->btn, LV_STATE_CHECKED, LV_OPA_TRANSP);
 
     lv_style_set_text_color(&styles->btn, LV_STATE_DEFAULT, IS_LIGHT ? lv_color_hex(0x31404f) : lv_color_hex(0xffffff));
     lv_style_set_text_color(&styles->btn, LV_STATE_PRESSED, IS_LIGHT ? lv_color_hex(0x31404f) : lv_color_hex(0xffffff));
@@ -968,6 +984,7 @@ static void theme_apply(lv_theme_t *th, lv_obj_t *obj, lv_theme_style_t name) {
         case LV_THEME_CONT:
             list = lv_obj_get_style_list(obj, LV_CONT_PART_MAIN);
             _lv_style_list_add_style(list, &styles->bg);
+            _lv_style_list_add_style(list, &styles->cont);
             break;
 #endif
 

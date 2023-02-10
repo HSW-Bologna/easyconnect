@@ -4,6 +4,7 @@
 #include "model/model.h"
 
 
+LV_IMG_DECLARE(img_error_sm);
 LV_IMG_DECLARE(img_icona_luce_1);
 LV_IMG_DECLARE(img_icona_luce_2);
 LV_IMG_DECLARE(img_icona_luce_3);
@@ -45,7 +46,7 @@ static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
     lv_btn_set_layout(btn, LV_LAYOUT_OFF);
     lv_obj_set_size(btn, 80, 48);
     lv_obj_t *lbl = lv_label_create(btn, NULL);
-    lv_label_set_text_fmt(lbl, "%i", device.address);
+    lv_label_set_text_fmt(lbl, "%i\n%i", device.address, device.serial_number);
     lv_obj_t *img = lv_img_create(btn, NULL);
 
     lv_obj_align(lbl, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
@@ -85,8 +86,9 @@ static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
     }
 
     if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR || device.alarms > 0) {
-        lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT,
-                                        lv_color_lighten(LV_COLOR_RED, LV_OPA_30));
+        lv_obj_t *img_error = lv_img_create(img, NULL);
+        lv_img_set_src(img_error, &img_error_sm);
+        lv_obj_align(img_error, img, LV_ALIGN_IN_BOTTOM_LEFT, 0, 0);
     }
     lv_obj_align(img, NULL, LV_ALIGN_IN_RIGHT_MID, -8, 0);
 

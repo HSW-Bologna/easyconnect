@@ -41,21 +41,39 @@ typedef enum {
 } model_fan_state_t;
 
 
+typedef enum {
+    LIGHT_STATE_OFF        = 0,
+    LIGHT_STATE_SINGLE_ON  = 1,
+    LIGHT_STATE_GROUP_1_ON = 1,
+    LIGHT_STATE_GROUP_2_ON = 2,
+    LIGHT_STATE_DOUBLE_ON  = 3,
+    LIGHT_STATE_TRIPLE_ON  = 3,
+} light_state_t;
+
+
 typedef struct {
     int temperature;
     int electrostatic_filter_on;
     int uvc_filter_on;
 
     model_fan_state_t state;
+    light_state_t     light_state;
 
     struct {
         uint16_t language;
         uint16_t active_backlight;
         uint16_t buzzer_volume;
         uint8_t  use_fahrenheit;
-        uint8_t  filters_for_speed[MAX_FAN_SPEED];
-        uint16_t environment_cleaning_period;     // In seconds
-        uint16_t immission_percentage;
+        uint8_t  uvc_filters_for_speed[MAX_FAN_SPEED];
+        uint8_t  esf_filters_for_speed[MAX_FAN_SPEED];
+        uint16_t environment_cleaning_start_period;      // In seconds
+        uint16_t environment_cleaning_finish_period;     // In seconds
+        uint8_t  siphoning_percentages[MAX_FAN_SPEED];
+        uint8_t  immission_percentages[MAX_FAN_SPEED];
+        uint16_t pressure_threshold_mb;
+        uint16_t passive_filters_hours_warning_threshold;
+        uint16_t passive_filters_hours_stop_threshold;
+        uint16_t num_passive_filters;
     } configuration;
     uint8_t fan_speed;
 
@@ -99,17 +117,29 @@ uint8_t           model_is_there_any_alarm_for_class(model_t *pmodel, uint16_t c
 uint8_t           model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms);
 uint8_t           model_is_any_filter_alarm_on(model_t *pmodel);
 uint8_t           model_is_there_a_fan_alarm(model_t *pmodel);
-uint8_t           model_get_filters_for_speed(model_t *pmodel, uint8_t speed);
-void              model_modify_filters_for_speed(model_t *pmodel, uint8_t speed, int op);
 void              model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressure);
 device_t         *model_get_device_mut(model_t *pmodel, uint8_t address);
+void              model_light_switch(model_t *model);
+uint8_t           model_get_siphoning_percentage(model_t *pmodel, uint8_t fan_speed);
+void              model_set_siphoning_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t percentage);
+uint8_t           model_get_immission_percentage(model_t *pmodel, uint8_t fan_speed);
+void              model_set_immission_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t percentage);
+uint8_t           model_get_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed);
+void              model_set_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
+uint8_t           model_get_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed);
+void              model_set_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
 
+GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);
 GETTERNSETTER(active_backlight, configuration.active_backlight);
 GETTERNSETTER(language, configuration.language);
 GETTERNSETTER(buzzer_volume, configuration.buzzer_volume);
 GETTERNSETTER(use_fahrenheit, configuration.use_fahrenheit);
-GETTERNSETTER(environment_cleaning_period, configuration.environment_cleaning_period);
-GETTERNSETTER(immission_percentage, configuration.immission_percentage);
+GETTERNSETTER(environment_cleaning_start_period, configuration.environment_cleaning_start_period);
+GETTERNSETTER(environment_cleaning_finish_period, configuration.environment_cleaning_finish_period);
+GETTERNSETTER(pressure_threshold_mb, configuration.pressure_threshold_mb);
+GETTERNSETTER(passive_filters_hours_warning_threshold, configuration.passive_filters_hours_warning_threshold);
+GETTERNSETTER(passive_filters_hours_stop_threshold, configuration.passive_filters_hours_stop_threshold);
+GETTERNSETTER(num_passive_filters, configuration.num_passive_filters);
 
 #endif

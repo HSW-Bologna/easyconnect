@@ -27,7 +27,7 @@ static void open_page(model_t *pmodel, void *arg) {
     struct page_data *data = arg;
     (void)data;
 
-    view_common_title(BUTTON_BACK_ID, view_intl_get_string(pmodel, STRINGS_MENU_ASSISTENZA), NULL);
+    view_common_title(BUTTON_BACK_ID, view_intl_get_string(pmodel, STRINGS_SYSTEM_SETUP), NULL);
 
     lv_obj_t *btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_DISPOSITIVI),
                                                     DEVICES_BTN_ID);
@@ -72,19 +72,11 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             break;
 
                         case FILTERS_BTN_ID:
-                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
-                            msg.vmsg.page = &page_filters;
                             break;
 
-                        case IMMISSION_BTN_ID:
-                            slider_parameter_t *args = view_common_slider_parameter_create(
-                                view_intl_get_string(pmodel, STRINGS_IMMISSIONE), "%",
-                                model_get_active_backlight(pmodel), 100, model_set_immission_percentage);
-
-                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
-                            msg.vmsg.page  = &page_parameter_slider;
-                            msg.vmsg.extra = args;
+                        case IMMISSION_BTN_ID: {
                             break;
+                        }
                     }
                     break;
                 }

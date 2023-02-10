@@ -48,7 +48,21 @@ QUANTI_DISPOSITIVI_DEVONO_ESSERE_CONFIGURATI, Quanti dispositivi devono essere c
 CONFIGURAZIONE_COMPLETATA_SE_NON_TUTTI_I_DISPOSITIVI_SONO_STATI_RILEVATI_RIPETERE_LA_PROCEDURA, Configurazione completata; se non tutti i dispositivi sono stati rilevati ripetere la procedura, Configuration complete; if there are missing devices repeat the procedure
 RIPROVA, Riprova, Try again
 DISPOSITIVI, Dispositivi, Devices
-MENU_ASSISTENZA, Menu' assistenza, Technical menu
+SYSTEM_SETUP, Setup sistema, System setup
+SISTEMA_REC, Sistema R.E.C., R.E.C. System
+VENTILAZIONE, Ventilazione, Ventilation
+FILTRAGGIO, Filtraggio, Filtering
+SENSORI, Sensori, Sensors
+DISPOSITIVI_REC, Dispositivi R.E.C., R.E.C. Devices
+CONF_AUTOMATICA, Conf. automatica, Automatic config
+RICERCA, Ricerca, Search
+MANUTENZIONE, Manutenzione, Maintenance
+FILTRI_ATTIVI, Filtri attivi, Active filtering
+SETUP_MANUTENZIONE, Setup manutenzione, Setup maintenance
+PRESSIONE, Pressione, Pressure
+UMIDITA, Umidita, Humidity
+TEMPERATURA, Temperatura, Temperature
+INIZIA_CAL, Inizia cal., Start cal.
 FILTRI, Filtri, Filters
 ERRORE_DI_COMUNICAZIONE, Errore di comunicazione, Communication error
 DISPOSITIVO, Dispositivo, Device

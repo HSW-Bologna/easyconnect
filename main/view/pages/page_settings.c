@@ -12,7 +12,6 @@ enum {
     DEGREES_BTN_ID,
     VOLUME_BTN_ID,
     BRIGHTNESS_BTN_ID,
-    CLEANING_BTN_ID,
 };
 
 struct page_data {};
@@ -31,30 +30,24 @@ static void open_page(model_t *pmodel, void *arg) {
 
     view_common_title(BUTTON_BACK_ID, view_intl_get_string(pmodel, STRINGS_IMPOSTAZIONI), NULL);
 
-    btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_LINGUA), LANGUAGE_BTN_ID);
+    btn = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_LINGUA), 230, LANGUAGE_BTN_ID);
     lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_LEFT, 8, 100);
     lv_obj_t *btn_previous = btn;
 
+    btn = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_DATA_ORA), 230, DATETIME_BTN_ID);
+    lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
+    btn_previous = btn;
+
+    btn = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_VOLUME), 230, VOLUME_BTN_ID);
+    lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
+    btn_previous = btn;
+
     btn =
-        view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_DATA_ORA), DATETIME_BTN_ID);
-    lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
-    btn_previous = btn;
-
-    btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_VOLUME), VOLUME_BTN_ID);
-    lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
-    btn_previous = btn;
-
-    btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_LUMINOSITA),
-                                          BRIGHTNESS_BTN_ID);
+        view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_LUMINOSITA), 230, BRIGHTNESS_BTN_ID);
     lv_obj_align(btn, NULL, LV_ALIGN_IN_TOP_RIGHT, -8, 100);
     btn_previous = btn;
 
-    btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_GRADI), DEGREES_BTN_ID);
-    lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
-    btn_previous = btn;
-
-    btn = view_common_default_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_TEMPO_PULIZIA),
-                                          CLEANING_BTN_ID);
+    btn = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_GRADI), 230, DEGREES_BTN_ID);
     lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
     btn_previous = btn;
 }
@@ -88,18 +81,6 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
                             msg.vmsg.page = &page_degrees;
                             break;
-
-                        case CLEANING_BTN_ID: {
-                            slider_parameter_t *args =
-                                view_common_slider_parameter_create(view_intl_get_string(pmodel, STRINGS_TEMPO_PULIZIA),
-                                                                    " s", model_get_environment_cleaning_period(pmodel),
-                                                                    30, model_set_environment_cleaning_period);
-
-                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
-                            msg.vmsg.page  = &page_parameter_slider;
-                            msg.vmsg.extra = args;
-                            break;
-                        }
 
                         case BRIGHTNESS_BTN_ID: {
                             slider_parameter_t *args = view_common_slider_parameter_create(
