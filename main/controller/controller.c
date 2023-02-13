@@ -99,16 +99,18 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                 break;
             }
 
-            uint16_t ulf_class =
-                DEVICE_CLASS_ULTRAVIOLET_FILTER(model_get_uvc_filters_for_speed(pmodel, model_get_fan_speed(pmodel)));
-            size_t  esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
-            size_t  ulf_count = model_get_class_count(pmodel, ulf_class);
-            uint8_t update    = 0;
+            uint16_t uvc_filters = model_get_uvc_filters_for_speed(pmodel, model_get_fan_speed(pmodel));
+
+            size_t esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
+            size_t ulf_count =
+                uvc_filters > 0 ? model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(uvc_filters - 1)) : 0;
+            uint8_t update = 0;
 
             if (ulf_count > 0) {
                 if (model_get_fan_state(pmodel) == MODEL_FAN_STATE_FAN_RUNNING || model_get_uvc_filter_state(pmodel)) {
                     model_uvc_filter_toggle(pmodel);
-                    controller_update_class_output(pmodel, ulf_class, model_get_uvc_filter_state(pmodel));
+                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(uvc_filters - 1),
+                                                   model_get_uvc_filter_state(pmodel));
                     if (model_get_uvc_filter_state(pmodel)) {
                         controller_state_event(pmodel, STATE_EVENT_FAN_START);
                     }
@@ -165,7 +167,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                     break;
 
                 default:
-                    controller_update_fan_speed(pmodel, model_get_fan_speed(pmodel));
+                    controller_update_fan_percentage(pmodel, model_get_fan_speed(pmodel));
                     break;
             }
             break;
@@ -339,15 +341,19 @@ void controller_update_class_output(model_t *pmodel, uint16_t class, int value) 
 }
 
 
-void controller_update_fan_speed(model_t *pmodel, size_t speed) {
-    uint16_t classes[] = {DEVICE_CLASS_IMMISSION_FAN, DEVICE_CLASS_SIPHONING_FAN};
+void controller_update_fan_percentage(model_t *pmodel, uint8_t fan_speed) {
+    uint16_t classes[]     = {DEVICE_CLASS_SIPHONING_FAN, DEVICE_CLASS_IMMISSION_FAN};
+    uint8_t  percentages[] = {
+        model_get_siphoning_percentage(pmodel, fan_speed),
+        model_get_immission_percentage(pmodel, fan_speed),
+    };
 
     for (size_t i = 0; i < sizeof(classes) / sizeof(classes[0]); i++) {
         uint8_t starting_address = 0;
         uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, classes[i]);
 
         while (address != starting_address) {
-            modbus_set_fan_speed(address, speed);
+            modbus_set_fan_percentage(address, percentages[i]);
             starting_address = address;
             address          = model_get_next_device_address_by_class(pmodel, starting_address, classes[i]);
         }

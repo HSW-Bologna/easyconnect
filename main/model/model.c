@@ -6,6 +6,9 @@
 #include "easyconnect_interface.h"
 
 
+static uint8_t alarm_for_device(model_t *pmodel, size_t i);
+
+
 void model_init(model_t *pmodel) {
     assert(pmodel != NULL);
 
@@ -34,8 +37,8 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.immission_percentages[4] = 80;
 
     for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
-        pmodel->configuration.uvc_filters_for_speed[i] = 0;
-        pmodel->configuration.esf_filters_for_speed[i] = 0;
+        pmodel->configuration.uvc_filters_for_speed[i] = 1;
+        pmodel->configuration.esf_filters_for_speed[i] = 1;
     }
 
     pmodel->configuration.pressure_threshold_mb = 0;
@@ -76,7 +79,8 @@ void model_set_immission_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t 
 uint8_t model_get_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed) {
     assert(pmodel != NULL);
     assert(fan_speed < MAX_FAN_SPEED);
-    return pmodel->configuration.uvc_filters_for_speed[fan_speed];
+    return 1;
+    // return pmodel->configuration.uvc_filters_for_speed[fan_speed];
 }
 
 
@@ -90,7 +94,8 @@ void model_set_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t
 uint8_t model_get_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed) {
     assert(pmodel != NULL);
     assert(fan_speed < MAX_FAN_SPEED);
-    return pmodel->configuration.esf_filters_for_speed[fan_speed];
+    return 1;
+    // return pmodel->configuration.esf_filters_for_speed[fan_speed];
 }
 
 
@@ -358,20 +363,49 @@ uint8_t model_is_there_an_alarm(model_t *pmodel) {
 }
 
 
+void model_get_alarms_for_classes(model_t *pmodel, uint8_t *uvc, uint8_t *esf, uint8_t *siph, uint8_t *imm) {
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
+        switch (pmodel->devices[i].class) {
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+                if (alarm_for_device(pmodel, i)) {
+                    *uvc = 1;
+                }
+                break;
+
+            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+                if (alarm_for_device(pmodel, i)) {
+                    *esf = 1;
+                }
+                break;
+
+            case DEVICE_CLASS_SIPHONING_FAN:
+                if (alarm_for_device(pmodel, i)) {
+                    *siph = 1;
+                }
+                break;
+
+            case DEVICE_CLASS_IMMISSION_FAN:
+                if (alarm_for_device(pmodel, i)) {
+                    *imm = 1;
+                }
+                break;
+        }
+    }
+}
+
+
 uint8_t model_is_there_any_alarm_for_class(model_t *pmodel, uint16_t class) {
     assert(pmodel != NULL);
-    return device_list_is_there_any_alarm_for_class(pmodel->devices, class);
+    return device_list_is_there_any_alarm_for_class(pmodel->devices, class) ||
+           device_list_is_class_communication_error(pmodel->devices, class);
 }
 
 
 uint8_t model_is_class_alarms_on(model_t *pmodel, uint16_t class, uint8_t alarms) {
     assert(pmodel != NULL);
     return device_list_is_class_alarms_on(pmodel->devices, class, alarms);
-}
-
-
-uint8_t model_is_any_filter_alarm_on(model_t *pmodel) {
-    return model_is_filter_alarm_on(pmodel, 0xFF);
 }
 
 
@@ -417,4 +451,10 @@ void model_light_switch(model_t *model) {
         default:
             assert(0);
     }
+}
+
+
+static uint8_t alarm_for_device(model_t *pmodel, size_t i) {
+    return ((pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED && (pmodel->devices[i].alarms & 0xFF) > 0) ||
+            pmodel->devices[i].status == DEVICE_STATUS_COMMUNICATION_ERROR);
 }

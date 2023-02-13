@@ -115,7 +115,6 @@ const char       *model_get_degrees_symbol(model_t *pmodel);
 uint8_t           model_is_there_an_alarm(model_t *pmodel);
 uint8_t           model_is_there_any_alarm_for_class(model_t *pmodel, uint16_t class);
 uint8_t           model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms);
-uint8_t           model_is_any_filter_alarm_on(model_t *pmodel);
 uint8_t           model_is_there_a_fan_alarm(model_t *pmodel);
 void              model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressure);
 device_t         *model_get_device_mut(model_t *pmodel, uint8_t address);
@@ -128,6 +127,7 @@ uint8_t           model_get_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_s
 void              model_set_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
 uint8_t           model_get_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed);
 void              model_set_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
+void model_get_alarms_for_classes(model_t *pmodel, uint8_t *uvc, uint8_t *esf, uint8_t *siph, uint8_t *imm);
 
 GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);

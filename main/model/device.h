@@ -11,7 +11,7 @@
 
 #define MAX_NUM_MESSAGES 2
 
-#define MODBUS_MAX_DEVICES 100
+#define MODBUS_MAX_DEVICES 64
 
 #define DEVICE_CLASS(class)    (((class) >> 8) & 0xFF)
 #define DEVICE_SUBCLASS(class) ((class) & 0xFF)
@@ -75,6 +75,7 @@ void          device_list_set_device_sn(device_t *devices, uint8_t address, uint
 uint8_t       device_list_is_there_an_alarm(device_t *devices);
 uint8_t       device_list_is_there_any_alarm_for_class(device_t *devices, uint16_t class);
 uint8_t       device_list_is_class_alarms_on(device_t *devices, uint16_t class, uint8_t alarms);
+uint8_t       device_list_is_class_communication_error(device_t *devices, uint16_t class);
 
 
 #endif

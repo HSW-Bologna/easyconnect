@@ -42,7 +42,7 @@ typedef enum {
     TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
     TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING,
     TASK_MESSAGE_CODE_SET_CLASS_OUTPUT,
-    TASK_MESSAGE_CODE_SET_FAN_SPEED,
+    TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE,
     TASK_MESSAGE_CODE_UPDATE_TIME,
     TASK_MESSAGE_CODE_UPDATE_EVENTS,
     TASK_MESSAGE_CODE_SCAN,
@@ -189,8 +189,9 @@ void modbus_set_class_output(uint16_t class, int value) {
 }
 
 
-void modbus_set_fan_speed(uint8_t address, size_t speed) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_SET_FAN_SPEED, .address = address, .value = speed};
+void modbus_set_fan_percentage(uint8_t address, uint8_t percentage) {
+    struct task_message message = {
+        .code = TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE, .address = address, .value = percentage};
     xQueueSend(messageq, &message, portMAX_DELAY);
 }
 
@@ -327,6 +328,7 @@ static void modbus_task(void *args) {
     struct task_message message                        = {0};
     uint8_t             buffer[MODBUS_MAX_PACKET_SIZE] = {0};
     modbus_response_t   error_resp                     = {.code = MODBUS_RESPONSE_CODE_ERROR};
+    unsigned long       timestamp                      = 0;
 
     ESP_LOGI(TAG, "Task starting");
     send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_NETWORK_INITIALIZATION, NULL, 0);
@@ -601,8 +603,8 @@ static void modbus_task(void *args) {
                     break;
                 }
 
-                case TASK_MESSAGE_CODE_SET_FAN_SPEED: {
-                    ESP_LOGI(TAG, "Setting fan speed for device %i", message.address);
+                case TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE: {
+                    ESP_LOGI(TAG, "Setting fan speed for device %i%%", message.address);
                     if (write_holding_register(&master, message.address, HOLDING_REGISTER_MOTOR_SPEED, message.value)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
@@ -623,6 +625,11 @@ static void modbus_task(void *args) {
                 }
             }
             vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT / 2));
+        }
+
+        if (is_expired(timestamp, get_millis(), EASYCONNECT_HEARTBEAT_TIMEOUT / 4)) {
+            send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_HEARTBEAT, NULL, 0);
+            timestamp = get_millis();
         }
     }
 

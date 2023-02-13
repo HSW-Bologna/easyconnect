@@ -74,7 +74,7 @@ static void temperature_task(void *args) {
                 ESP_LOGD(TAG, "Error in reading temperature measurement");
             }
         } else {
-            ESP_LOGW(TAG, "Error in starting temperature measurement");
+            ESP_LOGD(TAG, "Error in starting temperature measurement");
         }
 
 #if 0

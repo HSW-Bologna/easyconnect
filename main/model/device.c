@@ -256,6 +256,17 @@ uint8_t device_list_is_there_an_alarm(device_t *devices) {
 }
 
 
+uint8_t device_list_is_class_communication_error(device_t *devices, uint16_t class) {
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
+        if (devices[i].class == class && devices[i].status == DEVICE_STATUS_COMMUNICATION_ERROR) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+
 uint8_t device_list_is_class_alarms_on(device_t *devices, uint16_t class, uint8_t alarms) {
     for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
         if (devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {

@@ -10,16 +10,17 @@ typedef int (*state_event_manager_t)(model_t *, state_event_code_t);
 typedef int (*state_entry_t)(model_t *);
 
 
-static int off_entry(model_t *pmodel);
-static int off_event_manager(model_t *pmodel, state_event_code_t event);
-static int env_clean_sf_entry(model_t *pmodel);
-static int env_clean_sf_event_manager(model_t *pmodel, state_event_code_t event);
-static int env_clean_sf_if_entry(model_t *pmodel);
-static int env_clean_sf_if_event_manager(model_t *pmodel, state_event_code_t event);
-static int env_clean_if_entry(model_t *pmodel);
-static int env_clean_if_event_manager(model_t *pmodel, state_event_code_t event);
-static int fan_running_entry(model_t *pmodel);
-static int fan_running_event_manager(model_t *pmodel, state_event_code_t event);
+static int  off_entry(model_t *pmodel);
+static int  off_event_manager(model_t *pmodel, state_event_code_t event);
+static int  env_clean_sf_entry(model_t *pmodel);
+static int  env_clean_sf_event_manager(model_t *pmodel, state_event_code_t event);
+static int  env_clean_sf_if_entry(model_t *pmodel);
+static int  env_clean_sf_if_event_manager(model_t *pmodel, state_event_code_t event);
+static int  env_clean_if_entry(model_t *pmodel);
+static int  env_clean_if_event_manager(model_t *pmodel, state_event_code_t event);
+static int  fan_running_entry(model_t *pmodel);
+static int  fan_running_event_manager(model_t *pmodel, state_event_code_t event);
+static void update_uvc_filters(model_t *pmodel, uint8_t fan_speed, uint8_t value);
 
 
 static const struct {
@@ -89,7 +90,7 @@ static int off_event_manager(model_t *pmodel, state_event_code_t event) {
 static int env_clean_sf_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, cleaning_period * 1000UL, get_millis());
-    controller_update_fan_speed(pmodel, TOP_FAN_SPEED);
+    controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
     controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 0);
     return 0;
@@ -110,9 +111,7 @@ static int env_clean_sf_event_manager(model_t *pmodel, state_event_code_t event)
                 if (auto_uvc_on) {
                     auto_uvc_on = 0;
                     model_uvc_filter_on(pmodel);
-                    controller_update_class_output(
-                        pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(model_get_uvc_filters_for_speed(pmodel, TOP_FAN_SPEED)),
-                        1);
+                    update_uvc_filters(pmodel, TOP_FAN_SPEED, 1);
                 }
 
                 return MODEL_FAN_STATE_FAN_RUNNING;
@@ -129,7 +128,7 @@ static int env_clean_sf_event_manager(model_t *pmodel, state_event_code_t event)
 static int env_clean_if_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, cleaning_period * 1000UL, get_millis());
-    controller_update_fan_speed(pmodel, TOP_FAN_SPEED);
+    controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 0);
     controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
     return 0;
@@ -156,7 +155,7 @@ static int env_clean_if_event_manager(model_t *pmodel, state_event_code_t event)
 static int env_clean_sf_if_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, cleaning_period * 1000UL, get_millis());
-    controller_update_fan_speed(pmodel, TOP_FAN_SPEED);
+    controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
     controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
     return 0;
@@ -173,10 +172,7 @@ static int env_clean_sf_if_event_manager(model_t *pmodel, state_event_code_t eve
             if (auto_uvc_on) {
                 auto_uvc_on = 0;
                 model_uvc_filter_on(pmodel);
-                controller_update_class_output(pmodel,
-                                               DEVICE_CLASS_ULTRAVIOLET_FILTER(model_get_uvc_filters_for_speed(
-                                                   pmodel, model_get_fan_speed(pmodel))),
-                                               1);
+                update_uvc_filters(pmodel, model_get_fan_speed(pmodel), 1);
             }
             return MODEL_FAN_STATE_FAN_RUNNING;
 
@@ -190,7 +186,8 @@ static int env_clean_sf_if_event_manager(model_t *pmodel, state_event_code_t eve
 
 static int fan_running_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
-    controller_update_fan_speed(pmodel, model_get_fan_speed(pmodel));
+
+    controller_update_fan_percentage(pmodel, model_get_fan_speed(pmodel));
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
     controller_update_class_output(pmodel, DEVICE_CLASS_GAS, 1);
     return 0;
@@ -212,4 +209,13 @@ static int fan_running_event_manager(model_t *pmodel, state_event_code_t event) 
     }
 
     return -1;
+}
+
+
+static void update_uvc_filters(model_t *pmodel, uint8_t fan_speed, uint8_t value) {
+    uint16_t filters = model_get_uvc_filters_for_speed(pmodel, fan_speed);
+
+    if (filters > 0) {
+        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(filters - 1), value);
+    }
 }

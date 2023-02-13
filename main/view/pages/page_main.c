@@ -59,7 +59,6 @@ LV_IMG_DECLARE(img_tre_luci_gruppo_1_2_accesi);
 LV_IMG_DECLARE(img_tre_luci_spente);
 
 LV_IMG_DECLARE(img_logo);
-LV_IMG_DECLARE(img_warning);
 
 
 #define CENTER_X_DELTA 20
@@ -175,11 +174,16 @@ struct page_data {
     lv_obj_t *slider;
 
     lv_obj_t *img_light;
+    lv_obj_t *img_filter;
+    lv_obj_t *img_motor;
 
     lv_obj_t *img_error_light_1;
     lv_obj_t *img_error_light_2[2];
     lv_obj_t *img_error_light_3[3];
-    lv_obj_t *img_warning;
+    lv_obj_t *img_error_filters_1;
+    lv_obj_t *img_error_filters_2[2];
+    lv_obj_t *img_error_motors_1;
+    lv_obj_t *img_error_motors_2[2];
 
     lv_obj_t *lbl_pressure;
 
@@ -207,7 +211,11 @@ struct page_data {
         } filters;
     };
 
-    int blink;
+    int     blink;
+    uint8_t uvc_alarm;
+    uint8_t esf_alarm;
+    uint8_t siph_alarm;
+    uint8_t imm_alarm;
 };
 
 
@@ -217,7 +225,6 @@ static uint16_t modify_percentage(uint16_t value, int16_t mod);
 static void     update_menus(model_t *pmodel, struct page_data *pdata);
 
 
-static lv_style_t  style_alarm_btn;
 static const char *TAG = "MainPage";
 
 
@@ -283,6 +290,10 @@ static void update_filter_buttons(model_t *pmodel, struct page_data *data) {
                        model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3));
 
     if (esf_count > 0 && ulf_count > 0) {
+        lv_obj_set_hidden(data->img_error_filters_1, 1);
+        lv_obj_set_hidden(data->img_error_filters_2[0], !data->uvc_alarm);
+        lv_obj_set_hidden(data->img_error_filters_2[1], !data->esf_alarm);
+
         if (model_get_electrostatic_filter_state(pmodel) && model_get_uvc_filter_state(pmodel)) {
             lv_img_set_src(lv_obj_get_child(data->btn_filter, NULL), &img_filtro_lampada_accesi);
         } else if (model_get_electrostatic_filter_state(pmodel)) {
@@ -291,22 +302,24 @@ static void update_filter_buttons(model_t *pmodel, struct page_data *data) {
             lv_img_set_src(lv_obj_get_child(data->btn_filter, NULL), &img_filtro_lampada_spenti);
         }
     } else if (esf_count > 0) {
+        lv_obj_set_hidden(data->img_error_filters_1, !data->esf_alarm);
+        lv_obj_set_hidden(data->img_error_filters_2[0], 1);
+        lv_obj_set_hidden(data->img_error_filters_2[1], 1);
+
         lv_obj_set_hidden(data->btn_filter, 0);
         lv_img_set_src(lv_obj_get_child(data->btn_filter, NULL), model_get_electrostatic_filter_state(pmodel)
                                                                      ? &img_filtro_elettrostatico_acceso
                                                                      : &img_filtro_elettrostatico_spento);
     } else if (ulf_count > 0) {
+        lv_obj_set_hidden(data->img_error_filters_1, !data->uvc_alarm);
+        lv_obj_set_hidden(data->img_error_filters_2[0], 1);
+        lv_obj_set_hidden(data->img_error_filters_2[1], 1);
+
         lv_obj_set_hidden(data->btn_filter, 0);
         lv_img_set_src(lv_obj_get_child(data->btn_filter, NULL),
                        model_get_uvc_filter_state(pmodel) ? &img_lampada_uvc_accesa : &img_lampada_uvc_spenta);
     } else {
         lv_obj_set_hidden(data->btn_filter, 1);
-    }
-
-    if (model_is_any_filter_alarm_on(pmodel)) {
-        lv_obj_add_style(data->btn_filter, LV_OBJ_PART_MAIN, &style_alarm_btn);
-    } else {
-        lv_obj_remove_style(data->btn_filter, LV_OBJ_PART_MAIN, &style_alarm_btn);
     }
 }
 
@@ -316,7 +329,12 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
     size_t ifm_count = model_get_class_count(pmodel, DEVICE_CLASS_IMMISSION_FAN);
 
     if (sfm_count > 0 && ifm_count > 0) {
+        lv_obj_set_hidden(data->img_error_motors_1, 1);
+        lv_obj_set_hidden(data->img_error_motors_2[0], !data->siph_alarm);
+        lv_obj_set_hidden(data->img_error_motors_2[1], !data->imm_alarm);
+
         lv_obj_set_hidden(data->btn_fan, 0);
+
         switch (model_get_fan_state(pmodel)) {
             case MODEL_FAN_STATE_SF_ENV_CLEANING:
                 lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL), data->blink
@@ -345,7 +363,12 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
                 break;
         }
     } else if (sfm_count > 0) {
+        lv_obj_set_hidden(data->img_error_motors_1, !data->siph_alarm);
+        lv_obj_set_hidden(data->img_error_motors_2[0], 1);
+        lv_obj_set_hidden(data->img_error_motors_2[1], 1);
+
         lv_obj_set_hidden(data->btn_fan, 0);
+
         switch (model_get_fan_state(pmodel)) {
             case MODEL_FAN_STATE_SF_ENV_CLEANING:
                 lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL),
@@ -368,25 +391,19 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
     } else {
         lv_obj_set_hidden(data->btn_fan, 1);
     }
-
-    if (model_is_there_a_fan_alarm(pmodel)) {
-        lv_obj_add_style(data->btn_fan, LV_OBJ_PART_MAIN, &style_alarm_btn);
-    } else {
-        lv_obj_remove_style(data->btn_fan, LV_OBJ_PART_MAIN, &style_alarm_btn);
-    }
 }
 
 
-static void update_all_buttons(model_t *pmodel, struct page_data *data) {
+static void update_light_buttons(model_t *pmodel, struct page_data *pdata) {
     if (model_get_light_state(pmodel) > LIGHT_STATE_OFF) {
-        lv_btn_set_state(data->btn_light, LV_BTN_STATE_CHECKED_RELEASED);
+        lv_btn_set_state(pdata->btn_light, LV_BTN_STATE_CHECKED_RELEASED);
     } else {
-        lv_btn_set_state(data->btn_light, LV_BTN_STATE_RELEASED);
+        lv_btn_set_state(pdata->btn_light, LV_BTN_STATE_RELEASED);
     }
 
     uint16_t class;
     if (model_get_light_class(pmodel, &class)) {
-        lv_obj_set_hidden(data->btn_light, 0);
+        lv_obj_set_hidden(pdata->btn_light, 0);
 
         uint8_t  alarm     = 0;
         uint8_t  alarms[]  = {0, 0, 0};
@@ -399,14 +416,14 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
         light_state_t light_state = model_get_light_state(pmodel);
         switch (class) {
             case DEVICE_CLASS_LIGHT_1:
-                lv_img_set_src(data->img_light, light_state == LIGHT_STATE_SINGLE_ON ? &img_luce_singola_accesa
-                                                                                     : &img_luce_singola_spenta);
-                lv_obj_set_hidden(data->img_error_light_1, !alarm);
-                lv_obj_set_hidden(data->img_error_light_2[0], 1);
-                lv_obj_set_hidden(data->img_error_light_2[1], 1);
-                lv_obj_set_hidden(data->img_error_light_3[0], 1);
-                lv_obj_set_hidden(data->img_error_light_3[1], 1);
-                lv_obj_set_hidden(data->img_error_light_3[2], 1);
+                lv_img_set_src(pdata->img_light, light_state == LIGHT_STATE_SINGLE_ON ? &img_luce_singola_accesa
+                                                                                      : &img_luce_singola_spenta);
+                lv_obj_set_hidden(pdata->img_error_light_1, !alarm);
+                lv_obj_set_hidden(pdata->img_error_light_2[0], 1);
+                lv_obj_set_hidden(pdata->img_error_light_2[1], 1);
+                lv_obj_set_hidden(pdata->img_error_light_3[0], 1);
+                lv_obj_set_hidden(pdata->img_error_light_3[1], 1);
+                lv_obj_set_hidden(pdata->img_error_light_3[2], 1);
                 break;
 
             case DEVICE_CLASS_LIGHT_2: {
@@ -416,14 +433,14 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
                     &img_due_luci_gruppo_2_acceso,
                     &img_due_luci_accese,
                 };
-                lv_img_set_src(data->img_light, images[light_state]);
+                lv_img_set_src(pdata->img_light, images[light_state]);
 
-                lv_obj_set_hidden(data->img_error_light_1, 1);
-                lv_obj_set_hidden(data->img_error_light_2[0], !alarms[0]);
-                lv_obj_set_hidden(data->img_error_light_2[1], !alarms[1]);
-                lv_obj_set_hidden(data->img_error_light_3[0], 1);
-                lv_obj_set_hidden(data->img_error_light_3[1], 1);
-                lv_obj_set_hidden(data->img_error_light_3[2], 1);
+                lv_obj_set_hidden(pdata->img_error_light_1, 1);
+                lv_obj_set_hidden(pdata->img_error_light_2[0], !alarms[0]);
+                lv_obj_set_hidden(pdata->img_error_light_2[1], !alarms[1]);
+                lv_obj_set_hidden(pdata->img_error_light_3[0], 1);
+                lv_obj_set_hidden(pdata->img_error_light_3[1], 1);
+                lv_obj_set_hidden(pdata->img_error_light_3[2], 1);
                 break;
             }
 
@@ -434,14 +451,14 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
                     &img_tre_luci_gruppo_1_2_accesi,
                     &img_tre_luci_accese,
                 };
-                lv_img_set_src(data->img_light, images[light_state]);
+                lv_img_set_src(pdata->img_light, images[light_state]);
 
-                lv_obj_set_hidden(data->img_error_light_1, 1);
-                lv_obj_set_hidden(data->img_error_light_2[0], 1);
-                lv_obj_set_hidden(data->img_error_light_2[1], 1);
-                lv_obj_set_hidden(data->img_error_light_3[0], !alarms[0]);
-                lv_obj_set_hidden(data->img_error_light_3[1], !alarms[1]);
-                lv_obj_set_hidden(data->img_error_light_3[2], !alarms[2]);
+                lv_obj_set_hidden(pdata->img_error_light_1, 1);
+                lv_obj_set_hidden(pdata->img_error_light_2[0], 1);
+                lv_obj_set_hidden(pdata->img_error_light_2[1], 1);
+                lv_obj_set_hidden(pdata->img_error_light_3[0], !alarms[0]);
+                lv_obj_set_hidden(pdata->img_error_light_3[1], !alarms[1]);
+                lv_obj_set_hidden(pdata->img_error_light_3[2], !alarms[2]);
                 break;
             }
 
@@ -450,11 +467,21 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
         }
     } else {
         ESP_LOGI(TAG, "no light class");
-        lv_obj_set_hidden(data->btn_light, 1);
+        lv_obj_set_hidden(pdata->btn_light, 1);
     }
+}
 
+
+static void update_all_buttons(model_t *pmodel, struct page_data *data) {
+    data->uvc_alarm  = 0;
+    data->esf_alarm  = 0;
+    data->siph_alarm = 0;
+    data->imm_alarm  = 0;
+    model_get_alarms_for_classes(pmodel, &data->uvc_alarm, &data->esf_alarm, &data->siph_alarm, &data->imm_alarm);
+
+
+    update_light_buttons(pmodel, data);
     update_filter_buttons(pmodel, data);
-
     update_fan_buttons(pmodel, data);
 }
 
@@ -498,20 +525,11 @@ static void update_info(model_t *pmodel, struct page_data *data) {
 }
 
 
-static void update_warning(model_t *pmodel, struct page_data *pdata) {
-    view_common_set_hidden(pdata->img_warning, !model_is_there_an_alarm(pmodel));
-}
-
-
 static void *create_page(model_t *model, void *extra) {
     struct page_data *data = malloc(sizeof(struct page_data));
     data->blink_task       = view_register_periodic_task(500UL, LV_TASK_PRIO_OFF, TASK_BLINK_ID);
     data->blink            = 0;
     data->cont_subpage     = NULL;
-
-    lv_style_init(&style_alarm_btn);
-    lv_style_set_bg_color(&style_alarm_btn, LV_STATE_DEFAULT, LV_COLOR_RED);
-    lv_style_set_bg_color(&style_alarm_btn, LV_STATE_CHECKED, LV_COLOR_RED);
 
     return data;
 }
@@ -521,16 +539,13 @@ static void open_page(model_t *model, void *arg) {
     struct page_data *data = arg;
     lv_task_set_prio(data->blink_task, LV_TASK_PRIO_MID);
 
+    lv_obj_t *img, *lbl;
+
     lv_obj_t *logo = lv_img_create(lv_scr_act(), NULL);
     lv_img_set_src(logo, &img_logo);
     lv_obj_align(logo, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 8);
 
-    lv_obj_t *img = lv_img_create(lv_scr_act(), NULL);
-    lv_img_set_src(img, &img_warning);
-    lv_obj_align(img, NULL, LV_ALIGN_CENTER, CENTER_X_DELTA, 48);
-    data->img_warning = img;
-
-    lv_obj_t *lbl = lv_label_create(lv_scr_act(), NULL);
+    lbl = lv_label_create(lv_scr_act(), NULL);
     lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
     lv_obj_set_auto_realign(lbl, 1);
     lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, CENTER_X_DELTA, 0);
@@ -564,8 +579,14 @@ static void open_page(model_t *model, void *arg) {
     data->img_light = lv_img_create(butn1, NULL);
     lv_img_set_src(data->img_light, &img_tre_luci_accese);
     lv_obj_align(data->img_light, NULL, LV_ALIGN_CENTER, 0, 0);
-    lv_img_create(butn2, NULL);
-    lv_img_create(butn3, NULL);
+
+    data->img_motor = lv_img_create(butn2, NULL);
+    lv_img_set_src(data->img_motor, &img_aspirazione_accesa);
+    lv_obj_align(data->img_motor, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    data->img_filter = lv_img_create(butn3, NULL);
+    lv_img_set_src(data->img_filter, &img_filtro_lampada_accesi);
+    lv_obj_align(data->img_filter, NULL, LV_ALIGN_CENTER, 0, 0);
 
     view_register_default_callback(butn1, BTN_LIGHT_ID);
     view_register_default_callback(butn2, BTN_FAN_ID);
@@ -603,8 +624,39 @@ static void open_page(model_t *model, void *arg) {
 
     data->btn_light = butn1;
 
-    data->btn_fan    = butn2;
+    img = lv_img_create(data->img_filter, NULL);
+    lv_img_set_src(img, &img_error_md);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -16);
+    data->img_error_filters_1 = img;
+
+    img = lv_img_create(data->img_filter, NULL);
+    lv_img_set_src(img, &img_error_sm);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -16);
+    data->img_error_filters_2[0] = img;
+
+    img = lv_img_create(data->img_filter, NULL);
+    lv_img_set_src(img, &img_error_sm);
+    lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, -20);
+    data->img_error_filters_2[1] = img;
+
     data->btn_filter = butn3;
+
+    img = lv_img_create(data->img_motor, NULL);
+    lv_img_set_src(img, &img_error_md);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -16);
+    data->img_error_motors_1 = img;
+
+    img = lv_img_create(data->img_motor, NULL);
+    lv_img_set_src(img, &img_error_sm);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -16);
+    data->img_error_motors_2[0] = img;
+
+    img = lv_img_create(data->img_motor, NULL);
+    lv_img_set_src(img, &img_error_sm);
+    lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, -20);
+    data->img_error_motors_2[1] = img;
+
+    data->btn_fan = butn2;
 
     lv_obj_t *butn_plus  = lv_btn_create(lv_scr_act(), NULL);
     lv_obj_t *butn_minus = lv_btn_create(lv_scr_act(), NULL);
@@ -660,7 +712,6 @@ static void open_page(model_t *model, void *arg) {
 
     update_info(model, data);
     update_all_buttons(model, data);
-    update_warning(model, data);
     lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
 
     lbl = lv_label_create(lv_scr_act(), NULL);
@@ -681,6 +732,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 
     switch (event.code) {
         case VIEW_EVENT_CODE_STATE_UPDATE:
+            update_all_buttons(model, data);
             break;
 
         case VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE:
@@ -689,7 +741,6 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 
         case VIEW_EVENT_CODE_DEVICE_UPDATE:
         case VIEW_EVENT_CODE_DEVICE_ALARM:
-            update_warning(model, data);
             update_all_buttons(model, data);
             update_device_sensors(model, data);
             break;
@@ -846,9 +897,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                                     break;
 
                                 case PAGE_ROUTE_REC_DEVICE:
-                                    // change_page_route(model, data, PAGE_ROUTE_REC_SYSTEM);
-                                    msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
-                                    msg.vmsg.page = &page_devices;
+                                    change_page_route(model, data, PAGE_ROUTE_REC_SYSTEM);
                                     break;
 
                                 case PAGE_ROUTE_PRESSURE:
@@ -881,7 +930,9 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_REC_DEVICE_ID:
-                            change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_devices;
+                            // change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
                             break;
 
                         case BTN_SETUP_MAINTENANCE_FILTERING_ID:
@@ -1064,6 +1115,7 @@ void close_page(void *args) {
     struct page_data *data = args;
     lv_task_set_prio(data->blink_task, LV_TASK_PRIO_OFF);
     lv_obj_clean(lv_scr_act());
+    data->cont_subpage = NULL;
 }
 
 
@@ -1161,6 +1213,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_VENTILAZIONE), BTN_VENTILATION_ID);
             lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, -4);
 
+            /*
             btn = view_common_default_menu_button(pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_FILTRAGGIO),
                                                   BTN_FILTERING_ID);
             lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, 60);
@@ -1168,7 +1221,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             btn = view_common_default_menu_button(pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_SENSORI),
                                                   BTN_SENSORS_ID);
             lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, 124);
-
+            */
             break;
         }
 

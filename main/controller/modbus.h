@@ -55,7 +55,7 @@ int  modbus_get_response(modbus_response_t *response);
 void modbus_set_class_output(uint16_t class, int value);
 void modbus_scan(void);
 void modbus_stop_current_operation(void);
-void modbus_set_fan_speed(uint8_t address, size_t speed);
+void modbus_set_fan_percentage(uint8_t address, uint8_t percentage);
 void modbus_read_device_alarms(uint8_t address);
 void modbus_read_device_pressure(uint8_t address);
 void modbus_update_time(void);
