@@ -309,7 +309,7 @@ model_fan_state_t model_get_fan_state(model_t *pmodel) {
 }
 
 
-void model_set_filter_state(model_t *pmodel, model_fan_state_t state) {
+void model_set_fan_state(model_t *pmodel, model_fan_state_t state) {
     assert(pmodel != NULL);
     pmodel->state = state;
 }

@@ -32,7 +32,7 @@ static void update_info(model_t *pmodel, struct page_data *data) {
     lv_label_set_text_fmt(data->lbl_info,
                           "Dispositivo %i,\n versione %i.%i.%i\n classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
                           data->device.address, (data->device.firmware_version >> 10) & 0x3F,
-                          (data->device.firmware_version >> 6) & 0x3F, (data->device.firmware_version >> 0) & 0x3F,
+                          (data->device.firmware_version >> 6) & 0xF, (data->device.firmware_version >> 0) & 0x3F,
                           data->device.class, data->device.status, data->device.serial_number, data->device.alarms);
 
     if (data->device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {

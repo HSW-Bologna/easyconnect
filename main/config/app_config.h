@@ -5,7 +5,7 @@
  *  Macro riguardanti la configurazione dell'applicazione
  */
 
-#define APP_CONFIG_FIRMWARE_VERSION "1.0.0"
+#define APP_CONFIG_FIRMWARE_VERSION "2.0.0"
 
 #define BASE_TASK_SIZE 1024
 

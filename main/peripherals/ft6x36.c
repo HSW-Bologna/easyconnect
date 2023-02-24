@@ -192,7 +192,7 @@ bool ft6x36_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     last_y = LV_VER_RES - last_y;
 #endif
     data->point.x = last_x;
-    data->point.y = last_y;
+    data->point.y = last_y - 10;
     data->state   = LV_INDEV_STATE_PR;
     ESP_LOGD(TAG, "X=%u Y=%u", data->point.x, data->point.y);
     return false;

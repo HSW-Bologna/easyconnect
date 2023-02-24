@@ -7,6 +7,8 @@
 #include "model/model.h"
 #include "view/style.h"
 #include "esp_log.h"
+#include "config/app_config.h"
+
 
 LV_IMG_DECLARE(img_back_blue);
 
@@ -855,7 +857,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case BUTTON_PLUS_ID: {
                             uint8_t speed = model_get_fan_speed(model);
 
-                            if (speed < MAX_FAN_SPEED) {
+                            if (speed < MAX_FAN_SPEED - 1) {
                                 speed++;
                                 model_set_fan_speed(model, speed);
                                 lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
@@ -1202,7 +1204,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             break;
 
         case PAGE_ROUTE_SYSTEM_SETUP: {
-            lv_obj_t *btn;
+            lv_obj_t *btn, *lbl;
             pdata->cont_subpage = cont_subpage_create(view_intl_get_string(pmodel, STRINGS_SYSTEM_SETUP));
 
             btn = view_common_default_menu_button(pdata->cont_subpage,
@@ -1212,6 +1214,10 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             btn = view_common_default_menu_button(
                 pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_VENTILAZIONE), BTN_VENTILATION_ID);
             lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, -4);
+
+            lbl = lv_label_create(pdata->cont_subpage, NULL);
+            lv_label_set_text_fmt(lbl, "v%s", APP_CONFIG_FIRMWARE_VERSION);
+            lv_obj_align(lbl, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -4);
 
             /*
             btn = view_common_default_menu_button(pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_FILTRAGGIO),

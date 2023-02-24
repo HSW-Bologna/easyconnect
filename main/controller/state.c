@@ -43,7 +43,7 @@ void controller_state_event(model_t *pmodel, state_event_code_t event) {
 
     if (res >= 0) {
         if (event_managers[res].guard(pmodel) == 0) {
-            model_set_filter_state(pmodel, res);
+            model_set_fan_state(pmodel, res);
         }
     }
 }
@@ -62,6 +62,7 @@ void controller_state_manage(model_t *pmodel) {
 static int off_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 0);
+    controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 0);
     controller_update_class_output(pmodel, DEVICE_CLASS_GAS, 0);
     return 0;
 }
@@ -90,9 +91,11 @@ static int off_event_manager(model_t *pmodel, state_event_code_t event) {
 static int env_clean_sf_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, cleaning_period * 1000UL, get_millis());
-    controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
-    controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
-    controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 0);
+    if (cleaning_period > 0) {
+        controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
+        controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
+        controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 0);
+    }
     return 0;
 }
 
@@ -117,6 +120,9 @@ static int env_clean_sf_event_manager(model_t *pmodel, state_event_code_t event)
                 return MODEL_FAN_STATE_FAN_RUNNING;
             }
 
+        case STATE_EVENT_FAN_EMERGENCY_STOP:
+            return MODEL_FAN_STATE_OFF;
+
         default:
             break;
     }
@@ -128,9 +134,11 @@ static int env_clean_sf_event_manager(model_t *pmodel, state_event_code_t event)
 static int env_clean_if_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, cleaning_period * 1000UL, get_millis());
-    controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
-    controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 0);
-    controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
+    if (cleaning_period > 0) {
+        controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
+        controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 0);
+        controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
+    }
     return 0;
 }
 
@@ -144,6 +152,9 @@ static int env_clean_if_event_manager(model_t *pmodel, state_event_code_t event)
         case STATE_EVENT_ENVIRONMENTAL_CLEANING_DONE:
             return MODEL_FAN_STATE_OFF;
 
+        case STATE_EVENT_FAN_EMERGENCY_STOP:
+            return MODEL_FAN_STATE_OFF;
+
         default:
             break;
     }
@@ -155,9 +166,11 @@ static int env_clean_if_event_manager(model_t *pmodel, state_event_code_t event)
 static int env_clean_sf_if_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     stopwatch_setngo(&environment_cleaning_sw, cleaning_period * 1000UL, get_millis());
-    controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
-    controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
-    controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
+    if (cleaning_period > 0) {
+        controller_update_fan_percentage(pmodel, TOP_FAN_SPEED);
+        controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
+        controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
+    }
     return 0;
 }
 
@@ -176,6 +189,9 @@ static int env_clean_sf_if_event_manager(model_t *pmodel, state_event_code_t eve
             }
             return MODEL_FAN_STATE_FAN_RUNNING;
 
+        case STATE_EVENT_FAN_EMERGENCY_STOP:
+            return MODEL_FAN_STATE_OFF;
+
         default:
             break;
     }
@@ -189,6 +205,7 @@ static int fan_running_entry(model_t *pmodel) {
 
     controller_update_fan_percentage(pmodel, model_get_fan_speed(pmodel));
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
+    controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
     controller_update_class_output(pmodel, DEVICE_CLASS_GAS, 1);
     return 0;
 }
@@ -203,6 +220,9 @@ static int fan_running_event_manager(model_t *pmodel, state_event_code_t event) 
             } else {
                 return MODEL_FAN_STATE_OFF;
             }
+
+        case STATE_EVENT_FAN_EMERGENCY_STOP:
+            return MODEL_FAN_STATE_OFF;
 
         default:
             break;

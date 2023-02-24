@@ -19,6 +19,7 @@
 
 
 static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t alarms, uint8_t communication);
+static void system_shutdown(model_t *pmodel);
 static void print_heap_status(void);
 
 
@@ -205,7 +206,7 @@ void controller_manage(model_t *pmodel) {
         tempts = get_millis();
     }
 
-    if (refresh_devices || is_expired(refreshts, get_millis(), 1UL * 60UL * 1000UL)) {
+    if (refresh_devices || is_expired(refreshts, get_millis(), 1UL * 30UL * 1000UL)) {
         uint8_t starting_address = 0;
         uint8_t address          = model_get_next_device_address(pmodel, starting_address);
         while (address != starting_address) {
@@ -320,7 +321,7 @@ void controller_manage(model_t *pmodel) {
 
 
     if (is_expired(heapts, get_millis(), 5000UL)) {
-        print_heap_status();
+        // print_heap_status();
         heapts = get_millis();
     }
 
@@ -329,11 +330,13 @@ void controller_manage(model_t *pmodel) {
 
 
 void controller_update_class_output(model_t *pmodel, uint16_t class, int value) {
+    ESP_LOGI(TAG, "Setting output for class (generic) %X: %i", class, value);
     modbus_set_class_output(class, value);
 
     uint8_t starting_address = 0;
     uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
     while (address != starting_address) {
+        ESP_LOGI(TAG, "Setting output for class (specific %i) %X: %i", address, class, value);
         modbus_set_device_output(address, value > 0);
         starting_address = address;
         address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
@@ -368,35 +371,31 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
 
     switch (device.class) {
         case DEVICE_CLASS_ELECTROSTATIC_FILTER:
-            if (model_get_electrostatic_filter_state(pmodel) &&
-                (communication || (alarms & EASYCONNECT_SAFETY_ALARM))) {
-                controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
-                model_electrostatic_filter_off(pmodel);
-            }
-            break;
-
         case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
         case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
         case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
-            if (model_get_uvc_filter_state(pmodel) && (communication || (alarms & EASYCONNECT_SAFETY_ALARM))) {
-                controller_update_class_output(pmodel, device.class, 0);
-                model_uvc_filter_off(pmodel);
-            }
-            break;
-
         case DEVICE_CLASS_SIPHONING_FAN:
         case DEVICE_CLASS_IMMISSION_FAN:
-            if (model_get_electrostatic_filter_state(pmodel)) {
-                controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
-                model_electrostatic_filter_off(pmodel);
-            }
-            if (model_get_uvc_filter_state(pmodel)) {
-                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
-                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
-                controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
-                model_uvc_filter_off(pmodel);
-            }
+        case DEVICE_CLASS_PRESSURE_SAFETY:
+            system_shutdown(pmodel);
             break;
+    }
+}
+
+
+static void system_shutdown(model_t *pmodel) {
+    if (model_get_fan_state(pmodel) != MODEL_FAN_STATE_OFF) {
+        controller_state_event(pmodel, STATE_EVENT_FAN_EMERGENCY_STOP);
+    }
+    if (model_get_electrostatic_filter_state(pmodel)) {
+        controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
+        model_electrostatic_filter_off(pmodel);
+    }
+    if (model_get_uvc_filter_state(pmodel)) {
+        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
+        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
+        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
+        model_uvc_filter_off(pmodel);
     }
 }
 

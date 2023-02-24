@@ -90,7 +90,7 @@ void configuration_load(model_t *pmodel) {
                                            (void *)ESF_FILTERS_KEY, 4000UL);
     watchlist[i++] = WATCHER_DELAYED_ARRAY(&pmodel->configuration.siphoning_percentages, MAX_FAN_SPEED,
                                            save_double_byte_array, (void *)SIPHONING_PERCENTAGES_KEY, 4000UL);
-    watchlist[i++] = WATCHER_DELAYED_ARRAY(&pmodel->configuration.siphoning_percentages, MAX_FAN_SPEED,
+    watchlist[i++] = WATCHER_DELAYED_ARRAY(&pmodel->configuration.immission_percentages, MAX_FAN_SPEED,
                                            save_double_byte_array, (void *)IMMISSION_PERCENTAGES_KEY, 4000UL);
     assert(i == NUM_CONFIGURATION_PARAMETERS);
     watchlist[i++] = WATCHER_NULL;

@@ -23,7 +23,7 @@
 #define MODBUS_RESPONSE_05_LEN           8
 
 #define MODBUS_MESSAGE_QUEUE_SIZE     512
-#define MODBUS_TIMEOUT                20
+#define MODBUS_TIMEOUT                30
 #define MODBUS_MAX_PACKET_SIZE        256
 #define MODBUS_BROADCAST_ADDRESS      0
 #define MODBUS_COMMUNICATION_ATTEMPTS 3
@@ -504,11 +504,13 @@ static void modbus_task(void *args) {
                     uint16_t period = 0;
 
                     if (message.expected_devices < 5) {
-                        period = 2;
+                        period = 4;
                     } else if (message.expected_devices < 10) {
-                        period = 5;
-                    } else if (message.expected_devices < 20) {
                         period = 10;
+                    } else if (message.expected_devices < 20) {
+                        period = 20;
+                    } else if (message.expected_devices < 30) {
+                        period = 30;
                     } else if (message.expected_devices < 50) {
                         period = 60;
                     } else {
@@ -604,7 +606,7 @@ static void modbus_task(void *args) {
                 }
 
                 case TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE: {
-                    ESP_LOGI(TAG, "Setting fan speed for device %i%%", message.address);
+                    ESP_LOGI(TAG, "Setting fan speed for device %i %i%%", message.address, message.value);
                     if (write_holding_register(&master, message.address, HOLDING_REGISTER_MOTOR_SPEED, message.value)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
@@ -627,8 +629,9 @@ static void modbus_task(void *args) {
             vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT / 2));
         }
 
-        if (is_expired(timestamp, get_millis(), EASYCONNECT_HEARTBEAT_TIMEOUT / 4)) {
+        if (is_expired(timestamp, get_millis(), 100)) {
             send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_HEARTBEAT, NULL, 0);
+            vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT / 2));
             timestamp = get_millis();
         }
     }

@@ -102,7 +102,7 @@ uint8_t           model_get_next_device_address_by_class(model_t *pmodel, uint8_
 int               model_all_devices_queried(model_t *pmodel);
 size_t            model_get_class_count(model_t *pmodel, uint16_t class);
 model_fan_state_t model_get_fan_state(model_t *pmodel);
-void              model_set_filter_state(model_t *pmodel, model_fan_state_t state);
+void              model_set_fan_state(model_t *pmodel, model_fan_state_t state);
 int               model_get_uvc_filter_state(model_t *pmodel);
 int               model_get_electrostatic_filter_state(model_t *pmodel);
 void              model_electrostatic_filter_toggle(model_t *pmodel);
