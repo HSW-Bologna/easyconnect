@@ -206,6 +206,7 @@ void view_common_get_class_string(uint16_t class, char *string, size_t len) {
             break;
 
         case DEVICE_CLASS_PRESSURE_SAFETY:
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
             strncpy(string, "PS", len);
             break;
 

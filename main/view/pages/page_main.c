@@ -492,14 +492,14 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
     float pressures[3] = {0};
 
     uint8_t starting_address = 0;
-    uint8_t address = model_get_next_device_address_by_class(pmodel, starting_address, DEVICE_CLASS_PRESSURE_SAFETY);
-    size_t  i       = 0;
+    uint8_t address          = model_get_next_pressure_sensor_device(pmodel, starting_address);
+    size_t  i                = 0;
 
     while (address != starting_address && i < 3) {
         pressures[i] = ((float)model_get_device(pmodel, address).pressure) / 10.;
 
         starting_address = address;
-        address = model_get_next_device_address_by_class(pmodel, starting_address, DEVICE_CLASS_PRESSURE_SAFETY);
+        address          = model_get_next_pressure_sensor_device(pmodel, starting_address);
         i++;
     }
 

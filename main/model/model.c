@@ -144,6 +144,21 @@ uint8_t model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous
 }
 
 
+uint8_t model_get_next_pressure_sensor_device(model_t *pmodel, uint8_t previous) {
+    assert(pmodel != NULL);
+
+    for (size_t i = ADDR2INDEX(previous + 1); i < MODBUS_MAX_DEVICES; i++) {
+        if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED &&
+            (pmodel->devices[i].class == DEVICE_CLASS_PRESSURE_SAFETY ||
+             pmodel->devices[i].class == DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY)) {
+            return (uint8_t)INDEX2ADDR(i);
+        }
+    }
+
+    return previous;
+}
+
+
 uint8_t model_get_next_device_address(model_t *pmodel, uint8_t previous) {
     assert(pmodel != NULL);
     return device_list_get_next_configured_device_address(pmodel->devices, previous);
@@ -205,7 +220,7 @@ uint8_t model_set_device_error(model_t *pmodel, uint8_t address, int error) {
 }
 
 
-void model_set_device_sn(model_t *pmodel, uint8_t address, uint16_t serial_number) {
+void model_set_device_sn(model_t *pmodel, uint8_t address, uint32_t serial_number) {
     assert(pmodel != NULL);
     device_t *device = device_list_get_device_mut(pmodel->devices, address);
     if (device->status != DEVICE_STATUS_NOT_CONFIGURED) {
@@ -242,7 +257,8 @@ void model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressu
     assert(pmodel != NULL);
 
     device_t *device = model_get_device_mut(pmodel, address);
-    if (device->status == DEVICE_STATUS_OK && device->class == DEVICE_CLASS_PRESSURE_SAFETY) {
+    if (device->status == DEVICE_STATUS_OK && (device->class == DEVICE_CLASS_PRESSURE_SAFETY ||
+                                               device->class == DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY)) {
         device->pressure = pressure;
     }
 }

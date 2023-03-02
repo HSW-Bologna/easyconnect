@@ -76,6 +76,7 @@ static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
             lv_img_set_src(img, &img_icona_aspirazione);
             break;
         case DEVICE_CLASS_PRESSURE_SAFETY:
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
             lv_img_set_src(img, &img_icona_pressione);
             break;
 

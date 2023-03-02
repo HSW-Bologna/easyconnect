@@ -14,7 +14,7 @@
 	path = components/lvgl/lvgl
 	url = https://github.com/lvgl/lvgl.git
 [submodule "components/gel"]
-	path = components/gel
+	path = components/generic_embedded_libs
 	url = https://github.com/Maldus512/generic_embedded_libs.git
 [submodule "components/liblightmodbus-esp"]
 	path = components/liblightmodbus-esp

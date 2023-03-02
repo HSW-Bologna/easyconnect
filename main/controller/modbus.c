@@ -64,7 +64,7 @@ struct __attribute__((packed)) task_message {
 };
 
 typedef struct {
-    uint16_t device_map[255];
+    uint32_t device_map[MODBUS_MAX_DEVICES];
 } device_map_context_t;
 
 typedef struct {
@@ -86,7 +86,7 @@ static int  write_coil(ModbusMaster *master, uint8_t address, uint16_t index, in
 static int  read_holding_registers(ModbusMaster *master, uint16_t *registers, uint8_t address, uint16_t start,
                                    uint16_t count);
 static void send_custom_function(ModbusMaster *master, uint8_t address, uint8_t function, uint8_t *data, size_t len);
-static void configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number);
+static void configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint32_t serial_number);
 
 
 static const char   *TAG       = "Modbus";
@@ -346,14 +346,14 @@ static void modbus_task(void *args) {
                     response.address = message.address;
                     ESP_LOGI(TAG, "Reading info from %i", message.address);
 
-                    uint16_t registers[4];
+                    uint16_t registers[5];
                     if (read_holding_registers(&master, registers, message.address,
-                                               EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION, 4)) {
+                                               EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION, 5)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         response.firmware_version = registers[0];
                         response.class            = registers[1];
-                        response.serial_number    = registers[2];
+                        response.serial_number    = (registers[2] << 16) | registers[3];
                         xQueueSend(responseq, &response, portMAX_DELAY);
                     }
                     break;
@@ -534,13 +534,14 @@ static void modbus_task(void *args) {
                         while (xQueueReceive(messageq, &zero, 0) == pdTRUE && counter++ < MODBUS_MESSAGE_QUEUE_SIZE)
                             ;
 
-                        uint8_t response[4] = {0};
+                        uint8_t response[6] = {0};
                         int     len         = rs485_read(response, sizeof(response), pdMS_TO_TICKS(MODBUS_TIMEOUT));
-                        if (len == 4) {
+                        if (len == sizeof(response)) {
                             uint16_t calc_crc = modbusCRC(response, 2);
-                            uint16_t read_crc = (response[2] << 8) | response[3];
+                            uint16_t read_crc = (response[4] << 8) | response[5];
                             if (calc_crc == read_crc) {
-                                uint16_t serial_number = (response[0] << 8) | response[1];
+                                uint32_t serial_number =
+                                    (response[0] << 24) | (response[1] << 16) | (response[2] << 8) | response[3];
                                 ESP_LOGI(TAG, "Found new device with sn %i, given address %i", serial_number,
                                          found_address);
                                 device_list_configure_device(found_devices, found_address);
@@ -607,7 +608,7 @@ static void modbus_task(void *args) {
 
                 case TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE: {
                     ESP_LOGI(TAG, "Setting fan speed for device %i %i%%", message.address, message.value);
-                    if (write_holding_register(&master, message.address, HOLDING_REGISTER_MOTOR_SPEED, message.value)) {
+                    if (write_holding_register(&master, message.address, HOLDING_REGISTER_MOTOR_SPEED, (uint16_t)message.value)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
                     break;
@@ -669,7 +670,7 @@ static LIGHTMODBUS_RET_ERROR random_serial_number_response(ModbusMaster *master,
 
     device_map_context_t *ctx = modbusMasterGetUserPointer(master);
 
-    uint16_t serial_number   = (responsePDU[1] << 8) | responsePDU[2];
+    uint32_t serial_number   = (responsePDU[1] << 24) | (responsePDU[2] << 16) | (responsePDU[3] << 8) | responsePDU[4];
     ctx->device_map[address] = serial_number;
 
     ESP_LOGI(TAG, "Received serial number %i from %i", serial_number, address);
@@ -691,8 +692,14 @@ static void send_custom_function(ModbusMaster *master, uint8_t address, uint8_t 
 }
 
 
-static void configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint16_t serial_number) {
-    uint8_t data[] = {address, (serial_number >> 8) & 0xFF, serial_number & 0xFF};
+static void configure_device_with_serial_number(ModbusMaster *master, uint8_t address, uint32_t serial_number) {
+    uint8_t data[] = {
+        address,
+        (serial_number >> 24) & 0xFF,
+        (serial_number >> 16) & 0xFF,
+        (serial_number >> 8) & 0xFF,
+        serial_number & 0xFF,
+    };
     send_custom_function(master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_CONFIG_ADDRESS, data,
                          sizeof(data));
     vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
