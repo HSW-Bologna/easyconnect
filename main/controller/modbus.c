@@ -760,7 +760,7 @@ static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int
                                          buffer, len);
 
         if (!modbusIsOk(err)) {
-            ESP_LOGW(TAG, "Write coil for %i error: %i %i", address, err.source, err.error);
+            ESP_LOGD(TAG, "Write coil for %i error: %i %i", address, err.source, err.error);
             res = 1;
             vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
         }
@@ -797,9 +797,9 @@ static int read_holding_registers(ModbusMaster *master, uint16_t *registers, uin
                                          buffer, len);
 
         if (!modbusIsOk(err)) {
-            ESP_LOGW(TAG, "Read holding registers for %i error %zu: %i %i", address, counter, err.source, err.error);
+            ESP_LOGD(TAG, "Read holding registers for %i error %zu: %i %i", address, counter, err.source, err.error);
             if (len == 0) {
-                ESP_LOGW(TAG, "Empty packet!");
+                ESP_LOGD(TAG, "Empty packet!");
             } else {
                 ESP_LOG_BUFFER_HEX(TAG, buffer, len);
             }

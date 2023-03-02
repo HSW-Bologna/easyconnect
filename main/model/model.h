@@ -75,6 +75,11 @@ typedef struct {
         uint16_t passive_filters_hours_stop_threshold;
         uint16_t num_passive_filters;
     } configuration;
+
+    struct {
+        uint16_t passive_filters_work_hours;
+    } stats;
+
     uint8_t fan_speed;
 
     device_t devices[MODBUS_MAX_DEVICES];
@@ -128,7 +133,12 @@ uint8_t           model_get_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_s
 void              model_set_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
 uint8_t           model_get_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed);
 void              model_set_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
-void model_get_alarms_for_classes(model_t *pmodel, uint8_t *uvc, uint8_t *esf, uint8_t *siph, uint8_t *imm);
+void     model_get_alarms_for_classes(model_t *pmodel, uint8_t *uvc, uint8_t *esf, uint8_t *siph, uint8_t *imm);
+void     model_reset_passive_filters_work_hours(model_t *pmodel);
+void     model_add_passive_filters_work_hours(model_t *pmodel, uint16_t hours);
+uint16_t model_get_passive_filters_remaining_hours(model_t *pmodel);
+uint8_t  model_get_passive_filter_warning(model_t *pmodel);
+uint8_t  model_get_passive_filter_stop(model_t *pmodel);
 
 GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);
@@ -142,5 +152,7 @@ GETTERNSETTER(pressure_threshold_mb, configuration.pressure_threshold_mb);
 GETTERNSETTER(passive_filters_hours_warning_threshold, configuration.passive_filters_hours_warning_threshold);
 GETTERNSETTER(passive_filters_hours_stop_threshold, configuration.passive_filters_hours_stop_threshold);
 GETTERNSETTER(num_passive_filters, configuration.num_passive_filters);
+
+GETTER(passive_filters_work_hours, stats.passive_filters_work_hours);
 
 #endif

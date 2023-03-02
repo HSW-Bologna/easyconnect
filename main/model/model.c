@@ -45,6 +45,43 @@ void model_init(model_t *pmodel) {
 
     pmodel->configuration.passive_filters_hours_warning_threshold = 1000;
     pmodel->configuration.passive_filters_hours_stop_threshold    = 2000;
+
+    pmodel->stats.passive_filters_work_hours = 0;
+}
+
+
+void model_reset_passive_filters_work_hours(model_t *pmodel) {
+    assert(pmodel != NULL);
+    pmodel->stats.passive_filters_work_hours = 0;
+}
+
+
+void model_add_passive_filters_work_hours(model_t *pmodel, uint16_t hours) {
+    assert(pmodel != NULL);
+    pmodel->stats.passive_filters_work_hours += hours;
+}
+
+
+uint16_t model_get_passive_filters_remaining_hours(model_t *pmodel) {
+    assert(pmodel != NULL);
+    if (pmodel->stats.passive_filters_work_hours < pmodel->configuration.passive_filters_hours_stop_threshold) {
+        return pmodel->configuration.passive_filters_hours_stop_threshold - pmodel->stats.passive_filters_work_hours;
+    } else {
+        return 0;
+    }
+}
+
+
+uint8_t model_get_passive_filter_warning(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return model_get_passive_filters_remaining_hours(pmodel) <
+           pmodel->configuration.passive_filters_hours_warning_threshold;
+}
+
+
+uint8_t model_get_passive_filter_stop(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return model_get_passive_filters_remaining_hours(pmodel) == 0;
 }
 
 
@@ -259,7 +296,7 @@ void model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressu
     device_t *device = model_get_device_mut(pmodel, address);
     if (device->status == DEVICE_STATUS_OK && (device->class == DEVICE_CLASS_PRESSURE_SAFETY ||
                                                device->class == DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY)) {
-        device->pressure = pressure;
+        device->sensor_data.pressure = pressure;
     }
 }
 

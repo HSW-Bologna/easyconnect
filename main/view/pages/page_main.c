@@ -15,9 +15,29 @@ LV_IMG_DECLARE(img_back_blue);
 LV_IMG_DECLARE(img_error_sm);
 LV_IMG_DECLARE(img_error_md);
 
-LV_IMG_DECLARE(img_icon_siphoning_md);
+LV_IMG_DECLARE(img_icona_luce_1);
+LV_IMG_DECLARE(img_icona_luce_2);
+LV_IMG_DECLARE(img_icona_luce_3);
+LV_IMG_DECLARE(img_icona_elettrostatico);
+LV_IMG_DECLARE(img_icona_uvc);
+LV_IMG_DECLARE(img_icona_aspirazione);
+LV_IMG_DECLARE(img_icona_immissione);
+
+LV_IMG_DECLARE(img_icon_gas_sm);
+
+LV_IMG_DECLARE(img_icon_pressure_temperature_sm);
+
+LV_IMG_DECLARE(img_icon_temperature_humidity_sm);
+
+LV_IMG_DECLARE(img_icon_pressure_temperature_humidity_sm);
+
+LV_IMG_DECLARE(img_icon_immission_sm);
 LV_IMG_DECLARE(img_icon_immission_md);
+
+LV_IMG_DECLARE(img_icon_siphoning_md);
+
 LV_IMG_DECLARE(img_icon_siphoning_immission_md);
+
 LV_IMG_DECLARE(img_icon_uvc_md);
 LV_IMG_DECLARE(img_icon_esf_md);
 LV_IMG_DECLARE(img_icon_helmet_md);
@@ -146,6 +166,9 @@ enum {
     BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_MOD,
     BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_MOD,
     BTN_PASSIVE_FILTERS_NUM_MOD,
+
+    // Rec system group
+    BTN_DEVICE_ID,
 };
 
 
@@ -165,6 +188,15 @@ typedef enum {
     PAGE_ROUTE_TEMPERATURE,
 } page_route_t;
 
+
+typedef struct {
+    uint8_t   address;
+    lv_obj_t *lbl_state;
+    lv_obj_t *lbl_alarms;
+    lv_obj_t *lbl_address;
+    lv_obj_t *lbl_serial_number;
+    lv_obj_t *img_icon;
+} device_info_widget_t;
 
 struct page_data {
     lv_obj_t *btn_light;
@@ -196,6 +228,10 @@ struct page_data {
     page_route_t page_route;
     union {
         struct {
+            device_info_widget_t device_info_widgets[MODBUS_MAX_DEVICES];
+            size_t               count;
+        } rec_devices;
+        struct {
             lv_obj_t *lbl_siphoning_percentages[MAX_FAN_SPEED];
             lv_obj_t *lbl_immission_percentages[MAX_FAN_SPEED];
             lv_obj_t *lbl_start;
@@ -225,6 +261,7 @@ static void     change_page_route(model_t *pmodel, struct page_data *pdata, page
 static uint16_t modify_parameter(uint16_t value, int16_t mod, uint16_t min, uint16_t max);
 static uint16_t modify_percentage(uint16_t value, int16_t mod);
 static void     update_menus(model_t *pmodel, struct page_data *pdata);
+static void     update_device_list(model_t *pmodel, struct page_data *pdata);
 
 
 static const char *TAG = "MainPage";
@@ -496,7 +533,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
     size_t  i                = 0;
 
     while (address != starting_address && i < 3) {
-        pressures[i] = ((float)model_get_device(pmodel, address).pressure) / 10.;
+        pressures[i] = ((float)model_get_device(pmodel, address).sensor_data.pressure) / 10.;
 
         starting_address = address;
         address          = model_get_next_pressure_sensor_device(pmodel, starting_address);
@@ -724,7 +761,7 @@ static void open_page(model_t *model, void *arg) {
 
     update_all_buttons(model, data);
 
-    change_page_route(model, data, PAGE_ROUTE_MAIN_PAGE);
+    change_page_route(model, data, data->page_route);
 }
 
 
@@ -745,6 +782,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
         case VIEW_EVENT_CODE_DEVICE_ALARM:
             update_all_buttons(model, data);
             update_device_sensors(model, data);
+            update_device_list(model, data);
             break;
 
         case VIEW_EVENT_CODE_TIMER:
@@ -932,9 +970,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_REC_DEVICE_ID:
-                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
-                            msg.vmsg.page = &page_devices;
-                            // change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
+                            change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
                             break;
 
                         case BTN_SETUP_MAINTENANCE_FILTERING_ID:
@@ -955,6 +991,12 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 
                         case BTN_TEMPERATURE_ID:
                             change_page_route(model, data, PAGE_ROUTE_TEMPERATURE);
+                            break;
+
+                        case BTN_DEVICE_ID:
+                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
+                            msg.vmsg.page  = &page_device_info;
+                            msg.vmsg.extra = (void *)(uintptr_t)event.data.number;
                             break;
 
                         case BTN_SEARCH_ID:
@@ -1066,6 +1108,16 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
                     }
                     break;
+
+                    case LV_EVENT_LONG_PRESSED: {
+                        switch (event.data.id) {
+                            case BTN_REC_DEVICE_ID:
+                                msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                                msg.vmsg.page = &page_devices;
+                                break;
+                        }
+                        break;
+                    }
 
                     case LV_EVENT_VALUE_CHANGED: {
                         switch (event.data.id) {
@@ -1193,13 +1245,185 @@ static lv_obj_t *par_control_cont(lv_obj_t *root, lv_obj_t **lbl_return, int id)
 }
 
 
+static void update_device_list(model_t *pmodel, struct page_data *pdata) {
+    if (pdata->cont_subpage == NULL || pdata->page_route != PAGE_ROUTE_REC_DEVICE) {
+        return;
+    }
+
+    for (size_t i = 0; i < pdata->rec_devices.count; i++) {
+        lv_obj_t *img               = pdata->rec_devices.device_info_widgets[i].img_icon;
+        lv_obj_t *lbl_state         = pdata->rec_devices.device_info_widgets[i].lbl_state;
+        lv_obj_t *lbl_alarms        = pdata->rec_devices.device_info_widgets[i].lbl_alarms;
+        lv_obj_t *lbl_address       = pdata->rec_devices.device_info_widgets[i].lbl_address;
+        lv_obj_t *lbl_serial_number = pdata->rec_devices.device_info_widgets[i].lbl_serial_number;
+        device_t  device            = model_get_device(pmodel, pdata->rec_devices.device_info_widgets[i].address);
+
+        lv_label_set_text_fmt(lbl_serial_number, "SN: %8i", device.serial_number);
+
+        // Icon
+        switch (device.class) {
+            case DEVICE_CLASS_LIGHT_1:
+                lv_img_set_src(img, &img_icona_luce_1);
+                break;
+            case DEVICE_CLASS_LIGHT_2:
+                lv_img_set_src(img, &img_icona_luce_2);
+                break;
+            case DEVICE_CLASS_LIGHT_3:
+                lv_img_set_src(img, &img_icona_luce_3);
+                break;
+            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+                lv_img_set_src(img, &img_icona_elettrostatico);
+                break;
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+                lv_img_set_src(img, &img_icona_uvc);
+                break;
+            case DEVICE_CLASS_GAS:
+                lv_img_set_src(img, &img_icon_gas_sm);
+                break;
+            case DEVICE_CLASS_IMMISSION_FAN:
+                lv_img_set_src(img, &img_icon_immission_sm);
+                break;
+            case DEVICE_CLASS_SIPHONING_FAN:
+                lv_img_set_src(img, &img_icona_aspirazione);
+                break;
+            case DEVICE_CLASS_PRESSURE_SAFETY:
+                lv_img_set_src(img, &img_icon_pressure_temperature_sm);
+                break;
+            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY:
+                lv_img_set_src(img, &img_icon_temperature_humidity_sm);
+                break;
+            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
+                lv_img_set_src(img, &img_icon_pressure_temperature_humidity_sm);
+                break;
+
+            default:
+                lv_obj_set_hidden(img, 1);
+                break;
+        }
+
+        // State
+        switch (device.class) {
+            case DEVICE_CLASS_LIGHT_1:
+            case DEVICE_CLASS_LIGHT_2:
+            case DEVICE_CLASS_LIGHT_3:
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+            case DEVICE_CLASS_GAS:
+                lv_label_set_text(lbl_state, "");     // TODO: add state
+                break;
+            case DEVICE_CLASS_IMMISSION_FAN:
+            case DEVICE_CLASS_SIPHONING_FAN:
+                lv_label_set_text(lbl_state, "");     // TODO: add state
+                break;
+            case DEVICE_CLASS_PRESSURE_SAFETY:
+                lv_label_set_text_fmt(lbl_state, "%i%s %imB", device.sensor_data.temperature,
+                                      model_get_degrees_symbol(pmodel), device.sensor_data.pressure);
+                break;
+            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY:
+                lv_label_set_text_fmt(lbl_state, "%i%% %i%s", device.sensor_data.humidity,
+                                      device.sensor_data.temperature, model_get_degrees_symbol(pmodel));
+                break;
+            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
+                lv_label_set_text_fmt(lbl_state, "%i%% %i%s %imB", device.sensor_data.humidity,
+                                      device.sensor_data.temperature, model_get_degrees_symbol(pmodel),
+                                      device.sensor_data.pressure);
+                break;
+        }
+
+        // Alarms
+        switch (device.class) {
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+            case DEVICE_CLASS_GAS:
+                lv_label_set_text_fmt(lbl_state, "%s: %s  FB: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
+                                      (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0 ? "OK" : "KO",
+                                      (device.alarms & EASYCONNECT_FEEDBACK_ALARM) > 0 ? "OK" : "KO");
+                break;
+            default:
+                lv_label_set_text_fmt(lbl_state, "%s: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
+                                      (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0 ? "OK" : "KO");
+                break;
+        }
+
+
+        // Group
+        switch (device.class) {
+            case DEVICE_CLASS_LIGHT_1:
+            case DEVICE_CLASS_LIGHT_2:
+            case DEVICE_CLASS_LIGHT_3:
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+            case DEVICE_CLASS_SIPHONING_FAN:
+            case DEVICE_CLASS_IMMISSION_FAN:
+                lv_label_set_text_fmt(lbl_address, "IP: %03i Gr.: %i", device.address, CLASS_GET_GROUP(device.class));
+                break;
+
+            default:
+                lv_label_set_text_fmt(lbl_address, "IP: %03i Gr.: -", device.address);
+                break;
+        }
+
+        lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+    }
+}
+
+
+static device_info_widget_t device_info_widget_create(lv_obj_t *parent, device_t device) {
+    lv_obj_t *cont = lv_cont_create(parent, NULL);
+    lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_transparent_cont);
+    lv_obj_set_size(cont, 410, 56);
+    lv_page_glue_obj(cont, 1);
+
+    lv_obj_t *btn = lv_btn_create(cont, NULL);
+    lv_btn_set_layout(btn, LV_LAYOUT_OFF);
+    lv_obj_set_size(btn, 48, 48);
+    lv_obj_t *img = lv_img_create(btn, NULL);
+
+    lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, 0);
+    view_register_default_callback_number(btn, BTN_DEVICE_ID, device.address);
+
+    lv_obj_t *lbl_state = lv_label_create(cont, NULL);
+    lv_obj_set_auto_realign(lbl_state, 1);
+    lv_obj_align(lbl_state, btn, LV_ALIGN_OUT_LEFT_TOP, -4, 0);
+
+    lv_obj_t *lbl_address = lv_label_create(cont, NULL);
+    lv_obj_set_auto_realign(lbl_address, 1);
+    lv_obj_align(lbl_address, btn, LV_ALIGN_OUT_RIGHT_TOP, 4, 0);
+
+    lv_obj_t *lbl_alarms = lv_label_create(cont, NULL);
+    lv_obj_set_auto_realign(lbl_alarms, 1);
+    lv_obj_align(lbl_alarms, btn, LV_ALIGN_OUT_LEFT_BOTTOM, -4, 0);
+
+    lv_obj_t *lbl_serial_number = lv_label_create(cont, NULL);
+    lv_obj_set_auto_realign(lbl_serial_number, 1);
+    lv_obj_align(lbl_serial_number, btn, LV_ALIGN_OUT_RIGHT_BOTTOM, 4, 0);
+
+    return (device_info_widget_t){
+        .address           = device.address,
+        .lbl_address       = lbl_address,
+        .lbl_alarms        = lbl_alarms,
+        .lbl_serial_number = lbl_serial_number,
+        .lbl_state         = lbl_state,
+        .img_icon          = img,
+    };
+}
+
+
 static void change_page_route(model_t *pmodel, struct page_data *pdata, page_route_t route) {
     if (pdata->cont_subpage != NULL) {
         lv_obj_del(pdata->cont_subpage);
         pdata->cont_subpage = NULL;
     }
 
-    switch (route) {
+    pdata->page_route = route;
+    switch (pdata->page_route) {
         case PAGE_ROUTE_MAIN_PAGE:
             break;
 
@@ -1219,7 +1443,6 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_label_set_text_fmt(lbl, "v%s", APP_CONFIG_FIRMWARE_VERSION);
             lv_obj_align(lbl, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -4);
 
-            /*
             btn = view_common_default_menu_button(pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_FILTRAGGIO),
                                                   BTN_FILTERING_ID);
             lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, 60);
@@ -1227,7 +1450,6 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             btn = view_common_default_menu_button(pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_SENSORI),
                                                   BTN_SENSORS_ID);
             lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, 124);
-            */
             break;
         }
 
@@ -1272,8 +1494,27 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             pdata->cont_subpage = cont_subpage_create(view_intl_get_string(pmodel, STRINGS_DISPOSITIVI_REC));
 
             page = lv_page_create(pdata->cont_subpage, NULL);
-            lv_obj_set_size(page, LV_HOR_RES - 32, 260);
+            lv_obj_set_size(page, LV_HOR_RES - 32, 270);
             lv_obj_align(page, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, 0);
+
+            lv_page_set_scrl_layout(page, LV_LAYOUT_COLUMN_LEFT);
+            lv_obj_set_style_local_pad_inner(page, LV_PAGE_PART_SCROLLABLE, LV_STATE_DEFAULT, 0);
+            lv_obj_set_style_local_pad_top(page, LV_PAGE_PART_SCROLLABLE, LV_STATE_DEFAULT, 0);
+
+            uint8_t starting_address = 0;
+            uint8_t address          = model_get_next_device_address(pmodel, starting_address);
+            size_t  count            = 0;
+            while (address != starting_address) {
+                pdata->rec_devices.device_info_widgets[count] =
+                    device_info_widget_create(page, model_get_device(pmodel, address));
+
+                starting_address = address;
+                address          = model_get_next_device_address(pmodel, starting_address);
+                count++;
+            }
+            pdata->rec_devices.count = count;
+
+            update_device_list(pmodel, pdata);
             break;
         }
 
@@ -1620,7 +1861,6 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
         }
     }
 
-    pdata->page_route = route;
     update_menus(pmodel, pdata);
 }
 

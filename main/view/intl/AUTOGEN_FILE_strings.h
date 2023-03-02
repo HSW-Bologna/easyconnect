@@ -71,8 +71,9 @@ typedef enum {
     STRINGS_LUCE,
     STRINGS_TEMPO_PULIZIA,
     STRINGS_IMMISSIONE,
+    STRINGS_ALLARME,
 } strings_t;
 
-extern const char *strings[69][2];
+extern const char *strings[70][2];
 
 #endif

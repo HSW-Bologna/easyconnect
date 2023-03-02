@@ -54,7 +54,12 @@ typedef struct {
     uint16_t alarms;
 
     union {
-        int16_t pressure;
+        struct {
+            int16_t pressure;
+            int16_t temperature;
+            int16_t humidity;
+        } sensor_data;
+        uint16_t ourput_state;
     };
 } device_t;
 

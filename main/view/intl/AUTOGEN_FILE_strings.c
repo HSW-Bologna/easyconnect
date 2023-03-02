@@ -1,4 +1,4 @@
-const char *strings[69][2] = {
+const char *strings[70][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -68,5 +68,6 @@ const char *strings[69][2] = {
     {"Luce", "Light", },
     {"Tempo di pulizia", "Cleaning time", },
     {"Immissione", "Immission", },
+    {"All.", "Alarm", },
 };
 
