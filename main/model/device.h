@@ -28,15 +28,20 @@ typedef enum {
 } device_status_t;
 
 
-#define DEVICE_CLASS_LIGHT_1               (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_1))
-#define DEVICE_CLASS_LIGHT_2               (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_2))
-#define DEVICE_CLASS_LIGHT_3               (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_3))
-#define DEVICE_CLASS_ULTRAVIOLET_FILTER(g) (CLASS(DEVICE_MODE_UVC, g))
-#define DEVICE_CLASS_ELECTROSTATIC_FILTER  (CLASS(DEVICE_MODE_ESF, DEVICE_GROUP_1))
-#define DEVICE_CLASS_GAS                   (CLASS(DEVICE_MODE_GAS, DEVICE_GROUP_1))
-#define DEVICE_CLASS_PRESSURE_SAFETY       (CLASS(DEVICE_MODE_PRESSURE_SAFETY, DEVICE_GROUP_1))
-#define DEVICE_CLASS_SIPHONING_FAN         (CLASS(DEVICE_MODE_FAN, DEVICE_GROUP_1))
-#define DEVICE_CLASS_IMMISSION_FAN         (CLASS(DEVICE_MODE_FAN, DEVICE_GROUP_2))
+#define DEVICE_CLASS_LIGHT_1                              (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_1))
+#define DEVICE_CLASS_LIGHT_2                              (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_2))
+#define DEVICE_CLASS_LIGHT_3                              (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_3))
+#define DEVICE_CLASS_ULTRAVIOLET_FILTER(g)                (CLASS(DEVICE_MODE_UVC, g))
+#define DEVICE_CLASS_ELECTROSTATIC_FILTER                 (CLASS(DEVICE_MODE_ESF, DEVICE_GROUP_1))
+#define DEVICE_CLASS_GAS                                  (CLASS(DEVICE_MODE_GAS, DEVICE_GROUP_1))
+#define DEVICE_CLASS_PRESSURE_SAFETY                      (CLASS(DEVICE_MODE_SENSOR, DEVICE_GROUP_1))
+#define DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY          (CLASS(DEVICE_MODE_SENSOR, DEVICE_GROUP_2))
+#define DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY (CLASS(DEVICE_MODE_SENSOR, DEVICE_GROUP_3))
+#define DEVICE_CLASS_SIPHONING_FAN                        (CLASS(DEVICE_MODE_FAN, DEVICE_GROUP_1))
+#define DEVICE_CLASS_IMMISSION_FAN                        (CLASS(DEVICE_MODE_FAN, DEVICE_GROUP_2))
+
+#define ADDR2INDEX(addr) (addr - 1)
+#define INDEX2ADDR(addr) (addr + 1)
 
 
 typedef struct {
@@ -45,7 +50,7 @@ typedef struct {
     uint16_t event_count;
     uint16_t firmware_version;
     uint16_t class;
-    uint16_t serial_number;
+    uint32_t serial_number;
     uint16_t alarms;
 
     union {
@@ -71,7 +76,7 @@ uint8_t       device_list_set_device_alarms(device_t *devices, uint8_t address, 
 size_t        device_list_get_configured_devices(device_t *devices);
 device_t      device_list_get_device(device_t *devices, uint8_t address);
 device_t     *device_list_get_device_mut(device_t *devices, uint8_t address);
-void          device_list_set_device_sn(device_t *devices, uint8_t address, uint16_t serial_number);
+void          device_list_set_device_sn(device_t *devices, uint8_t address, uint32_t serial_number);
 uint8_t       device_list_is_there_an_alarm(device_t *devices);
 uint8_t       device_list_is_there_any_alarm_for_class(device_t *devices, uint16_t class);
 uint8_t       device_list_is_class_alarms_on(device_t *devices, uint16_t class, uint8_t alarms);

@@ -64,6 +64,13 @@ static int off_entry(model_t *pmodel) {
     controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 0);
     controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 0);
     controller_update_class_output(pmodel, DEVICE_CLASS_GAS, 0);
+
+    model_uvc_filter_off(pmodel);
+    model_electrostatic_filter_off(pmodel);
+    controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
+    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
+    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
+    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
     return 0;
 }
 

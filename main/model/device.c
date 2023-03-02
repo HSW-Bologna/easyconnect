@@ -3,8 +3,6 @@
 #include "esp_log.h"
 
 
-#define ADDR2INDEX(addr)     (addr - 1)
-#define INDEX2ADDR(addr)     (addr + 1)
 #define ASSERT_ADDRESS(addr) assert(addr != 0 && ADDR2INDEX(addr) <= MODBUS_MAX_DEVICES);
 
 
@@ -196,7 +194,7 @@ uint8_t device_list_set_device_error(device_t *devices, uint8_t address, int err
 }
 
 
-void device_list_set_device_sn(device_t *devices, uint8_t address, uint16_t serial_number) {
+void device_list_set_device_sn(device_t *devices, uint8_t address, uint32_t serial_number) {
     assert(devices != NULL);
     ASSERT_ADDRESS(address);
     size_t index = ADDR2INDEX(address);

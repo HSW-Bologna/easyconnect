@@ -374,9 +374,16 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
         case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
         case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
         case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+            if (communication || (alarms & EASYCONNECT_SAFETY_ALARM)) {
+                system_shutdown(pmodel);
+            }
+            break;
+
         case DEVICE_CLASS_SIPHONING_FAN:
         case DEVICE_CLASS_IMMISSION_FAN:
         case DEVICE_CLASS_PRESSURE_SAFETY:
+        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY:
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
             system_shutdown(pmodel);
             break;
     }

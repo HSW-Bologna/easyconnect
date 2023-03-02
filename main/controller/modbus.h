@@ -28,8 +28,8 @@ typedef struct {
     union {
         struct {
             uint16_t class;
-            uint16_t serial_number;
             uint16_t firmware_version;
+            uint32_t serial_number;
         };
         uint16_t alarms;
         uint16_t pressure;
