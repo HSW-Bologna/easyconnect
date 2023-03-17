@@ -59,20 +59,24 @@ typedef struct {
             int16_t temperature;
             int16_t humidity;
         } sensor_data;
-        uint16_t ourput_state;
+        struct {
+            uint16_t ourput_state;
+            uint16_t work_hours;
+        } actuator_data;
     };
 } device_t;
 
 
-void          device_list_init(device_t *devices);
-uint8_t       device_list_get_prev_device_address(device_t *devices, uint8_t next);
-uint8_t       device_list_get_next_configured_device_address(device_t *devices, uint8_t previous);
-uint8_t       device_list_get_next_found_device_address(device_t *devices, uint8_t previous);
-int           device_list_is_address_configured(device_t *devices, uint8_t address);
-uint8_t       device_list_get_available_address(device_t *devices, uint8_t previous);
-uint8_t       device_list_get_next_device_address_by_class(device_t *devices, uint8_t previous, uint16_t class);
-int           device_list_configure_device(device_t *devices, uint8_t address);
-int           device_list_device_found(device_t *devices, uint8_t address);
+void    device_list_init(device_t *devices);
+uint8_t device_list_get_prev_device_address(device_t *devices, uint8_t next);
+uint8_t device_list_get_next_configured_device_address(device_t *devices, uint8_t previous);
+uint8_t device_list_get_next_found_device_address(device_t *devices, uint8_t previous);
+int     device_list_is_address_configured(device_t *devices, uint8_t address);
+uint8_t device_list_get_available_address(device_t *devices, uint8_t previous);
+uint8_t device_list_get_next_device_address_by_class(device_t *devices, uint8_t previous, uint16_t class);
+uint8_t device_list_get_next_device_address_by_modes(device_t *devices, uint8_t previous, uint16_t *modes, size_t num);
+int     device_list_configure_device(device_t *devices, uint8_t address);
+int     device_list_device_found(device_t *devices, uint8_t address);
 address_map_t device_list_get_address_map(device_t *devices);
 address_map_t device_list_get_error_map(device_t *devices);
 void          device_list_delete_device(device_t *devices, uint8_t address);

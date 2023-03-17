@@ -30,15 +30,18 @@
 
 #define HOLDING_REGISTER_MOTOR_SPEED 256
 #define HOLDING_REGISTER_PRESSURE    256
+#define HOLDING_REGISTER_WORK_HOURS  256
 
 #define MODBUS_AUTO_COMMISSIONING_DONE_BIT 0x01
 
 typedef enum {
     TASK_MESSAGE_CODE_READ_DEVICE_INFO,
     TASK_MESSAGE_CODE_READ_DEVICE_MESSAGES,
-    TASK_MESSAGE_CODE_READ_DEVICE_ALARMS,
+    TASK_MESSAGE_CODE_READ_DEVICE_STATE,
     TASK_MESSAGE_CODE_READ_DEVICE_PRESSURE,
     TASK_MESSAGE_CODE_READ_DEVICE_INPUTS,
+    TASK_MESSAGE_CODE_READ_DEVICE_WORK_HOURS,
+    TASK_MESSAGE_CODE_RESET_DEVICE_WORK_HOURS,
     TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
     TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING,
     TASK_MESSAGE_CODE_SET_CLASS_OUTPUT,
@@ -231,8 +234,8 @@ void modbus_read_device_messages(uint8_t address, uint8_t device_model) {
 }
 
 
-void modbus_read_device_alarms(uint8_t address) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_ALARMS, .address = address};
+void modbus_read_device_state(uint8_t address) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_STATE, .address = address};
     xQueueSend(messageq, &message, portMAX_DELAY);
 }
 
@@ -240,6 +243,19 @@ void modbus_read_device_alarms(uint8_t address) {
 void modbus_read_device_pressure(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_PRESSURE, .address = address};
     xQueueSend(messageq, &message, portMAX_DELAY);
+}
+
+
+void modbus_read_device_work_hours(uint8_t address) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_WORK_HOURS, .address = address};
+    xQueueSend(messageq, &message, portMAX_DELAY);
+}
+
+
+void modbus_reset_device_work_hours(uint8_t address) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_RESET_DEVICE_WORK_HOURS, .address = address};
+    xQueueSend(messageq, &message, portMAX_DELAY);
+    modbus_read_device_work_hours(address);
 }
 
 
@@ -346,9 +362,10 @@ static void modbus_task(void *args) {
                     response.address = message.address;
                     ESP_LOGI(TAG, "Reading info from %i", message.address);
 
-                    uint16_t registers[5];
+                    uint16_t registers[4];
                     if (read_holding_registers(&master, registers, message.address,
-                                               EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION, 5)) {
+                                               EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION,
+                                               sizeof(registers) / sizeof(registers[0]))) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         response.firmware_version = registers[0];
@@ -394,14 +411,17 @@ static void modbus_task(void *args) {
                     break;
                 }
 
-                case TASK_MESSAGE_CODE_READ_DEVICE_ALARMS: {
-                    response.code    = MODBUS_RESPONSE_CODE_ALARMS_REG;
+                case TASK_MESSAGE_CODE_READ_DEVICE_STATE: {
+                    response.code    = MODBUS_RESPONSE_CODE_STATE;
                     response.address = message.address;
 
-                    if (read_holding_registers(&master, &response.alarms, message.address,
-                                               EASYCONNECT_HOLDING_REGISTER_ALARMS, 1)) {
+                    uint16_t registers[2];
+                    if (read_holding_registers(&master, registers, message.address, EASYCONNECT_HOLDING_REGISTER_ALARMS,
+                                               sizeof(registers) / sizeof(registers[0]))) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
+                        response.alarms = registers[0];
+                        response.state  = registers[1];
                         xQueueSend(responseq, &response, portMAX_DELAY);
                     }
                     break;
@@ -608,7 +628,8 @@ static void modbus_task(void *args) {
 
                 case TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE: {
                     ESP_LOGI(TAG, "Setting fan speed for device %i %i%%", message.address, message.value);
-                    if (write_holding_register(&master, message.address, HOLDING_REGISTER_MOTOR_SPEED, (uint16_t)message.value)) {
+                    if (write_holding_register(&master, message.address, HOLDING_REGISTER_MOTOR_SPEED,
+                                               (uint16_t)message.value)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
                     break;
@@ -623,6 +644,26 @@ static void modbus_task(void *args) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         xQueueSend(responseq, &response, portMAX_DELAY);
+                    }
+                    break;
+                }
+
+                case TASK_MESSAGE_CODE_READ_DEVICE_WORK_HOURS: {
+                    response.code    = MODBUS_RESPONSE_CODE_WORK_HOURS;
+                    response.address = message.address;
+
+                    if (read_holding_registers(&master, &response.work_hours, message.address,
+                                               HOLDING_REGISTER_WORK_HOURS, 1)) {
+                        xQueueSend(responseq, &error_resp, portMAX_DELAY);
+                    } else {
+                        xQueueSend(responseq, &response, portMAX_DELAY);
+                    }
+                    break;
+                }
+
+                case TASK_MESSAGE_CODE_RESET_DEVICE_WORK_HOURS: {
+                    if (write_holding_register(&master, message.address, HOLDING_REGISTER_WORK_HOURS, 0)) {
+                        xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
                     break;
                 }

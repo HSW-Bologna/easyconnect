@@ -23,6 +23,7 @@ ERRORE_DI_COMUNICAZIONE, errore di comunicazione, communication error
 INDIRIZZO, Indirizzo, Address
 CLASSE, Classe, Class
 NUMERO_DI_SERIE, numero di serie, serial number
+SERIALE, Seriale, Serial
 ALLARME_DI_SICUREZZA, allarme di sicurezza, safety alarm
 IMPOSTAZIONI, Impostazioni, Settings
 DATA_ORA, Data/Ora, Date/Time
@@ -69,4 +70,11 @@ DISPOSITIVO, Dispositivo, Device
 LUCE, Luce, Light
 TEMPO_PULIZIA, Tempo di pulizia, Cleaning time
 IMMISSIONE, Immissione, Immission
+ASPIRAZIONE, Aspirazione, Syphoning
 ALLARME, All., Alarm
+GRUPPO, Gruppo, Group
+FILTRO, Filtro, Filter
+ORE_DI_LAVORO, Ore lavoro, Work hours
+ORE_RIMASTE, Ore rimaste, Hours left
+VERSIONE, Versione, Version
+CALIBRAZIONE_PRESSIONE, Calibrazione pressione, Pressure calibration

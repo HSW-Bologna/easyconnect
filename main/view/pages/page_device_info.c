@@ -10,6 +10,15 @@
 #include "model/model.h"
 
 
+LV_IMG_DECLARE(img_icona_luce_1);
+LV_IMG_DECLARE(img_icona_luce_2);
+LV_IMG_DECLARE(img_icona_luce_3);
+LV_IMG_DECLARE(img_icona_elettrostatico);
+LV_IMG_DECLARE(img_icona_uvc);
+LV_IMG_DECLARE(img_icona_aspirazione);
+LV_IMG_DECLARE(img_icona_immissione);
+
+
 
 enum {
     BACK_BTN_ID,
@@ -20,7 +29,9 @@ enum {
 
 struct page_data {
     device_t  device;
+    lv_obj_t *img_icon;
     lv_obj_t *lbl_info;
+    lv_obj_t *lbl_serial_address;
     lv_obj_t *lbl_alarms[MAX_NUM_MESSAGES];
     size_t    num_messages;
     char     *messages[MAX_NUM_MESSAGES];
@@ -29,11 +40,20 @@ struct page_data {
 
 static void update_info(model_t *pmodel, struct page_data *data) {
     data->device = model_get_device(pmodel, data->device.address);
-    lv_label_set_text_fmt(data->lbl_info,
-                          "Dispositivo %i,\n versione %i.%i.%i\n classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
-                          data->device.address, (data->device.firmware_version >> 10) & 0x3F,
-                          (data->device.firmware_version >> 6) & 0xF, (data->device.firmware_version >> 0) & 0x3F,
-                          data->device.class, data->device.status, data->device.serial_number, data->device.alarms);
+
+    view_common_get_class_icon(data->device.class, data->img_icon);
+
+    char device_type[64] = "";
+    view_common_get_class_string(pmodel, data->device.class, device_type, sizeof(device_type));
+
+    lv_label_set_text_fmt(data->lbl_info, "%s\n%s %i\n%s %i.%i.%i", device_type,
+                          view_intl_get_string(pmodel, STRINGS_GRUPPO), CLASS_GET_GROUP(data->device.class),
+                          view_intl_get_string(pmodel, STRINGS_VERSIONE), (data->device.firmware_version >> 10) & 0x3F,
+                          (data->device.firmware_version >> 6) & 0xF, (data->device.firmware_version >> 0) & 0x3F);
+
+    lv_label_set_text_fmt(data->lbl_serial_address, "%s: %i\n%s: %i", view_intl_get_string(pmodel, STRINGS_SERIALE),
+                          data->device.serial_number, view_intl_get_string(pmodel, STRINGS_INDIRIZZO),
+                          data->device.address);
 
     if (data->device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
         lv_label_set_text(data->lbl_alarms[0], view_intl_get_string(pmodel, STRINGS_ERRORE_DI_COMUNICAZIONE));
@@ -72,18 +92,38 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_t         *title = view_common_title(BACK_BTN_ID, "Info dispositivo", NULL);
     (void)title;
 
+    lv_obj_t *cont = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_set_style_local_border_width(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 2);
+    lv_obj_set_style_local_radius(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 8);
+    lv_obj_set_size(cont, 48, 48);
+
+    lv_obj_t *img = lv_img_create(cont, NULL);
+    lv_obj_set_size(img, 32, 32);
+    lv_obj_set_auto_realign(img, 1);
+    lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+    data->img_icon = img;
+
+    lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_LEFT, 16, 80);
+
     lv_obj_t *lbl = lv_label_create(lv_scr_act(), NULL);
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
     lv_obj_set_auto_realign(lbl, 1);
-    lv_obj_set_width(lbl, 420);
-    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 80);
+    lv_obj_set_width(lbl, 160);
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_LEFT, 70, 72);
     data->lbl_info = lbl;
+
+    lbl = lv_label_create(lv_scr_act(), NULL);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_set_width(lbl, 220);
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_RIGHT, 0, 72);
+    data->lbl_serial_address = lbl;
 
     for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
         lbl = lv_label_create(lv_scr_act(), NULL);
         lv_obj_set_auto_realign(lbl, 1);
         lv_obj_set_style_local_text_color(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
-        lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 150 + 24 * i);
+        lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 160 + 24 * i);
         data->lbl_alarms[i] = lbl;
     }
 

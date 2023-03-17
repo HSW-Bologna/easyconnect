@@ -10,13 +10,14 @@ typedef enum {
     MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION_LISTENING_DONE,
     MODBUS_RESPONSE_CODE_INFO,
     MODBUS_RESPONSE_CODE_MESSAGES,
-    MODBUS_RESPONSE_CODE_ALARMS_REG,
+    MODBUS_RESPONSE_CODE_STATE,
     MODBUS_RESPONSE_CODE_SCAN_DONE,
     MODBUS_RESPONSE_CODE_DEVICE_OK,
     MODBUS_RESPONSE_CODE_ERROR,
     MODBUS_RESPONSE_CODE_ALARM,
     MODBUS_RESPONSE_CODE_EVENTS,
     MODBUS_RESPONSE_CODE_PRESSURE,
+    MODBUS_RESPONSE_CODE_WORK_HOURS,
 } modbus_response_code_t;
 
 typedef struct {
@@ -31,8 +32,12 @@ typedef struct {
             uint16_t firmware_version;
             uint32_t serial_number;
         };
-        uint16_t alarms;
+        struct {
+            uint16_t alarms;
+            uint16_t state;
+        };
         uint16_t pressure;
+        uint16_t work_hours;
         struct {
             uint16_t event_count;
         };
@@ -56,8 +61,10 @@ void modbus_set_class_output(uint16_t class, int value);
 void modbus_scan(void);
 void modbus_stop_current_operation(void);
 void modbus_set_fan_percentage(uint8_t address, uint8_t percentage);
-void modbus_read_device_alarms(uint8_t address);
+void modbus_read_device_state(uint8_t address);
 void modbus_read_device_pressure(uint8_t address);
 void modbus_update_time(void);
+void modbus_read_device_work_hours(uint8_t address);
+void modbus_reset_device_work_hours(uint8_t address);
 
 #endif

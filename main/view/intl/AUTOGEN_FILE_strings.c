@@ -1,4 +1,4 @@
-const char *strings[70][2] = {
+const char *strings[78][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -23,6 +23,7 @@ const char *strings[70][2] = {
     {"Indirizzo", "Address", },
     {"Classe", "Class", },
     {"numero di serie", "serial number", },
+    {"Seriale", "Serial", },
     {"allarme di sicurezza", "safety alarm", },
     {"Impostazioni", "Settings", },
     {"Data/Ora", "Date/Time", },
@@ -68,6 +69,13 @@ const char *strings[70][2] = {
     {"Luce", "Light", },
     {"Tempo di pulizia", "Cleaning time", },
     {"Immissione", "Immission", },
+    {"Aspirazione", "Syphoning", },
     {"All.", "Alarm", },
+    {"Gruppo", "Group", },
+    {"Filtro", "Filter", },
+    {"Ore lavoro", "Work hours", },
+    {"Ore rimaste", "Hours left", },
+    {"Versione", "Version", },
+    {"Calibrazione pressione", "Pressure calibration", },
 };
 

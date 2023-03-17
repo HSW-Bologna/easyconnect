@@ -24,6 +24,15 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.environment_cleaning_start_period  = 4;
     pmodel->configuration.environment_cleaning_finish_period = 4;
 
+    pmodel->configuration.pressure_differences_for_speed[0] = 0;
+    pmodel->configuration.pressure_differences_for_speed[1] = 1;
+    pmodel->configuration.pressure_differences_for_speed[2] = 2;
+    pmodel->configuration.pressure_differences_for_speed[3] = 3;
+    pmodel->configuration.pressure_differences_for_speed[4] = 4;
+
+    pmodel->configuration.pressure_difference_deviation_warn = 30;
+    pmodel->configuration.pressure_difference_deviation_stop = 50;
+
     pmodel->configuration.siphoning_percentages[0] = 0;
     pmodel->configuration.siphoning_percentages[1] = 20;
     pmodel->configuration.siphoning_percentages[2] = 30;
@@ -45,29 +54,103 @@ void model_init(model_t *pmodel) {
 
     pmodel->configuration.passive_filters_hours_warning_threshold = 1000;
     pmodel->configuration.passive_filters_hours_stop_threshold    = 2000;
+    pmodel->configuration.uvc_filters_hours_warning_threshold     = 8000;
+    pmodel->configuration.uvc_filters_hours_stop_threshold        = 10000;
+    pmodel->configuration.esf_filters_hours_warning_threshold     = 1000;
+    pmodel->configuration.esf_filters_hours_stop_threshold        = 2000;
 
-    pmodel->stats.passive_filters_work_hours = 0;
+    pmodel->configuration.first_temperature_delta        = 25;
+    pmodel->configuration.second_temperature_delta       = 35;
+    pmodel->configuration.first_temperature_speed_raise  = 10;
+    pmodel->configuration.second_temperature_speed_raise = 20;
+    pmodel->configuration.temperature_warn               = 70;
+    pmodel->configuration.temperature_stop               = 80;
+
+    pmodel->configuration.first_humidity_delta        = 10;
+    pmodel->configuration.second_humidity_delta       = 20;
+    pmodel->configuration.first_humidity_speed_raise  = 10;
+    pmodel->configuration.second_humidity_speed_raise = 20;
+    pmodel->configuration.humidity_warn               = 95;
+    pmodel->configuration.humidity_stop               = 100;
+
+    pmodel->stats.passive_filters_work_seconds = 0;
 }
 
 
 void model_reset_passive_filters_work_hours(model_t *pmodel) {
     assert(pmodel != NULL);
-    pmodel->stats.passive_filters_work_hours = 0;
+    pmodel->stats.passive_filters_work_seconds = 0;
 }
 
 
-void model_add_passive_filters_work_hours(model_t *pmodel, uint16_t hours) {
+void model_add_passive_filters_work_seconds(model_t *pmodel, uint32_t seconds) {
     assert(pmodel != NULL);
-    pmodel->stats.passive_filters_work_hours += hours;
+    pmodel->stats.passive_filters_work_seconds += seconds;
+}
+
+
+uint16_t model_get_passive_filters_work_hours(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return pmodel->stats.passive_filters_work_seconds / (60UL * 60UL);
 }
 
 
 uint16_t model_get_passive_filters_remaining_hours(model_t *pmodel) {
     assert(pmodel != NULL);
-    if (pmodel->stats.passive_filters_work_hours < pmodel->configuration.passive_filters_hours_stop_threshold) {
-        return pmodel->configuration.passive_filters_hours_stop_threshold - pmodel->stats.passive_filters_work_hours;
+    if (model_get_passive_filters_work_hours(pmodel) < pmodel->configuration.passive_filters_hours_stop_threshold) {
+        return pmodel->configuration.passive_filters_hours_stop_threshold -
+               model_get_passive_filters_work_hours(pmodel);
     } else {
         return 0;
+    }
+}
+
+
+uint16_t model_get_filter_device_work_hours(model_t *pmodel, uint8_t address) {
+    assert(pmodel != NULL);
+    device_t device = device_list_get_device(pmodel->devices, address);
+    switch (CLASS_GET_MODE(device.class)) {
+        case DEVICE_MODE_UVC:
+        case DEVICE_MODE_ESF:
+            return device.actuator_data.work_hours;
+        default:
+            return 0;
+    }
+}
+
+
+uint16_t model_get_filter_device_remaining_hours(model_t *pmodel, uint8_t address) {
+    assert(pmodel != NULL);
+    device_t device = device_list_get_device(pmodel->devices, address);
+    switch (CLASS_GET_MODE(device.class)) {
+        case DEVICE_MODE_UVC:
+            if (device.actuator_data.work_hours > pmodel->configuration.uvc_filters_hours_stop_threshold) {
+                return 0;
+            } else {
+                return pmodel->configuration.uvc_filters_hours_stop_threshold - device.actuator_data.work_hours;
+            }
+        case DEVICE_MODE_ESF:
+            if (device.actuator_data.work_hours > pmodel->configuration.esf_filters_hours_stop_threshold) {
+                return 0;
+            } else {
+                return pmodel->configuration.esf_filters_hours_stop_threshold - device.actuator_data.work_hours;
+            }
+        default:
+            return 0;
+    }
+}
+
+
+uint8_t model_get_filter_device_warning(model_t *pmodel, uint8_t address) {
+    assert(pmodel != NULL);
+    device_t device = device_list_get_device(pmodel->devices, address);
+    switch (CLASS_GET_MODE(device.class)) {
+        case DEVICE_MODE_UVC:
+            return device.actuator_data.work_hours > pmodel->configuration.uvc_filters_hours_warning_threshold;
+        case DEVICE_MODE_ESF:
+            return device.actuator_data.work_hours > pmodel->configuration.esf_filters_hours_warning_threshold;
+        default:
+            return 0;
     }
 }
 
@@ -82,6 +165,20 @@ uint8_t model_get_passive_filter_warning(model_t *pmodel) {
 uint8_t model_get_passive_filter_stop(model_t *pmodel) {
     assert(pmodel != NULL);
     return model_get_passive_filters_remaining_hours(pmodel) == 0;
+}
+
+
+uint16_t model_get_pressure_difference(model_t *pmodel, uint8_t fan_speed) {
+    assert(pmodel != NULL);
+    assert(fan_speed < MAX_FAN_SPEED);
+    return pmodel->configuration.pressure_differences_for_speed[fan_speed];
+}
+
+
+void model_set_pressure_difference(model_t *pmodel, uint8_t fan_speed, uint16_t difference) {
+    assert(pmodel != NULL);
+    assert(fan_speed < MAX_FAN_SPEED);
+    pmodel->configuration.pressure_differences_for_speed[fan_speed] = difference;
 }
 
 
@@ -181,6 +278,18 @@ uint8_t model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous
 }
 
 
+uint8_t model_get_next_device_address_by_mode(model_t *pmodel, uint8_t previous, uint16_t mode) {
+    assert(pmodel != NULL);
+    return device_list_get_next_device_address_by_modes(pmodel->devices, previous, &mode, 1);
+}
+
+
+uint8_t model_get_next_device_address_by_modes(model_t *pmodel, uint8_t previous, uint16_t *modes, size_t num) {
+    assert(pmodel != NULL);
+    return device_list_get_next_device_address_by_modes(pmodel->devices, previous, modes, num);
+}
+
+
 uint8_t model_get_next_pressure_sensor_device(model_t *pmodel, uint8_t previous) {
     assert(pmodel != NULL);
 
@@ -266,6 +375,15 @@ void model_set_device_sn(model_t *pmodel, uint8_t address, uint32_t serial_numbe
 }
 
 
+void model_set_device_work_hours(model_t *pmodel, uint8_t address, uint16_t work_hours) {
+    assert(pmodel != NULL);
+    device_t *device = device_list_get_device_mut(pmodel->devices, address);
+    if (device->status != DEVICE_STATUS_NOT_CONFIGURED) {
+        device->actuator_data.work_hours = work_hours;
+    }
+}
+
+
 void model_set_device_class(model_t *pmodel, uint8_t address, uint16_t class) {
     assert(pmodel != NULL);
     device_t *device = device_list_get_device_mut(pmodel->devices, address);
@@ -287,6 +405,16 @@ void model_set_device_firmware(model_t *pmodel, uint8_t address, uint16_t firmwa
 uint8_t model_set_device_alarms(model_t *pmodel, uint8_t address, uint16_t alarms) {
     assert(pmodel != NULL);
     return device_list_set_device_alarms(pmodel->devices, address, alarms);
+}
+
+
+void model_set_device_state(model_t *pmodel, uint8_t address, uint16_t state) {
+    assert(pmodel != NULL);
+    device_t *device = model_get_device_mut(pmodel, address);
+
+    if (device->status == DEVICE_STATUS_OK && (CLASS_GET_MODE(device->class) != DEVICE_MODE_SENSOR)) {
+        device->actuator_data.ourput_state = state;
+    }
 }
 
 
@@ -324,6 +452,22 @@ int model_get_light_class(model_t *pmodel, uint16_t *class) {
     }
 
     return found;
+}
+
+
+size_t model_get_mode_count(model_t *pmodel, uint16_t mode) {
+    assert(pmodel != NULL);
+    size_t count = 0;
+
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
+        if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
+            if (CLASS_GET_MODE(pmodel->devices[i].class) == mode) {
+                count++;
+            }
+        }
+    }
+
+    return count;
 }
 
 

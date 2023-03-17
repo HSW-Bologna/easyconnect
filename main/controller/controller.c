@@ -18,14 +18,16 @@
 #include "peripherals/buzzer.h"
 
 
+static void update_work_hours_cycle(model_t *pmodel);
 static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t alarms, uint8_t communication);
 static void system_shutdown(model_t *pmodel);
 static void print_heap_status(void);
 
 
-static const char *TAG             = "Controller";
-static uint8_t     refresh_devices = 1;
-static uint8_t     update_time     = 1;
+static const char *TAG               = "Controller";
+static uint8_t     refresh_devices   = 1;
+static uint8_t     update_time       = 1;
+static uint8_t     first_update_loop = 1;
 
 
 void controller_init(model_t *pmodel) {
@@ -172,17 +174,22 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                     break;
             }
             break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_RESET_FILTER_HOURS:
+            modbus_reset_device_work_hours(msg->address);
+            break;
     }
 }
 
 
 void controller_manage(model_t *pmodel) {
-    static unsigned long refreshts    = 0;
-    static unsigned long tempts       = 0;
-    static unsigned long poll_ts      = 0;
-    static unsigned long heapts       = 0;
-    static unsigned long time_ts      = 0;
-    static uint8_t       poll_address = 0;
+    static unsigned long refreshts     = 0;
+    static unsigned long work_hours_ts = 0;
+    static unsigned long tempts        = 0;
+    static unsigned long poll_ts       = 0;
+    static unsigned long heapts        = 0;
+    static unsigned long time_ts       = 0;
+    static uint8_t       poll_address  = 0;
 
     configuration_manage();
 
@@ -190,7 +197,7 @@ void controller_manage(model_t *pmodel) {
         if (poll_address == 0) {
             poll_address = model_get_next_device_address(pmodel, poll_address);
         } else {
-            modbus_read_device_alarms(poll_address);
+            modbus_read_device_state(poll_address);
 
             if (model_get_device(pmodel, poll_address).class == DEVICE_CLASS_PRESSURE_SAFETY) {
                 modbus_read_device_pressure(poll_address);
@@ -216,6 +223,12 @@ void controller_manage(model_t *pmodel) {
         }
         refresh_devices = 0;
         refreshts       = get_millis();
+    }
+
+    if (model_all_devices_queried(pmodel) &&
+        (first_update_loop || is_expired(work_hours_ts, get_millis(), 2UL * 5UL * 1000UL))) {
+        update_work_hours_cycle(pmodel);
+        work_hours_ts = get_millis();
     }
 
     if (update_time || is_expired(time_ts, get_millis(), 10UL * 60UL * 1000UL)) {
@@ -255,7 +268,7 @@ void controller_manage(model_t *pmodel) {
                 break;
 
             case MODBUS_RESPONSE_CODE_ALARM:
-                modbus_read_device_alarms(response.address);
+                modbus_read_device_state(response.address);
                 poll_ts = get_millis();
                 break;
 
@@ -286,6 +299,12 @@ void controller_manage(model_t *pmodel) {
                     .code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = response.error});
                 break;
 
+            case MODBUS_RESPONSE_CODE_WORK_HOURS:
+                ESP_LOGI(TAG, "Device %i work hours: %i", response.address, response.work_hours);
+                model_set_device_work_hours(pmodel, response.address, response.work_hours);
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_UPDATE_WORK_HOURS});
+                break;
+
             case MODBUS_RESPONSE_CODE_MESSAGES: {
                 view_event_t event = {.code = VIEW_EVENT_CODE_DEVICE_MESSAGES};
                 event.num_messages = response.num_messages;
@@ -296,13 +315,14 @@ void controller_manage(model_t *pmodel) {
                 break;
             }
 
-            case MODBUS_RESPONSE_CODE_ALARMS_REG:
-                ESP_LOGD(TAG, "Device %i alarm 0x%02X", response.address, response.alarms);
+            case MODBUS_RESPONSE_CODE_STATE:
                 model_set_device_error(pmodel, response.address, 0);
                 if (model_set_device_alarms(pmodel, response.address, response.alarms)) {
                     error_condition_on_device(pmodel, response.address, response.alarms, 0);
                     view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_ALARM, .address = response.address});
                 }
+                model_set_device_state(pmodel, response.address, response.state);
+
                 uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
                 if (new_poll_address == poll_address) {
                     // Restart
@@ -419,4 +439,26 @@ static void print_heap_status(void) {
     lv_mem_monitor(&monitor);
     printf("[%s] - LVGL        : free = %u, frag = %u%%\n", TAG, monitor.free_size, monitor.frag_pct);
 #endif
+}
+
+
+static void update_work_hours_cycle(model_t *pmodel) {
+    static uint8_t starting_address = 0;
+    static uint8_t address          = 0;
+
+    uint16_t const modes[] = {DEVICE_MODE_ESF, DEVICE_MODE_UVC};
+
+    address = model_get_next_device_address_by_modes(pmodel, starting_address, (uint16_t *)modes,
+                                                     sizeof(modes) / sizeof(modes[0]));
+    if (address != starting_address) {
+        ESP_LOGI(TAG, "Reading work hours for %i", address);
+        modbus_read_device_work_hours(address);
+        starting_address = address;
+    } else {
+        ESP_LOGI(TAG, "work hours update cycle complete");
+        // restart
+        starting_address  = 0;
+        address           = 0;
+        first_update_loop = 0;
+    }
 }

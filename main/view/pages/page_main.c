@@ -10,10 +10,14 @@
 #include "config/app_config.h"
 
 
-LV_IMG_DECLARE(img_back_blue);
+LV_IMG_DECLARE(img_icon_reset_md);
+LV_IMG_DECLARE(img_icon_reset_warning_md);
+LV_IMG_DECLARE(img_icon_reset_stop_md);
 
 LV_IMG_DECLARE(img_error_sm);
 LV_IMG_DECLARE(img_error_md);
+
+LV_IMG_DECLARE(img_stop);
 
 LV_IMG_DECLARE(img_icona_luce_1);
 LV_IMG_DECLARE(img_icona_luce_2);
@@ -162,13 +166,47 @@ enum {
     BTN_ESF_FILTER_4_MOD,
     BTN_PRESSURE_THRESHOLD_MOD,
 
+    // Maintenance popup
+    BTN_RESET_PASSIVE_FILTERS_HOURS,
+    BTN_RESET_FILTER_HOURS,
+
     // Filters popup
+    BTN_UVC_FILTERS_HOURS_THRESHOLD_WARN_MOD,
+    BTN_UVC_FILTERS_HOURS_THRESHOLD_STOP_MOD,
+    BTN_ESF_FILTERS_HOURS_THRESHOLD_WARN_MOD,
+    BTN_ESF_FILTERS_HOURS_THRESHOLD_STOP_MOD,
     BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_MOD,
     BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_MOD,
     BTN_PASSIVE_FILTERS_NUM_MOD,
 
     // Rec system group
     BTN_DEVICE_ID,
+
+    // Pressure group
+    BTN_PRESSURE_DIFFERENCE_0_MOD,
+    BTN_PRESSURE_DIFFERENCE_1_MOD,
+    BTN_PRESSURE_DIFFERENCE_2_MOD,
+    BTN_PRESSURE_DIFFERENCE_3_MOD,
+    BTN_PRESSURE_DIFFERENCE_4_MOD,
+    BTN_PRESSURE_WARN_MOD,
+    BTN_PRESSURE_STOP_MOD,
+    BTN_START_CALIBRATION,
+
+    // Humidity/temperature group
+    BTN_HUMTEMP_FIRST_DELTA_MOD,
+    BTN_HUMTEMP_SECOND_DELTA_MOD,
+    BTN_HUMTEMP_FIRST_CORRECTION_MOD,
+    BTN_HUMTEMP_SECOND_CORRECTION_MOD,
+    BTN_HUMTEMP_WARN_MOD,
+    BTN_HUMTEMP_STOP_MOD,
+
+    // Temperature group
+    BTN_TEMPERATURE_FIRST_DELTA_MOD,
+    BTN_TEMPERATURE_SECOND_DELTA_MOD,
+    BTN_TEMPERATURE_FIRST_CORRECTION_MOD,
+    BTN_TEMPERATURE_SECOND_CORRECTION_MOD,
+    BTN_TEMPERATURE_WARN_MOD,
+    BTN_TEMPERATURE_STOP_MOD,
 };
 
 
@@ -243,10 +281,27 @@ struct page_data {
             lv_obj_t *lbl_pressure_threshold;
         } active_filtering;
         struct {
+            lv_obj_t *lbl_uvc_filters_hours_threshold_warn;
+            lv_obj_t *lbl_uvc_filters_hours_threshold_stop;
+            lv_obj_t *lbl_esf_filters_hours_threshold_warn;
+            lv_obj_t *lbl_esf_filters_hours_threshold_stop;
             lv_obj_t *lbl_passive_filters_hours_threshold_warn;
             lv_obj_t *lbl_passive_filters_hours_threshold_stop;
             lv_obj_t *lbl_num_passive_filters;
         } filters;
+        struct {
+            lv_obj_t *lbl_pressure_differences[MAX_FAN_SPEED];
+            lv_obj_t *lbl_pressure_warn;
+            lv_obj_t *lbl_pressure_stop;
+        } pressure;
+        struct {
+            lv_obj_t *lbl_first_delta;
+            lv_obj_t *lbl_second_delta;
+            lv_obj_t *lbl_first_speed_raise;
+            lv_obj_t *lbl_second_speed_raise;
+            lv_obj_t *lbl_warn;
+            lv_obj_t *lbl_stop;
+        } humidity_temperature;
     };
 
     int     blink;
@@ -324,9 +379,7 @@ static lv_res_t tab_drag_cb(lv_obj_t *obj, lv_signal_t signal, void *arg) {
 
 static void update_filter_buttons(model_t *pmodel, struct page_data *data) {
     size_t esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
-    size_t ulf_count = model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1)) +
-                       model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2)) +
-                       model_get_class_count(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3));
+    size_t ulf_count = model_get_mode_count(pmodel, DEVICE_MODE_UVC);
 
     if (esf_count > 0 && ulf_count > 0) {
         lv_obj_set_hidden(data->img_error_filters_1, 1);
@@ -774,6 +827,13 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
             update_all_buttons(model, data);
             break;
 
+        case VIEW_EVENT_CODE_UPDATE_WORK_HOURS:
+            if (data->page_route == PAGE_ROUTE_MAINTENANCE) {
+                // Refresh the page
+                change_page_route(model, data, data->page_route);
+            }
+            break;
+
         case VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE:
             update_info(model, data);
             break;
@@ -797,6 +857,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 
         case VIEW_EVENT_CODE_LVGL: {
             switch (event.lv_event) {
+                case LV_EVENT_LONG_PRESSED_REPEAT:
                 case LV_EVENT_CLICKED: {
                     switch (event.data.id) {
                         case BTN_SIPHONING_PERCENTAGE_0_MOD:
@@ -860,10 +921,37 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             uint8_t i = event.data.id - BTN_ESF_FILTER_0_MOD;
                             model_set_esf_filters_for_speed(
                                 model, i,
-                                modify_parameter(model_get_esf_filters_for_speed(model, i), 0, 3, event.data.number));
+                                modify_parameter(model_get_esf_filters_for_speed(model, i), event.data.number, 0, 3));
                             update_menus(model, data);
                             break;
                         }
+
+                        case BTN_PRESSURE_DIFFERENCE_0_MOD:
+                        case BTN_PRESSURE_DIFFERENCE_1_MOD:
+                        case BTN_PRESSURE_DIFFERENCE_2_MOD:
+                        case BTN_PRESSURE_DIFFERENCE_3_MOD:
+                        case BTN_PRESSURE_DIFFERENCE_4_MOD: {
+                            uint8_t i = event.data.id - BTN_PRESSURE_DIFFERENCE_0_MOD;
+                            model_set_pressure_difference(
+                                model, i,
+                                modify_parameter(model_get_pressure_difference(model, i), event.data.number, 0, 100));
+                            update_menus(model, data);
+                            break;
+                        }
+
+                        case BTN_PRESSURE_WARN_MOD:
+                            model_set_pressure_difference_deviation_warn(
+                                model, modify_parameter(model_get_pressure_difference_deviation_warn(model),
+                                                        event.data.number * 5, 0, 100));
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_PRESSURE_STOP_MOD:
+                            model_set_pressure_difference_deviation_stop(
+                                model, modify_parameter(model_get_pressure_difference_deviation_stop(model),
+                                                        event.data.number * 5, 0, 100));
+                            update_menus(model, data);
+                            break;
 
                         case BTN_PRESSURE_THRESHOLD_MOD:
                             model_set_pressure_threshold_mb(
@@ -883,6 +971,108 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             model_set_passive_filters_hours_stop_threshold(
                                 model, modify_parameter(model_get_passive_filters_hours_stop_threshold(model),
                                                         event.data.number * 100, 100, 10000));
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_UVC_FILTERS_HOURS_THRESHOLD_WARN_MOD:
+                            model_set_uvc_filters_hours_warning_threshold(
+                                model, modify_parameter(model_get_uvc_filters_hours_warning_threshold(model),
+                                                        event.data.number * 100, 100, 10000));
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_UVC_FILTERS_HOURS_THRESHOLD_STOP_MOD:
+                            model_set_uvc_filters_hours_stop_threshold(
+                                model, modify_parameter(model_get_uvc_filters_hours_stop_threshold(model),
+                                                        event.data.number * 100, 100, 10000));
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_ESF_FILTERS_HOURS_THRESHOLD_WARN_MOD:
+                            model_set_esf_filters_hours_warning_threshold(
+                                model, modify_parameter(model_get_esf_filters_hours_warning_threshold(model),
+                                                        event.data.number * 100, 100, 10000));
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_ESF_FILTERS_HOURS_THRESHOLD_STOP_MOD:
+                            model_set_esf_filters_hours_stop_threshold(
+                                model, modify_parameter(model_get_esf_filters_hours_stop_threshold(model),
+                                                        event.data.number * 100, 100, 10000));
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_HUMTEMP_FIRST_DELTA_MOD:
+                            if (data->page_route == PAGE_ROUTE_HUMIDITY) {
+                                model_set_first_humidity_delta(
+                                    model,
+                                    modify_parameter(model_get_first_humidity_delta(model), event.data.number, 0, 100));
+                            } else {
+                                model_set_first_temperature_delta(
+                                    model, modify_parameter(model_get_first_temperature_delta(model), event.data.number,
+                                                            0, 100));
+                            }
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_HUMTEMP_SECOND_DELTA_MOD:
+                            if (data->page_route == PAGE_ROUTE_HUMIDITY) {
+                                model_set_second_humidity_delta(model,
+                                                                modify_parameter(model_get_second_humidity_delta(model),
+                                                                                 event.data.number, 0, 100));
+                            } else {
+                                model_set_second_temperature_delta(
+                                    model, modify_parameter(model_get_second_temperature_delta(model),
+                                                            event.data.number, 0, 100));
+                            }
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_HUMTEMP_FIRST_CORRECTION_MOD:
+                            if (data->page_route == PAGE_ROUTE_HUMIDITY) {
+                                model_set_first_humidity_speed_raise(
+                                    model, modify_parameter(model_get_first_humidity_speed_raise(model),
+                                                            event.data.number, 0, 100));
+                            } else {
+                                model_set_first_temperature_speed_raise(
+                                    model, modify_parameter(model_get_first_temperature_speed_raise(model),
+                                                            event.data.number, 0, 100));
+                            }
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_HUMTEMP_SECOND_CORRECTION_MOD:
+                            if (data->page_route == PAGE_ROUTE_HUMIDITY) {
+                                model_set_second_humidity_speed_raise(
+                                    model, modify_parameter(model_get_second_humidity_speed_raise(model),
+                                                            event.data.number, 0, 100));
+                            } else {
+                                model_set_second_temperature_speed_raise(
+                                    model, modify_parameter(model_get_second_temperature_speed_raise(model),
+                                                            event.data.number, 0, 100));
+                            }
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_HUMTEMP_WARN_MOD:
+                            if (data->page_route == PAGE_ROUTE_HUMIDITY) {
+                                model_set_humidity_warn(
+                                    model, modify_parameter(model_get_humidity_warn(model), event.data.number, 0, 100));
+                            } else {
+                                model_set_temperature_warn(model, modify_parameter(model_get_temperature_warn(model),
+                                                                                   event.data.number, 0, 100));
+                            }
+                            update_menus(model, data);
+                            break;
+
+                        case BTN_HUMTEMP_STOP_MOD:
+                            if (data->page_route == PAGE_ROUTE_HUMIDITY) {
+                                model_set_humidity_stop(
+                                    model, modify_parameter(model_get_humidity_stop(model), event.data.number, 0, 100));
+                            } else {
+                                model_set_temperature_stop(model, modify_parameter(model_get_temperature_stop(model),
+                                                                                   event.data.number, 0, 100));
+                            }
                             update_menus(model, data);
                             break;
 
@@ -915,6 +1105,16 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             }
                             break;
                         }
+
+                        case BTN_RESET_PASSIVE_FILTERS_HOURS:
+                            model_reset_passive_filters_work_hours(model);
+                            change_page_route(model, data, data->page_route);
+                            break;
+
+                        case BTN_RESET_FILTER_HOURS:
+                            msg.cmsg.code    = VIEW_CONTROLLER_MESSAGE_CODE_RESET_FILTER_HOURS;
+                            msg.cmsg.address = event.data.number;
+                            break;
 
                         case BTN_BACK_ID: {
                             switch (data->page_route) {
@@ -1023,9 +1223,14 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             change_page_route(model, data, PAGE_ROUTE_SYSTEM_SETUP);
                             break;
 
+                        case BTN_START_CALIBRATION:
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_pressure_calibration;
+                            break;
+
                         case BTN_LIGHT_ID: {
                             uint16_t class;
-                            if (!model_get_light_class(model, &class)) {
+                            if (!model_get_light_class(model, &class) || event.lv_event != LV_EVENT_CLICKED) {
                                 break;
                             }
 
@@ -1097,10 +1302,16 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         }
 
                         case BTN_FAN_ID:
+                            if (event.lv_event != LV_EVENT_CLICKED) {
+                                break;
+                            }
                             msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN;
                             break;
 
                         case BTN_FILTER_ID:
+                            if (event.lv_event != LV_EVENT_CLICKED) {
+                                break;
+                            }
                             msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER;
                             break;
 
@@ -1183,11 +1394,7 @@ static lv_obj_t *cont_subpage_create(const char *title) {
     lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
     lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_LEFT, 16, 12);
 
-    lv_obj_t *img = lv_img_create(cont, NULL);
-    lv_img_set_src(img, &img_back_blue);
-    lv_obj_align(img, NULL, LV_ALIGN_IN_TOP_RIGHT, -8, 8);
-    lv_obj_set_click(img, 1);
-    view_register_default_callback(img, BTN_BACK_ID);
+    view_common_back_button(cont, BTN_BACK_ID);
 
     return cont;
 }
@@ -1261,47 +1468,7 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
         lv_label_set_text_fmt(lbl_serial_number, "SN: %8i", device.serial_number);
 
         // Icon
-        switch (device.class) {
-            case DEVICE_CLASS_LIGHT_1:
-                lv_img_set_src(img, &img_icona_luce_1);
-                break;
-            case DEVICE_CLASS_LIGHT_2:
-                lv_img_set_src(img, &img_icona_luce_2);
-                break;
-            case DEVICE_CLASS_LIGHT_3:
-                lv_img_set_src(img, &img_icona_luce_3);
-                break;
-            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
-                lv_img_set_src(img, &img_icona_elettrostatico);
-                break;
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
-                lv_img_set_src(img, &img_icona_uvc);
-                break;
-            case DEVICE_CLASS_GAS:
-                lv_img_set_src(img, &img_icon_gas_sm);
-                break;
-            case DEVICE_CLASS_IMMISSION_FAN:
-                lv_img_set_src(img, &img_icon_immission_sm);
-                break;
-            case DEVICE_CLASS_SIPHONING_FAN:
-                lv_img_set_src(img, &img_icona_aspirazione);
-                break;
-            case DEVICE_CLASS_PRESSURE_SAFETY:
-                lv_img_set_src(img, &img_icon_pressure_temperature_sm);
-                break;
-            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY:
-                lv_img_set_src(img, &img_icon_temperature_humidity_sm);
-                break;
-            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
-                lv_img_set_src(img, &img_icon_pressure_temperature_humidity_sm);
-                break;
-
-            default:
-                lv_obj_set_hidden(img, 1);
-                break;
-        }
+        view_common_get_class_icon(device.class, img);
 
         // State
         switch (device.class) {
@@ -1313,11 +1480,13 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
             case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
             case DEVICE_CLASS_ELECTROSTATIC_FILTER:
             case DEVICE_CLASS_GAS:
-                lv_label_set_text(lbl_state, "");     // TODO: add state
+                lv_label_set_text_fmt(lbl_state, "Output: %s", device.actuator_data.ourput_state ? "ON" : "OFF");
                 break;
             case DEVICE_CLASS_IMMISSION_FAN:
             case DEVICE_CLASS_SIPHONING_FAN:
-                lv_label_set_text(lbl_state, "");     // TODO: add state
+                lv_label_set_text_fmt(lbl_state, "Output: %s - %i%%",
+                                      (device.actuator_data.ourput_state & 0xFF) > 0 ? "ON" : "OFF",
+                                      (device.actuator_data.ourput_state >> 8) & 0xFF);
                 break;
             case DEVICE_CLASS_PRESSURE_SAFETY:
                 lv_label_set_text_fmt(lbl_state, "%i%s %imB", device.sensor_data.temperature,
@@ -1332,6 +1501,9 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
                                       device.sensor_data.temperature, model_get_degrees_symbol(pmodel),
                                       device.sensor_data.pressure);
                 break;
+            default:
+                lv_label_set_text(lbl_state, "");
+                break;
         }
 
         // Alarms
@@ -1341,12 +1513,12 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
             case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
             case DEVICE_CLASS_ELECTROSTATIC_FILTER:
             case DEVICE_CLASS_GAS:
-                lv_label_set_text_fmt(lbl_state, "%s: %s  FB: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
+                lv_label_set_text_fmt(lbl_alarms, "%s: %s  FB: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
                                       (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0 ? "OK" : "KO",
                                       (device.alarms & EASYCONNECT_FEEDBACK_ALARM) > 0 ? "OK" : "KO");
                 break;
             default:
-                lv_label_set_text_fmt(lbl_state, "%s: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
+                lv_label_set_text_fmt(lbl_alarms, "%s: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
                                       (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0 ? "OK" : "KO");
                 break;
         }
@@ -1413,6 +1585,63 @@ static device_info_widget_t device_info_widget_create(lv_obj_t *parent, device_t
         .lbl_state         = lbl_state,
         .img_icon          = img,
     };
+}
+
+
+static lv_obj_t *filter_info_create(model_t *pmodel, lv_obj_t *parent, const char *description, device_group_t group,
+                                    uint16_t worked_hours, uint16_t hours_left, const lv_img_dsc_t *img_icon,
+                                    uint8_t warning, int id, int num) {
+    const lv_img_dsc_t *img_btn = &img_icon_reset_md;
+    if (hours_left == 0) {
+        img_btn = &img_icon_reset_stop_md;
+    } else if (warning) {
+        img_btn = &img_icon_reset_warning_md;
+    }
+
+    lv_obj_t *cont = lv_cont_create(parent, NULL);
+    lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_transparent_cont);
+    lv_obj_set_size(cont, 410, 70);
+    lv_page_glue_obj(cont, 1);
+
+    lv_obj_t *btn_reset = lv_btn_create(cont, NULL);
+    lv_obj_set_size(btn_reset, 70, 70);
+    lv_obj_t *img = lv_img_create(btn_reset, NULL);
+    lv_img_set_src(img, img_btn);
+    lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(btn_reset, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
+    view_register_default_callback_number(btn_reset, id, num);
+
+    lv_obj_t *cont_icon = bordered_cont(cont);
+    img                 = lv_img_create(cont_icon, NULL);
+    lv_img_set_src(img, img_icon);
+    lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    if (hours_left == 0) {
+        img = lv_img_create(cont_icon, NULL);
+        lv_img_set_src(img, &img_stop);
+        lv_obj_align(img, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -4, -4);
+    } else if (warning) {
+        img = lv_img_create(cont_icon, NULL);
+        lv_img_set_src(img, &img_warn);
+        lv_obj_align(img, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -4, -4);
+    }
+
+    lv_obj_align(cont_icon, btn_reset, LV_ALIGN_OUT_RIGHT_MID, 4, 0);
+
+    lv_obj_t *lbl = lv_label_create(cont, NULL);
+    lv_label_set_text_fmt(lbl, "%s: %s - %i", view_intl_get_string(pmodel, STRINGS_GRUPPO),
+                          view_intl_get_string(pmodel, STRINGS_FILTRO), group + 1);
+    lv_obj_align(lbl, cont_icon, LV_ALIGN_OUT_RIGHT_TOP, 4, 0);
+
+    lbl = lv_label_create(cont, NULL);
+    lv_label_set_text_fmt(lbl, "%s: %i", view_intl_get_string(pmodel, STRINGS_ORE_DI_LAVORO), worked_hours);
+    lv_obj_align(lbl, cont_icon, LV_ALIGN_OUT_RIGHT_MID, 4, 0);
+
+    lbl = lv_label_create(cont, NULL);
+    lv_label_set_text_fmt(lbl, "%s: %i", view_intl_get_string(pmodel, STRINGS_ORE_RIMASTE), hours_left);
+    lv_obj_align(lbl, cont_icon, LV_ALIGN_OUT_RIGHT_BOTTOM, 4, 0);
+
+    return cont;
 }
 
 
@@ -1525,6 +1754,45 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             page = lv_page_create(pdata->cont_subpage, NULL);
             lv_obj_set_size(page, LV_HOR_RES - 32, 260);
             lv_obj_align(page, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, 0);
+
+            lv_page_set_scrl_layout(page, LV_LAYOUT_COLUMN_LEFT);
+            lv_obj_set_style_local_pad_inner(page, LV_PAGE_PART_SCROLLABLE, LV_STATE_DEFAULT, 0);
+            lv_obj_set_style_local_pad_top(page, LV_PAGE_PART_SCROLLABLE, LV_STATE_DEFAULT, 0);
+
+            filter_info_create(pmodel, page, view_intl_get_string(pmodel, STRINGS_FILTRO), DEVICE_GROUP_1,
+                               model_get_passive_filters_work_hours(pmodel),
+                               model_get_passive_filters_remaining_hours(pmodel), &img_icon_passive_filter_md,
+                               model_get_passive_filter_warning(pmodel), BTN_RESET_PASSIVE_FILTERS_HOURS, 0);
+
+            uint8_t starting_address = 0;
+            uint8_t address          = model_get_next_device_address_by_mode(pmodel, starting_address, DEVICE_MODE_UVC);
+
+            while (address != starting_address) {
+                device_t device = model_get_device(pmodel, address);
+                filter_info_create(pmodel, page, "UVC", CLASS_GET_GROUP(device.class),
+                                   model_get_filter_device_work_hours(pmodel, address),
+                                   model_get_filter_device_remaining_hours(pmodel, address), &img_icon_uvc_md,
+                                   model_get_filter_device_warning(pmodel, address), BTN_RESET_FILTER_HOURS, address);
+
+                starting_address = address;
+                address          = model_get_next_device_address_by_mode(pmodel, starting_address, DEVICE_MODE_UVC);
+            }
+
+
+            starting_address = 0;
+            address          = model_get_next_device_address_by_mode(pmodel, starting_address, DEVICE_MODE_ESF);
+
+            while (address != starting_address) {
+                device_t device = model_get_device(pmodel, address);
+                filter_info_create(pmodel, page, "ESF", CLASS_GET_GROUP(device.class),
+                                   model_get_filter_device_work_hours(pmodel, address),
+                                   model_get_filter_device_remaining_hours(pmodel, address), &img_icon_esf_md,
+                                   model_get_filter_device_warning(pmodel, address), BTN_RESET_FILTER_HOURS, address);
+
+                starting_address = address;
+                address          = model_get_next_device_address_by_mode(pmodel, starting_address, DEVICE_MODE_ESF);
+            }
+
             break;
         }
 
@@ -1687,12 +1955,75 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             for (size_t i = 0; i < 3; i++) {
                 img = lv_img_create(pdata->cont_subpage, NULL);
                 lv_img_set_src(img, img_dscs[i]);
-                lv_obj_align(img, NULL, LV_ALIGN_IN_TOP_MID, -80 + 80 * i, 60);
+                lv_obj_align(img, NULL, LV_ALIGN_IN_TOP_MID, -80 + 80 * i, 56);
             }
 
-            int16_t cont_y = 100;
+            int16_t cont_y = 90;
 
-            // TODO: conditionally add UVC and ESF
+            size_t esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
+            size_t ulf_count = model_get_mode_count(pmodel, DEVICE_MODE_UVC);
+
+            if (ulf_count > 0) {
+                cont = bordered_cont(pdata->cont_subpage);
+                lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_LEFT, 32, cont_y);
+
+                img = lv_img_create(cont, NULL);
+                lv_img_set_src(img, &img_icon_uvc_md);
+                lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+
+                lv_obj_t **labels[] = {
+                    &pdata->filters.lbl_uvc_filters_hours_threshold_warn,
+                    &pdata->filters.lbl_uvc_filters_hours_threshold_stop,
+                };
+                int identifiers[] = {
+                    BTN_UVC_FILTERS_HOURS_THRESHOLD_WARN_MOD,
+                    BTN_UVC_FILTERS_HOURS_THRESHOLD_STOP_MOD,
+                };
+
+                for (size_t i = 0; i < 2; i++) {
+                    lv_obj_t *par_cont = par_control_cont(pdata->cont_subpage, labels[i], identifiers[i]);
+                    lv_obj_align(par_cont, cont, LV_ALIGN_OUT_RIGHT_MID, 8 + 78 * i, 0);
+                }
+
+                lv_obj_t *par_cont = bordered_cont(pdata->cont_subpage);
+                lv_obj_t *lbl      = lv_label_create(par_cont, NULL);
+                lv_label_set_text_fmt(lbl, "%zu", ulf_count);
+                lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+                lv_obj_align(par_cont, cont, LV_ALIGN_OUT_RIGHT_MID, 8 + 78 * 2, 0);
+
+                cont_y += 72;
+            }
+
+            if (esf_count > 0) {
+                cont = bordered_cont(pdata->cont_subpage);
+                lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_LEFT, 32, cont_y);
+
+                img = lv_img_create(cont, NULL);
+                lv_img_set_src(img, &img_icon_esf_md);
+                lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+
+                lv_obj_t **labels[] = {
+                    &pdata->filters.lbl_esf_filters_hours_threshold_warn,
+                    &pdata->filters.lbl_esf_filters_hours_threshold_stop,
+                };
+                int identifiers[] = {
+                    BTN_ESF_FILTERS_HOURS_THRESHOLD_WARN_MOD,
+                    BTN_ESF_FILTERS_HOURS_THRESHOLD_STOP_MOD,
+                };
+
+                for (size_t i = 0; i < 2; i++) {
+                    lv_obj_t *par_cont = par_control_cont(pdata->cont_subpage, labels[i], identifiers[i]);
+                    lv_obj_align(par_cont, cont, LV_ALIGN_OUT_RIGHT_MID, 8 + 78 * i, 0);
+                }
+
+                lv_obj_t *par_cont = bordered_cont(pdata->cont_subpage);
+                lv_obj_t *lbl      = lv_label_create(par_cont, NULL);
+                lv_label_set_text_fmt(lbl, "%zu", esf_count);
+                lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+                lv_obj_align(par_cont, cont, LV_ALIGN_OUT_RIGHT_MID, 8 + 78 * 2, 0);
+
+                cont_y += 72;
+            }
 
             cont = bordered_cont(pdata->cont_subpage);
             lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_LEFT, 32, cont_y);
@@ -1732,8 +2063,13 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_img_set_src(img, &img_pipe);
             lv_obj_align(img, NULL, LV_ALIGN_IN_RIGHT_MID, 0, -34);
 
+            int ids[MAX_FAN_SPEED] = {
+                BTN_PRESSURE_DIFFERENCE_0_MOD, BTN_PRESSURE_DIFFERENCE_1_MOD, BTN_PRESSURE_DIFFERENCE_2_MOD,
+                BTN_PRESSURE_DIFFERENCE_3_MOD, BTN_PRESSURE_DIFFERENCE_4_MOD,
+            };
+
             for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
-                cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+                cont = par_control_cont(pdata->cont_subpage, &pdata->pressure.lbl_pressure_differences[i], ids[i]);
                 lv_obj_align(cont, NULL, LV_ALIGN_IN_LEFT_MID, 45 + (lv_obj_get_width(cont) + 2) * (i), -34);
             }
 
@@ -1745,14 +2081,14 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 }
             }
 
-            cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+            cont = par_control_cont(pdata->cont_subpage, &pdata->pressure.lbl_pressure_warn, BTN_PRESSURE_WARN_MOD);
             lv_obj_align(cont, NULL, LV_ALIGN_IN_LEFT_MID, 45, 100);
 
             img = lv_img_create(pdata->cont_subpage, NULL);
             lv_img_set_src(img, &img_warn);
             lv_obj_align(img, cont, LV_ALIGN_OUT_TOP_MID, 0, -4);
 
-            cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+            cont = par_control_cont(pdata->cont_subpage, &pdata->pressure.lbl_pressure_stop, BTN_PRESSURE_STOP_MOD);
             lv_obj_align(cont, NULL, LV_ALIGN_IN_LEFT_MID, 45 + 78, 100);
 
             img = lv_img_create(pdata->cont_subpage, NULL);
@@ -1763,13 +2099,15 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_obj_set_style_local_border_width(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, 0);
             lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, STYLE_FAINT_YELLOW);
             lv_obj_set_style_local_radius(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, 24);
-            lv_obj_set_size(btn, 60, 200);
+            lv_obj_set_size(btn, 180, 60);
 
             lv_obj_t *lbl = lv_label_create(btn, NULL);
             lv_label_set_text(lbl, view_intl_get_string(pmodel, STRINGS_INIZIA_CAL));
             lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
 
-            lv_obj_align(btn, NULL, LV_ALIGN_IN_LEFT_MID, 200, 96);
+            view_register_default_callback(btn, BTN_START_CALIBRATION);
+
+            lv_obj_align(btn, NULL, LV_ALIGN_IN_LEFT_MID, 210, 96);
 
             img = lv_img_create(pdata->cont_subpage, NULL);
             lv_img_set_src(img, &img_calibration);
@@ -1781,17 +2119,36 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
         case PAGE_ROUTE_HUMIDITY: {
             pdata->cont_subpage = cont_subpage_create(view_intl_get_string(pmodel, STRINGS_UMIDITA));
 
-            const lv_img_dsc_t *top_imgs[2] = {&img_speed_1, &img_speed_2};
+            const lv_img_dsc_t *top_imgs[2]  = {&img_speed_1, &img_speed_2};
+            const lv_img_dsc_t *left_imgs[2] = {&img_icon_temperature_humidity_sm, &img_icon_siphoning_immission_md};
+            lv_obj_t          **labels[4]    = {
+                &pdata->humidity_temperature.lbl_first_delta,
+                &pdata->humidity_temperature.lbl_second_delta,
+                &pdata->humidity_temperature.lbl_warn,
+                &pdata->humidity_temperature.lbl_stop,
+            };
+            const int ids[] = {
+                BTN_HUMTEMP_FIRST_DELTA_MOD,
+                BTN_HUMTEMP_SECOND_DELTA_MOD,
+                BTN_HUMTEMP_WARN_MOD,
+                BTN_HUMTEMP_STOP_MOD,
+            };
+            size_t label_index = 0;
 
             for (size_t i = 0; i < 2; i++) {
                 lv_obj_t *icon_cont = bordered_cont(pdata->cont_subpage);
                 lv_obj_align(icon_cont, NULL, LV_ALIGN_IN_TOP_LEFT, 32, 100 + i * 72);
 
+                lv_obj_t *img = lv_img_create(icon_cont, NULL);
+                lv_img_set_src(img, left_imgs[i]);
+                lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+
                 lv_obj_t *prev_cont = icon_cont;
 
                 for (size_t j = 0; j < 2; j++) {
-                    lv_obj_t *cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+                    lv_obj_t *cont = par_control_cont(pdata->cont_subpage, labels[label_index], ids[label_index]);
                     lv_obj_align(cont, prev_cont, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
+                    label_index++;
 
                     if (i == 0) {
                         lv_obj_t *img = lv_img_create(pdata->cont_subpage, NULL);
@@ -1803,14 +2160,18 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 }
             }
 
-            lv_obj_t *first_cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+            lv_obj_t *first_cont =
+                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_first_speed_raise,
+                                 BTN_HUMTEMP_FIRST_CORRECTION_MOD);
             lv_obj_align(first_cont, NULL, LV_ALIGN_IN_TOP_LEFT, 254, 100);
 
             lv_obj_t *img = lv_img_create(pdata->cont_subpage, NULL);
             lv_img_set_src(img, &img_warn);
             lv_obj_align(img, first_cont, LV_ALIGN_OUT_TOP_MID, 0, -16);
 
-            lv_obj_t *second_cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+            lv_obj_t *second_cont =
+                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_second_speed_raise,
+                                 BTN_HUMTEMP_SECOND_CORRECTION_MOD);
             lv_obj_align(second_cont, first_cont, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 
             img = lv_img_create(pdata->cont_subpage, NULL);
@@ -1822,17 +2183,36 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
         case PAGE_ROUTE_TEMPERATURE: {
             pdata->cont_subpage = cont_subpage_create(view_intl_get_string(pmodel, STRINGS_TEMPERATURA));
 
-            const lv_img_dsc_t *top_imgs[2] = {&img_speed_1, &img_speed_2};
+            const lv_img_dsc_t *top_imgs[2]  = {&img_speed_1, &img_speed_2};
+            const lv_img_dsc_t *left_imgs[2] = {&img_icon_temperature_humidity_sm, &img_icon_siphoning_immission_md};
+            lv_obj_t          **labels[4]    = {
+                &pdata->humidity_temperature.lbl_first_delta,
+                &pdata->humidity_temperature.lbl_second_delta,
+                &pdata->humidity_temperature.lbl_warn,
+                &pdata->humidity_temperature.lbl_stop,
+            };
+            const int ids[] = {
+                BTN_HUMTEMP_FIRST_DELTA_MOD,
+                BTN_HUMTEMP_SECOND_DELTA_MOD,
+                BTN_HUMTEMP_WARN_MOD,
+                BTN_HUMTEMP_STOP_MOD,
+            };
+            size_t label_index = 0;
 
             for (size_t i = 0; i < 2; i++) {
                 lv_obj_t *icon_cont = bordered_cont(pdata->cont_subpage);
                 lv_obj_align(icon_cont, NULL, LV_ALIGN_IN_TOP_LEFT, 32, 100 + i * 72);
 
+                lv_obj_t *img = lv_img_create(icon_cont, NULL);
+                lv_img_set_src(img, left_imgs[i]);
+                lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+
                 lv_obj_t *prev_cont = icon_cont;
 
                 for (size_t j = 0; j < 2; j++) {
-                    lv_obj_t *cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+                    lv_obj_t *cont = par_control_cont(pdata->cont_subpage, labels[label_index], ids[label_index]);
                     lv_obj_align(cont, prev_cont, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
+                    label_index++;
 
                     if (i == 0) {
                         lv_obj_t *img = lv_img_create(pdata->cont_subpage, NULL);
@@ -1844,14 +2224,18 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 }
             }
 
-            lv_obj_t *first_cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+            lv_obj_t *first_cont =
+                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_first_speed_raise,
+                                 BTN_HUMTEMP_FIRST_CORRECTION_MOD);
             lv_obj_align(first_cont, NULL, LV_ALIGN_IN_TOP_LEFT, 254, 100);
 
             lv_obj_t *img = lv_img_create(pdata->cont_subpage, NULL);
             lv_img_set_src(img, &img_warn);
             lv_obj_align(img, first_cont, LV_ALIGN_OUT_TOP_MID, 0, -16);
 
-            lv_obj_t *second_cont = par_control_cont(pdata->cont_subpage, NULL, -1);
+            lv_obj_t *second_cont =
+                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_second_speed_raise,
+                                 BTN_HUMTEMP_SECOND_CORRECTION_MOD);
             lv_obj_align(second_cont, first_cont, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 
             img = lv_img_create(pdata->cont_subpage, NULL);
@@ -1895,11 +2279,58 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
             break;
 
         case PAGE_ROUTE_SETUP_MAINTENANCE:
+            lv_label_set_text_fmt(pdata->filters.lbl_uvc_filters_hours_threshold_warn, "%i",
+                                  model_get_uvc_filters_hours_warning_threshold(pmodel));
+            lv_label_set_text_fmt(pdata->filters.lbl_uvc_filters_hours_threshold_stop, "%i",
+                                  model_get_uvc_filters_hours_stop_threshold(pmodel));
+            lv_label_set_text_fmt(pdata->filters.lbl_esf_filters_hours_threshold_warn, "%i",
+                                  model_get_esf_filters_hours_warning_threshold(pmodel));
+            lv_label_set_text_fmt(pdata->filters.lbl_esf_filters_hours_threshold_stop, "%i",
+                                  model_get_esf_filters_hours_stop_threshold(pmodel));
             lv_label_set_text_fmt(pdata->filters.lbl_passive_filters_hours_threshold_warn, "%i",
                                   model_get_passive_filters_hours_warning_threshold(pmodel));
             lv_label_set_text_fmt(pdata->filters.lbl_passive_filters_hours_threshold_stop, "%i",
                                   model_get_passive_filters_hours_stop_threshold(pmodel));
             lv_label_set_text_fmt(pdata->filters.lbl_num_passive_filters, "%i", model_get_num_passive_filters(pmodel));
+            break;
+
+        case PAGE_ROUTE_PRESSURE:
+            for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
+                lv_label_set_text_fmt(pdata->pressure.lbl_pressure_differences[i], "%i",
+                                      model_get_pressure_difference(pmodel, i));
+            }
+            lv_label_set_text_fmt(pdata->pressure.lbl_pressure_warn, "%i%%",
+                                  model_get_pressure_difference_deviation_warn(pmodel));
+            lv_label_set_text_fmt(pdata->pressure.lbl_pressure_stop, "%i%%",
+                                  model_get_pressure_difference_deviation_stop(pmodel));
+            break;
+
+        case PAGE_ROUTE_HUMIDITY:
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_delta, "%i%%",
+                                  model_get_first_humidity_delta(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_delta, "%i%%",
+                                  model_get_second_humidity_delta(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_speed_raise, "%i%%",
+                                  model_get_first_humidity_speed_raise(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_speed_raise, "%i%%",
+                                  model_get_second_humidity_speed_raise(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_warn, "%i%%", model_get_humidity_warn(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_stop, "%i%%", model_get_humidity_stop(pmodel));
+            break;
+
+        case PAGE_ROUTE_TEMPERATURE:
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_delta, "%i %s",
+                                  model_get_first_temperature_delta(pmodel), model_get_degrees_symbol(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_delta, "%i %s",
+                                  model_get_second_temperature_delta(pmodel), model_get_degrees_symbol(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_speed_raise, "%i%%",
+                                  model_get_first_temperature_speed_raise(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_speed_raise, "%i%%",
+                                  model_get_second_temperature_speed_raise(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_warn, "%i %s", model_get_temperature_warn(pmodel),
+                                  model_get_degrees_symbol(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_stop, "%i %s", model_get_temperature_stop(pmodel),
+                                  model_get_degrees_symbol(pmodel));
             break;
 
         default:

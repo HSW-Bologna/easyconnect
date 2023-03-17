@@ -1,6 +1,7 @@
 #include <assert.h>
 #include "model.h"
 #include "esp_log.h"
+#include "easyconnect_interface.h"
 
 
 #define ASSERT_ADDRESS(addr) assert(addr != 0 && ADDR2INDEX(addr) <= MODBUS_MAX_DEVICES);
@@ -86,6 +87,22 @@ uint8_t device_list_get_available_address(device_t *devices, uint8_t previous) {
     return previous;
 }
 
+
+uint8_t device_list_get_next_device_address_by_modes(device_t *devices, uint8_t previous, uint16_t *modes, size_t num) {
+    assert(devices != NULL);
+
+    for (size_t i = ADDR2INDEX(previous + 1); i < MODBUS_MAX_DEVICES; i++) {
+        if (devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
+            for (size_t j = 0; j < num; j++) {
+                if (CLASS_GET_MODE(devices[i].class) == modes[j]) {
+                    return (uint8_t)INDEX2ADDR(i);
+                }
+            }
+        }
+    }
+
+    return previous;
+}
 
 
 uint8_t device_list_get_next_device_address_by_class(device_t *devices, uint8_t previous, uint16_t class) {
