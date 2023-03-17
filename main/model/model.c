@@ -74,6 +74,8 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.humidity_stop               = 100;
 
     pmodel->stats.passive_filters_work_seconds = 0;
+
+    pmodel->show_work_hours_state = 0;
 }
 
 
@@ -83,9 +85,15 @@ void model_reset_passive_filters_work_hours(model_t *pmodel) {
 }
 
 
-void model_add_passive_filters_work_seconds(model_t *pmodel, uint32_t seconds) {
+uint8_t model_add_passive_filters_work_seconds(model_t *pmodel, uint32_t seconds) {
     assert(pmodel != NULL);
+    uint8_t previous_warn = model_get_passive_filter_warning(pmodel);
+    uint8_t previous_stop = model_get_passive_filter_stop(pmodel);
     pmodel->stats.passive_filters_work_seconds += seconds;
+    uint8_t next_warn = model_get_passive_filter_warning(pmodel);
+    uint8_t next_stop = model_get_passive_filter_stop(pmodel);
+
+    return (next_warn || next_stop) && (previous_warn != next_warn || previous_stop != next_stop);
 }
 
 
@@ -155,10 +163,15 @@ uint8_t model_get_filter_device_warning(model_t *pmodel, uint8_t address) {
 }
 
 
+uint8_t model_get_filter_device_stop(model_t *pmodel, uint8_t address) {
+    assert(pmodel != NULL);
+    return model_get_filter_device_remaining_hours(pmodel, address) == 0;
+}
+
+
 uint8_t model_get_passive_filter_warning(model_t *pmodel) {
     assert(pmodel != NULL);
-    return model_get_passive_filters_remaining_hours(pmodel) <
-           pmodel->configuration.passive_filters_hours_warning_threshold;
+    return model_get_passive_filters_work_hours(pmodel) > pmodel->configuration.passive_filters_hours_warning_threshold;
 }
 
 
@@ -213,8 +226,7 @@ void model_set_immission_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t 
 uint8_t model_get_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed) {
     assert(pmodel != NULL);
     assert(fan_speed < MAX_FAN_SPEED);
-    return 1;
-    // return pmodel->configuration.uvc_filters_for_speed[fan_speed];
+    return pmodel->configuration.uvc_filters_for_speed[fan_speed];
 }
 
 
@@ -375,12 +387,47 @@ void model_set_device_sn(model_t *pmodel, uint8_t address, uint32_t serial_numbe
 }
 
 
-void model_set_device_work_hours(model_t *pmodel, uint8_t address, uint16_t work_hours) {
+uint8_t model_set_filter_work_hours(model_t *pmodel, uint8_t address, uint16_t work_hours) {
     assert(pmodel != NULL);
     device_t *device = device_list_get_device_mut(pmodel->devices, address);
-    if (device->status != DEVICE_STATUS_NOT_CONFIGURED) {
-        device->actuator_data.work_hours = work_hours;
+
+    switch (CLASS_GET_MODE(device->class)) {
+        case DEVICE_MODE_UVC:
+        case DEVICE_MODE_ESF: {
+            uint8_t previous_warn = model_get_filter_device_warning(pmodel, address);
+            uint8_t previous_stop = model_get_filter_device_stop(pmodel, address);
+            if (device->status != DEVICE_STATUS_NOT_CONFIGURED) {
+                device->actuator_data.work_hours = work_hours;
+            }
+            uint8_t next_warn = model_get_filter_device_warning(pmodel, address);
+            uint8_t next_stop = model_get_filter_device_stop(pmodel, address);
+            // returns 1 if an alarm was activated
+            return (next_warn || next_stop) && (previous_warn != next_warn || previous_stop != next_stop);
+        }
+        default:
+            break;
     }
+    return 0;
+}
+
+
+uint8_t model_get_problematic_filter_device(model_t *pmodel, uint8_t previous) {
+    uint16_t const modes[] = {DEVICE_MODE_ESF, DEVICE_MODE_UVC};
+
+    uint8_t original = previous;
+    uint8_t address  = previous;
+    uint8_t warn     = 0;
+    uint8_t stop     = 0;
+
+    do {
+        previous = address;
+        address  = model_get_next_device_address_by_modes(pmodel, previous, (uint16_t *)modes,
+                                                          sizeof(modes) / sizeof(modes[0]));
+        warn     = model_get_filter_device_warning(pmodel, address);
+        stop     = model_get_filter_device_stop(pmodel, address);
+    } while (previous != address && warn == 0 && stop == 0);
+
+    return previous == address ? original : address;
 }
 
 

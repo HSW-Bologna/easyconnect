@@ -56,6 +56,8 @@ typedef struct {
     int electrostatic_filter_on;
     int uvc_filter_on;
 
+    uint8_t show_work_hours_state;
+
     model_fan_state_t state;
     light_state_t     light_state;
 
@@ -124,7 +126,7 @@ void          model_set_device_sn(model_t *pmodel, uint8_t address, uint32_t ser
 void          model_set_device_class(model_t *pmodel, uint8_t address, uint16_t class);
 uint8_t       model_set_device_alarms(model_t *pmodel, uint8_t address, uint16_t alarms);
 void          model_set_device_state(model_t *pmodel, uint8_t address, uint16_t state);
-void          model_set_device_work_hours(model_t *pmodel, uint8_t address, uint16_t work_hours);
+uint8_t       model_set_filter_work_hours(model_t *pmodel, uint8_t address, uint16_t work_hours);
 int           model_get_light_class(model_t *pmodel, uint16_t *class);
 uint8_t       model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous, uint16_t class);
 uint8_t       model_get_next_device_address_by_mode(model_t *pmodel, uint8_t previous, uint16_t mode);
@@ -159,9 +161,10 @@ uint8_t           model_get_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_s
 void              model_set_uvc_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
 uint8_t           model_get_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed);
 void              model_set_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
+uint8_t           model_get_problematic_filter_device(model_t *pmodel, uint8_t previous);
 void     model_get_alarms_for_classes(model_t *pmodel, uint8_t *uvc, uint8_t *esf, uint8_t *siph, uint8_t *imm);
 void     model_reset_passive_filters_work_hours(model_t *pmodel);
-void     model_add_passive_filters_work_seconds(model_t *pmodel, uint32_t seconds);
+uint8_t  model_add_passive_filters_work_seconds(model_t *pmodel, uint32_t seconds);
 uint16_t model_get_passive_filters_remaining_hours(model_t *pmodel);
 uint8_t  model_get_passive_filter_warning(model_t *pmodel);
 uint8_t  model_get_passive_filter_stop(model_t *pmodel);
@@ -171,6 +174,7 @@ uint16_t model_get_filter_device_remaining_hours(model_t *pmodel, uint8_t addres
 uint8_t  model_get_filter_device_warning(model_t *pmodel, uint8_t address);
 uint16_t model_get_pressure_difference(model_t *pmodel, uint8_t fan_speed);
 void     model_set_pressure_difference(model_t *pmodel, uint8_t fan_speed, uint16_t difference);
+uint8_t  model_get_filter_device_stop(model_t *pmodel, uint8_t address);
 
 GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);
@@ -204,5 +208,6 @@ GETTERNSETTER(first_temperature_speed_raise, configuration.first_temperature_spe
 GETTERNSETTER(second_temperature_speed_raise, configuration.second_temperature_speed_raise);
 GETTERNSETTER(temperature_warn, configuration.temperature_warn);
 GETTERNSETTER(temperature_stop, configuration.temperature_stop);
+GETTERNSETTER(show_work_hours_state, show_work_hours_state);
 
 #endif

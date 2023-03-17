@@ -362,7 +362,7 @@ static void modbus_task(void *args) {
                     response.address = message.address;
                     ESP_LOGI(TAG, "Reading info from %i", message.address);
 
-                    uint16_t registers[4];
+                    uint16_t registers[5];
                     if (read_holding_registers(&master, registers, message.address,
                                                EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION,
                                                sizeof(registers) / sizeof(registers[0]))) {

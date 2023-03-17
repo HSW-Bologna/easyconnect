@@ -1,4 +1,4 @@
-const char *strings[78][2] = {
+const char *strings[82][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -37,7 +37,7 @@ const char *strings[78][2] = {
     {"Configuro", "Configuring", },
     {"Configura", "Configure", },
     {"Dispositivi configurati", "Configured devices", },
-    {"Errore", "Error", },
+    {"Errore!", "Error!", },
     {"Errori", "Errors", },
     {"Configurazione automatica", "Automatic configuration", },
     {"Configurazione", "Configuration", },
@@ -77,5 +77,9 @@ const char *strings[78][2] = {
     {"Ore rimaste", "Hours left", },
     {"Versione", "Version", },
     {"Calibrazione pressione", "Pressure calibration", },
+    {"Attenzione!", "Warning!", },
+    {"E' necessaria la manutenzione del filtro %s; contattare l'assistenza per prenotare un appuntamento", "Maintenance of filter %s is required; contact the assistance to book the maintenance intervention", },
+    {"E' necessaria la manutenzione del filtro %s; contattare l'assistenza", "Filter maintenance for %s is required; contact the assistance", },
+    {"Passivo", "passive", },
 };
 

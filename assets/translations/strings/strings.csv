@@ -78,3 +78,8 @@ ORE_DI_LAVORO, Ore lavoro, Work hours
 ORE_RIMASTE, Ore rimaste, Hours left
 VERSIONE, Versione, Version
 CALIBRAZIONE_PRESSIONE, Calibrazione pressione, Pressure calibration
+ATTENZIONE, Attenzione!, Warning!
+ERRORE, Errore!, Error!
+WARNING_MANUTENZIONE, E' necessaria la manutenzione del filtro %s; contattare l'assistenza per prenotare un appuntamento, Maintenance of filter %s is required; contact the assistance to book the maintenance intervention
+STOP_MANUTENZIONE, E' necessaria la manutenzione del filtro %s; contattare l'assistenza, Filter maintenance for %s is required; contact the assistance
+PASSIVO, Passivo, passive

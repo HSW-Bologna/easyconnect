@@ -80,8 +80,12 @@ typedef enum {
     STRINGS_ORE_RIMASTE,
     STRINGS_VERSIONE,
     STRINGS_CALIBRAZIONE_PRESSIONE,
+    STRINGS_ATTENZIONE,
+    STRINGS_WARNING_MANUTENZIONE,
+    STRINGS_STOP_MANUTENZIONE,
+    STRINGS_PASSIVO,
 } strings_t;
 
-extern const char *strings[78][2];
+extern const char *strings[82][2];
 
 #endif

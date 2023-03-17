@@ -37,6 +37,10 @@ void controller_init(model_t *pmodel) {
     configuration_load(pmodel);
     view_start(pmodel);
 
+    if (model_get_passive_filter_warning(pmodel) || model_get_passive_filter_stop(pmodel)) {
+        model_set_show_work_hours_state(pmodel, 1);
+    }
+
     tft_backlight_set(model_get_active_backlight(pmodel));
 
     if (ds1307_is_clock_halted(rtc_driver)) {
@@ -110,17 +114,14 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             uint8_t update = 0;
 
             if (ulf_count > 0) {
-                if (model_get_fan_state(pmodel) == MODEL_FAN_STATE_FAN_RUNNING || model_get_uvc_filter_state(pmodel)) {
-                    model_uvc_filter_toggle(pmodel);
-                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(uvc_filters - 1),
-                                                   model_get_uvc_filter_state(pmodel));
-                    if (model_get_uvc_filter_state(pmodel)) {
-                        controller_state_event(pmodel, STATE_EVENT_FAN_START);
-                    }
-                    update = 1;
-                } else {
-                    controller_state_event(pmodel, STATE_EVENT_FAN_UVC_START);
-                }
+                model_uvc_filter_toggle(pmodel);
+                controller_state_event(pmodel, model_get_uvc_filter_state(pmodel) ? STATE_EVENT_FAN_UVC_ON
+                                                                                  : STATE_EVENT_FAN_UVC_OFF);
+                update = 1;
+            } else if (model_get_uvc_filter_state(pmodel)) {
+                model_uvc_filter_off(pmodel);
+                controller_state_event(pmodel, STATE_EVENT_FAN_UVC_OFF);
+                update = 1;
             }
 
             if (esf_count > 0) {
@@ -163,16 +164,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED:
-            switch (model_get_fan_state(pmodel)) {
-                case MODEL_FAN_STATE_SF_ENV_CLEANING:
-                case MODEL_FAN_STATE_IF_ENV_CLEANING:
-                    // Max speed, ignore
-                    break;
-
-                default:
-                    controller_update_fan_percentage(pmodel, model_get_fan_speed(pmodel));
-                    break;
-            }
+            controller_state_event(pmodel, STATE_EVENT_FAN_CHANGE_SPEED);
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_RESET_FILTER_HOURS:
@@ -226,7 +218,7 @@ void controller_manage(model_t *pmodel) {
     }
 
     if (model_all_devices_queried(pmodel) &&
-        (first_update_loop || is_expired(work_hours_ts, get_millis(), 2UL * 5UL * 1000UL))) {
+        (first_update_loop || is_expired(work_hours_ts, get_millis(), 1UL * 60UL * 1000UL))) {
         update_work_hours_cycle(pmodel);
         work_hours_ts = get_millis();
     }
@@ -301,7 +293,9 @@ void controller_manage(model_t *pmodel) {
 
             case MODBUS_RESPONSE_CODE_WORK_HOURS:
                 ESP_LOGI(TAG, "Device %i work hours: %i", response.address, response.work_hours);
-                model_set_device_work_hours(pmodel, response.address, response.work_hours);
+                if (model_set_filter_work_hours(pmodel, response.address, response.work_hours)) {
+                    model_set_show_work_hours_state(pmodel, 1);
+                }
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_UPDATE_WORK_HOURS});
                 break;
 
@@ -356,7 +350,6 @@ void controller_update_class_output(model_t *pmodel, uint16_t class, int value) 
     uint8_t starting_address = 0;
     uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
     while (address != starting_address) {
-        ESP_LOGI(TAG, "Setting output for class (specific %i) %X: %i", address, class, value);
         modbus_set_device_output(address, value > 0);
         starting_address = address;
         address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
