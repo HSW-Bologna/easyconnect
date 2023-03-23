@@ -219,16 +219,22 @@ void view_common_get_class_string(model_t *pmodel, uint16_t class, char *string,
             strncpy(string, "UVC", len);
             break;
 
-        case DEVICE_CLASS_PRESSURE_SAFETY:
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1):
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2):
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_3):
             strncpy(string, view_intl_get_string(pmodel, STRINGS_PRESSIONE), len);
             break;
 
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY:
+        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
+        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
+        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
             snprintf(string, len, "%s/%s", view_intl_get_string(pmodel, STRINGS_TEMPERATURA),
                      view_intl_get_string(pmodel, STRINGS_UMIDITA));
             break;
 
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
             snprintf(string, len, "%s/%s", view_intl_get_string(pmodel, STRINGS_PRESSIONE),
                      view_intl_get_string(pmodel, STRINGS_UMIDITA));
             break;
@@ -277,13 +283,19 @@ void view_common_get_class_icon(uint16_t class, lv_obj_t *img) {
         case DEVICE_CLASS_SIPHONING_FAN:
             lv_img_set_src(img, &img_icona_aspirazione);
             break;
-        case DEVICE_CLASS_PRESSURE_SAFETY:
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1):
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2):
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_3):
             lv_img_set_src(img, &img_icon_pressure_temperature_sm);
             break;
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY:
+        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
+        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
+        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
             lv_img_set_src(img, &img_icon_temperature_humidity_sm);
             break;
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
             lv_img_set_src(img, &img_icon_pressure_temperature_humidity_sm);
             break;
 

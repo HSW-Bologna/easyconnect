@@ -105,12 +105,17 @@ uint8_t device_list_get_next_device_address_by_modes(device_t *devices, uint8_t 
 }
 
 
-uint8_t device_list_get_next_device_address_by_class(device_t *devices, uint8_t previous, uint16_t class) {
+uint8_t device_list_get_next_device_address_by_classes(device_t *devices, uint8_t previous, uint16_t *classes,
+                                                       size_t num) {
     assert(devices != NULL);
 
     for (size_t i = ADDR2INDEX(previous + 1); i < MODBUS_MAX_DEVICES; i++) {
-        if (devices[i].status != DEVICE_STATUS_NOT_CONFIGURED && devices[i].class == class) {
-            return (uint8_t)INDEX2ADDR(i);
+        if (devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
+            for (size_t j = 0; j < num; j++) {
+                if (devices[i].class == classes[j]) {
+                    return (uint8_t)INDEX2ADDR(i);
+                }
+            }
         }
     }
 

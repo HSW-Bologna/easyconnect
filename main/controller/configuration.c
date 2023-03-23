@@ -8,12 +8,13 @@
 #include "utils/utils.h"
 
 
-#define NUM_CONFIGURATION_PARAMETERS 33
+#define NUM_CONFIGURATION_PARAMETERS 34
 
 
 static void save_backlight(void *mem, void *arg);
 static void save_byte_array(void *mem, void *arg);
 static void save_double_byte_array(void *mem, void *arg);
+static void save_pressure_offsets(void *mem, void *arg);
 
 
 static const char *DEVICE_MAP_KEY                           = "DMAP";
@@ -52,6 +53,8 @@ static const char *FIRST_TEMPERATURE_SPEED_RAISE_KEY  = "FSTTEMPSPD";
 static const char *SECOND_TEMPERATURE_SPEED_RAISE_KEY = "SNDTEMPSPD";
 static const char *TEMPERATURE_WARN_KEY               = "TEMPWARN";
 static const char *TEMPERATURE_STOP_KEY               = "TEMPSTOP";
+
+static const char *PRESSURE_OFFSETS_KEY = "PRESSOFF";
 
 static const char *TAG = "Devices";
 
@@ -118,6 +121,9 @@ void configuration_load(model_t *pmodel) {
     storage_load_uint16(&pmodel->configuration.temperature_stop, (char *)TEMPERATURE_STOP_KEY);
 
     storage_load_uint32(&pmodel->stats.passive_filters_work_seconds, (char *)PASSIVE_FILTERS_WORK_HOURS_KEY);
+
+    storage_load_blob(&pmodel->configuration.pressure_offsets, sizeof(pmodel->configuration.pressure_offsets),
+                      (char *)PRESSURE_OFFSETS_KEY);
 
     size_t i       = 0;
     watchlist[i++] = WATCHER(&pmodel->configuration.language, storage_save_uint16, (void *)LANGUAGE_KEY);
@@ -186,6 +192,8 @@ void configuration_load(model_t *pmodel) {
 
     watchlist[i++] = WATCHER(&pmodel->stats.passive_filters_work_seconds, storage_save_uint32,
                              (void *)PASSIVE_FILTERS_WORK_HOURS_KEY);
+    watchlist[i++] =
+        WATCHER_ARRAY(&pmodel->configuration.pressure_offsets, 3, save_pressure_offsets, (void *)PRESSURE_OFFSETS_KEY);
     assert(i == NUM_CONFIGURATION_PARAMETERS);
     watchlist[i++] = WATCHER_NULL;
     watcher_list_init(watchlist);
@@ -218,4 +226,9 @@ static void save_byte_array(void *mem, void *arg) {
 
 static void save_double_byte_array(void *mem, void *arg) {
     storage_save_blob(mem, MAX_FAN_SPEED * 2, arg);
+}
+
+
+static void save_pressure_offsets(void *mem, void *arg) {
+    storage_save_blob(mem, 6, arg);
 }

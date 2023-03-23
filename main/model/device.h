@@ -28,17 +28,17 @@ typedef enum {
 } device_status_t;
 
 
-#define DEVICE_CLASS_LIGHT_1                              (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_1))
-#define DEVICE_CLASS_LIGHT_2                              (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_2))
-#define DEVICE_CLASS_LIGHT_3                              (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_3))
-#define DEVICE_CLASS_ULTRAVIOLET_FILTER(g)                (CLASS(DEVICE_MODE_UVC, g))
-#define DEVICE_CLASS_ELECTROSTATIC_FILTER                 (CLASS(DEVICE_MODE_ESF, DEVICE_GROUP_1))
-#define DEVICE_CLASS_GAS                                  (CLASS(DEVICE_MODE_GAS, DEVICE_GROUP_1))
-#define DEVICE_CLASS_PRESSURE_SAFETY                      (CLASS(DEVICE_MODE_SENSOR, DEVICE_GROUP_1))
-#define DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY          (CLASS(DEVICE_MODE_SENSOR, DEVICE_GROUP_2))
-#define DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY (CLASS(DEVICE_MODE_SENSOR, DEVICE_GROUP_3))
-#define DEVICE_CLASS_SIPHONING_FAN                        (CLASS(DEVICE_MODE_FAN, DEVICE_GROUP_1))
-#define DEVICE_CLASS_IMMISSION_FAN                        (CLASS(DEVICE_MODE_FAN, DEVICE_GROUP_2))
+#define DEVICE_CLASS_LIGHT_1                                 (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_1))
+#define DEVICE_CLASS_LIGHT_2                                 (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_2))
+#define DEVICE_CLASS_LIGHT_3                                 (CLASS(DEVICE_MODE_LIGHT, DEVICE_GROUP_3))
+#define DEVICE_CLASS_ULTRAVIOLET_FILTER(g)                   (CLASS(DEVICE_MODE_UVC, g))
+#define DEVICE_CLASS_ELECTROSTATIC_FILTER                    (CLASS(DEVICE_MODE_ESF, DEVICE_GROUP_1))
+#define DEVICE_CLASS_GAS                                     (CLASS(DEVICE_MODE_GAS, DEVICE_GROUP_1))
+#define DEVICE_CLASS_PRESSURE_SAFETY(g)                      (CLASS(DEVICE_MODE_PRESSURE, g))
+#define DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(g)          (CLASS(DEVICE_MODE_TEMPERATURE_HUMIDITY, g))
+#define DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(g) (CLASS(DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY, g))
+#define DEVICE_CLASS_SIPHONING_FAN                           (CLASS(DEVICE_MODE_FAN, DEVICE_GROUP_1))
+#define DEVICE_CLASS_IMMISSION_FAN                           (CLASS(DEVICE_MODE_FAN, DEVICE_GROUP_2))
 
 #define ADDR2INDEX(addr) (addr - 1)
 #define INDEX2ADDR(addr) (addr + 1)
@@ -73,7 +73,8 @@ uint8_t device_list_get_next_configured_device_address(device_t *devices, uint8_
 uint8_t device_list_get_next_found_device_address(device_t *devices, uint8_t previous);
 int     device_list_is_address_configured(device_t *devices, uint8_t address);
 uint8_t device_list_get_available_address(device_t *devices, uint8_t previous);
-uint8_t device_list_get_next_device_address_by_class(device_t *devices, uint8_t previous, uint16_t class);
+uint8_t device_list_get_next_device_address_by_classes(device_t *devices, uint8_t previous, uint16_t *classes,
+                                                       size_t num);
 uint8_t device_list_get_next_device_address_by_modes(device_t *devices, uint8_t previous, uint16_t *modes, size_t num);
 int     device_list_configure_device(device_t *devices, uint8_t address);
 int     device_list_device_found(device_t *devices, uint8_t address);

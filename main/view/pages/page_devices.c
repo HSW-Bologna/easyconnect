@@ -75,8 +75,12 @@ static lv_obj_t *address_button(lv_obj_t *root, device_t device) {
         case DEVICE_CLASS_SIPHONING_FAN:
             lv_img_set_src(img, &img_icona_aspirazione);
             break;
-        case DEVICE_CLASS_PRESSURE_SAFETY:
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1):
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2):
+        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_3):
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
+        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
             lv_img_set_src(img, &img_icona_pressione);
             break;
 

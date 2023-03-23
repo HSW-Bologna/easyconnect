@@ -191,6 +191,7 @@ enum {
     BTN_PRESSURE_WARN_MOD,
     BTN_PRESSURE_STOP_MOD,
     BTN_START_CALIBRATION,
+    BTN_PRESSURE_INFO,
 
     // Humidity/temperature group
     BTN_HUMTEMP_FIRST_DELTA_MOD,
@@ -454,6 +455,10 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
             case MODEL_FAN_STATE_OFF:
                 lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL), &img_aspirazione_immissione_spente);
                 break;
+
+            case MODEL_FAN_STATE_PRESSURE_CALIBRATION:
+                // TODO:
+                break;
         }
     } else if (sfm_count > 0) {
         lv_obj_set_hidden(data->img_error_motors_1, !data->siph_alarm);
@@ -479,6 +484,10 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
             case MODEL_FAN_STATE_SF_IF_ENV_CLEANING:
             case MODEL_FAN_STATE_IF_ENV_CLEANING:
                 assert(0);
+                break;
+
+            case MODEL_FAN_STATE_PRESSURE_CALIBRATION:
+                // TODO:
                 break;
         }
     } else {
@@ -580,22 +589,13 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
 
 
 static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
-    float pressures[3] = {0};
-
-    uint8_t starting_address = 0;
-    uint8_t address          = model_get_next_pressure_sensor_device(pmodel, starting_address);
-    size_t  i                = 0;
-
-    while (address != starting_address && i < 3) {
-        pressures[i] = ((float)model_get_device(pmodel, address).sensor_data.pressure) / 10.;
-
-        starting_address = address;
-        address          = model_get_next_pressure_sensor_device(pmodel, starting_address);
-        i++;
-    }
+    int16_t pressure_1 = 0;
+    int16_t pressure_2 = 0;
+    int16_t pressure_3 = 0;
+    model_get_pressures(pmodel, &pressure_1, &pressure_2, &pressure_3);
 
     char string[64] = {0};
-    snprintf(string, sizeof(string), "%.1f %.1f %.1f", pressures[0], pressures[1], pressures[2]);
+    snprintf(string, sizeof(string), "%4i %4i %4i Pa", pressure_1, pressure_2, pressure_3);
     lv_label_set_text(pdata->lbl_pressure, string);
 }
 
@@ -1232,8 +1232,14 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_START_CALIBRATION:
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_FAN_OFF;
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
                             msg.vmsg.page = &page_pressure_calibration;
+                            break;
+
+                        case BTN_PRESSURE_INFO:
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_pressure_info;
                             break;
 
                         case BTN_LIGHT_ID: {
@@ -1496,15 +1502,21 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
                                       (device.actuator_data.ourput_state & 0xFF) > 0 ? "ON" : "OFF",
                                       (device.actuator_data.ourput_state >> 8) & 0xFF);
                 break;
-            case DEVICE_CLASS_PRESSURE_SAFETY:
+            case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1):
+            case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2):
+            case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_3):
                 lv_label_set_text_fmt(lbl_state, "%i%s %imB", device.sensor_data.temperature,
                                       model_get_degrees_symbol(pmodel), device.sensor_data.pressure);
                 break;
-            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY:
+            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
+            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
+            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
                 lv_label_set_text_fmt(lbl_state, "%i%% %i%s", device.sensor_data.humidity,
                                       device.sensor_data.temperature, model_get_degrees_symbol(pmodel));
                 break;
-            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
+            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
+            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
+            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
                 lv_label_set_text_fmt(lbl_state, "%i%% %i%s %imB", device.sensor_data.humidity,
                                       device.sensor_data.temperature, model_get_degrees_symbol(pmodel),
                                       device.sensor_data.pressure);
@@ -2127,6 +2139,15 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_img_set_src(img, &img_calibration);
             lv_obj_align(img, btn, LV_ALIGN_OUT_TOP_MID, 0, -4);
 
+            lv_obj_t *tmp_btn = lv_btn_create(pdata->cont_subpage, NULL);
+            lv_btn_set_layout(tmp_btn, LV_LAYOUT_OFF);
+            lv_obj_set_size(tmp_btn, 56, 56);
+            img = lv_img_create(tmp_btn, NULL);
+            lv_img_set_src(img, &img_pipe);
+
+            view_register_default_callback(tmp_btn, BTN_PRESSURE_INFO);
+
+            lv_obj_align(tmp_btn, btn, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
             break;
         }
 
@@ -2395,14 +2416,14 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
             break;
 
         case PAGE_ROUTE_TEMPERATURE:
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_delta, "%i %s",
-                                  model_get_first_temperature_delta(pmodel), model_get_degrees_symbol(pmodel));
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_delta, "%i %s",
-                                  model_get_second_temperature_delta(pmodel), model_get_degrees_symbol(pmodel));
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_speed_raise, "%i%%",
-                                  model_get_first_temperature_speed_raise(pmodel));
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_speed_raise, "%i%%",
-                                  model_get_second_temperature_speed_raise(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_delta, "%i%%",
+                                  model_get_first_temperature_delta(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_delta, "%i%%",
+                                  model_get_second_temperature_delta(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_speed_raise, "%i %s",
+                                  model_get_first_temperature_speed_raise(pmodel), model_get_degrees_symbol(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_speed_raise, "%i %s",
+                                  model_get_second_temperature_speed_raise(pmodel), model_get_degrees_symbol(pmodel));
             lv_label_set_text_fmt(pdata->humidity_temperature.lbl_warn, "%i %s", model_get_temperature_warn(pmodel),
                                   model_get_degrees_symbol(pmodel));
             lv_label_set_text_fmt(pdata->humidity_temperature.lbl_stop, "%i %s", model_get_temperature_stop(pmodel),

@@ -99,6 +99,10 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             }
             break;
 
+        case VIEW_CONTROLLER_MESSAGE_CODE_FAN_OFF:
+            controller_state_event(pmodel, STATE_EVENT_FAN_STOP);
+            break;
+
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER: {
             if (model_is_filter_alarm_on(pmodel, EASYCONNECT_SAFETY_ALARM)) {
                 ESP_LOGI(TAG, "Attempt failed due to alarm");
@@ -191,8 +195,11 @@ void controller_manage(model_t *pmodel) {
         } else {
             modbus_read_device_state(poll_address);
 
-            if (model_get_device(pmodel, poll_address).class == DEVICE_CLASS_PRESSURE_SAFETY) {
-                modbus_read_device_pressure(poll_address);
+            switch (CLASS_GET_MODE(model_get_device(pmodel, poll_address).class)) {
+                case DEVICE_MODE_PRESSURE:
+                case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
+                    modbus_read_device_pressure(poll_address);
+                    break;
             }
 
             poll_ts = get_millis();
@@ -382,21 +389,18 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
     ESP_LOGW(TAG, "error condition on device %i, comm %i, class 0x%X, alarms 0x%X", address, communication,
              device.class, alarms);
 
-    switch (device.class) {
-        case DEVICE_CLASS_ELECTROSTATIC_FILTER:
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+    switch (CLASS_GET_MODE(device.class)) {
+        case DEVICE_MODE_ESF:
+        case DEVICE_MODE_UVC:
             if (communication || (alarms & EASYCONNECT_SAFETY_ALARM)) {
                 system_shutdown(pmodel);
             }
             break;
 
-        case DEVICE_CLASS_SIPHONING_FAN:
-        case DEVICE_CLASS_IMMISSION_FAN:
-        case DEVICE_CLASS_PRESSURE_SAFETY:
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY:
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
+        case DEVICE_MODE_FAN:
+        case DEVICE_MODE_PRESSURE:
+        case DEVICE_MODE_TEMPERATURE_HUMIDITY:
+        case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
             system_shutdown(pmodel);
             break;
     }

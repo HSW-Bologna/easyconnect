@@ -6,6 +6,7 @@
 #include "address_map.h"
 #include "device.h"
 #include "gel/collections/queue.h"
+#include "easyconnect_interface.h"
 
 
 #define NUM_PARAMETERS    3
@@ -38,6 +39,7 @@ typedef enum {
     MODEL_FAN_STATE_SF_IF_ENV_CLEANING,
     MODEL_FAN_STATE_IF_ENV_CLEANING,
     MODEL_FAN_STATE_FAN_RUNNING,
+    MODEL_FAN_STATE_PRESSURE_CALIBRATION,
 } model_fan_state_t;
 
 
@@ -97,6 +99,8 @@ typedef struct {
         uint8_t  second_temperature_speed_raise;
         uint16_t temperature_warn;
         uint16_t temperature_stop;
+
+        int16_t pressure_offsets[3];
     } configuration;
 
     struct {
@@ -129,12 +133,13 @@ void          model_set_device_state(model_t *pmodel, uint8_t address, uint16_t 
 uint8_t       model_set_filter_work_hours(model_t *pmodel, uint8_t address, uint16_t work_hours);
 int           model_get_light_class(model_t *pmodel, uint16_t *class);
 uint8_t       model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous, uint16_t class);
-uint8_t       model_get_next_device_address_by_mode(model_t *pmodel, uint8_t previous, uint16_t mode);
-uint8_t       model_get_next_device_address_by_modes(model_t *pmodel, uint8_t previous, uint16_t *modes, size_t num);
-uint8_t       model_get_next_pressure_sensor_device(model_t *pmodel, uint8_t previous);
-int           model_all_devices_queried(model_t *pmodel);
-size_t        model_get_class_count(model_t *pmodel, uint16_t class);
-size_t        model_get_mode_count(model_t *pmodel, uint16_t mode);
+uint8_t model_get_next_device_address_by_classes(model_t *pmodel, uint8_t previous, uint16_t *classes, size_t num);
+uint8_t model_get_next_device_address_by_mode(model_t *pmodel, uint8_t previous, uint16_t mode);
+uint8_t model_get_next_device_address_by_modes(model_t *pmodel, uint8_t previous, uint16_t *modes, size_t num);
+uint8_t model_get_next_pressure_sensor_device(model_t *pmodel, uint8_t previous);
+int     model_all_devices_queried(model_t *pmodel);
+size_t  model_get_class_count(model_t *pmodel, uint16_t class);
+size_t  model_get_mode_count(model_t *pmodel, uint16_t mode);
 model_fan_state_t model_get_fan_state(model_t *pmodel);
 void              model_set_fan_state(model_t *pmodel, model_fan_state_t state);
 int               model_get_uvc_filter_state(model_t *pmodel);
@@ -175,6 +180,14 @@ uint8_t  model_get_filter_device_warning(model_t *pmodel, uint8_t address);
 uint16_t model_get_pressure_difference(model_t *pmodel, uint8_t fan_speed);
 void     model_set_pressure_difference(model_t *pmodel, uint8_t fan_speed, uint16_t difference);
 uint8_t  model_get_filter_device_stop(model_t *pmodel, uint8_t address);
+uint8_t  model_is_device_sensor(model_t *pmodel, uint8_t address);
+void     model_set_pressure_offset(model_t *pmodel, device_group_t group, int16_t offset);
+int16_t  model_get_pressure_offset(model_t *pmodel, device_group_t group);
+
+int model_get_raw_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *pressure_2, int16_t *pressure_3);
+int model_get_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *pressure_2, int16_t *pressure_3);
+int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *temperature_2, int16_t *temperature_3);
+int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity_2, int16_t *humidity_3);
 
 GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);

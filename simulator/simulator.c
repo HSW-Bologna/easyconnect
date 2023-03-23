@@ -33,9 +33,16 @@ void app_main(void *arg) {
     add_simulated_device(&model, 6, 6, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1));
     add_simulated_device(&model, 7, 7, DEVICE_CLASS_ELECTROSTATIC_FILTER);
     add_simulated_device(&model, 8, 8, DEVICE_CLASS_GAS);
-    add_simulated_device(&model, 9, 9, DEVICE_CLASS_PRESSURE_SAFETY);
-    add_simulated_device(&model, 10, 10, DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY);
-    add_simulated_device(&model, 11, 11, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY);
+
+    add_simulated_device(&model, 9, 9, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1));
+    model_set_device_pressure(&model, 9, 1);
+
+    add_simulated_device(&model, 10, 10, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2));
+    model_set_device_pressure(&model, 10, 2);
+
+    add_simulated_device(&model, 11, 11, DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1));
+    add_simulated_device(&model, 12, 12, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3));
+    model_set_device_pressure(&model, 12, 3);
 
     view_init(monitor_flush, mouse_read);
     controller_init(&model);

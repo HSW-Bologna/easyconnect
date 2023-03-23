@@ -72,6 +72,9 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.second_humidity_speed_raise = 20;
     pmodel->configuration.humidity_warn               = 95;
     pmodel->configuration.humidity_stop               = 100;
+    pmodel->configuration.pressure_offsets[0]         = 0;
+    pmodel->configuration.pressure_offsets[1]         = 0;
+    pmodel->configuration.pressure_offsets[2]         = 0;
 
     pmodel->stats.passive_filters_work_seconds = 0;
 
@@ -286,7 +289,13 @@ uint8_t model_get_available_address(model_t *pmodel, uint8_t previous) {
 
 uint8_t model_get_next_device_address_by_class(model_t *pmodel, uint8_t previous, uint16_t class) {
     assert(pmodel != NULL);
-    return device_list_get_next_device_address_by_class(pmodel->devices, previous, class);
+    return device_list_get_next_device_address_by_classes(pmodel->devices, previous, &class, 1);
+}
+
+
+uint8_t model_get_next_device_address_by_classes(model_t *pmodel, uint8_t previous, uint16_t *classes, size_t num) {
+    assert(pmodel != NULL);
+    return device_list_get_next_device_address_by_classes(pmodel->devices, previous, classes, num);
 }
 
 
@@ -304,16 +313,11 @@ uint8_t model_get_next_device_address_by_modes(model_t *pmodel, uint8_t previous
 
 uint8_t model_get_next_pressure_sensor_device(model_t *pmodel, uint8_t previous) {
     assert(pmodel != NULL);
-
-    for (size_t i = ADDR2INDEX(previous + 1); i < MODBUS_MAX_DEVICES; i++) {
-        if (pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED &&
-            (pmodel->devices[i].class == DEVICE_CLASS_PRESSURE_SAFETY ||
-             pmodel->devices[i].class == DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY)) {
-            return (uint8_t)INDEX2ADDR(i);
-        }
-    }
-
-    return previous;
+    uint16_t modes[] = {
+        DEVICE_MODE_PRESSURE,
+        DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY,
+    };
+    return model_get_next_device_address_by_modes(pmodel, previous, modes, sizeof(modes) / sizeof(modes[0]));
 }
 
 
@@ -459,9 +463,17 @@ void model_set_device_state(model_t *pmodel, uint8_t address, uint16_t state) {
     assert(pmodel != NULL);
     device_t *device = model_get_device_mut(pmodel, address);
 
-    if (device->status == DEVICE_STATUS_OK && (CLASS_GET_MODE(device->class) != DEVICE_MODE_SENSOR)) {
+    if (device->status == DEVICE_STATUS_OK && !model_is_device_sensor(pmodel, address)) {
         device->actuator_data.ourput_state = state;
     }
+}
+
+
+uint8_t model_is_device_sensor(model_t *pmodel, uint8_t address) {
+    assert(pmodel != NULL);
+    uint16_t mode = CLASS_GET_MODE(model_get_device(pmodel, address).class);
+    return mode == DEVICE_MODE_PRESSURE || mode == DEVICE_MODE_TEMPERATURE_HUMIDITY ||
+           mode == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY;
 }
 
 
@@ -469,10 +481,202 @@ void model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressu
     assert(pmodel != NULL);
 
     device_t *device = model_get_device_mut(pmodel, address);
-    if (device->status == DEVICE_STATUS_OK && (device->class == DEVICE_CLASS_PRESSURE_SAFETY ||
-                                               device->class == DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY)) {
+    uint16_t  mode   = CLASS_GET_MODE(device->class);
+    if (device->status == DEVICE_STATUS_OK &&
+        (mode == DEVICE_MODE_PRESSURE || mode == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY)) {
         device->sensor_data.pressure = pressure;
     }
+}
+
+
+void model_set_pressure_offset(model_t *pmodel, device_group_t group, int16_t offset) {
+    assert(pmodel != NULL);
+
+    pmodel->configuration.pressure_offsets[group] = offset;
+}
+
+
+int16_t model_get_pressure_offset(model_t *pmodel, device_group_t group) {
+    assert(pmodel != NULL);
+
+    return pmodel->configuration.pressure_offsets[group];
+}
+
+
+int model_get_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *pressure_2, int16_t *pressure_3) {
+    int res = model_get_raw_pressures(pmodel, pressure_1, pressure_2, pressure_3);
+    if (pressure_1 != NULL) {
+        *pressure_1 += pmodel->configuration.pressure_offsets[0];
+    }
+    if (pressure_2 != NULL) {
+        *pressure_2 += pmodel->configuration.pressure_offsets[1];
+    }
+    if (pressure_3 != NULL) {
+        *pressure_3 += pmodel->configuration.pressure_offsets[2];
+    }
+    return res;
+}
+
+
+int model_get_raw_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *pressure_2, int16_t *pressure_3) {
+    assert(pmodel != NULL);
+
+    uint16_t const modes[] = {DEVICE_MODE_PRESSURE, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
+
+    uint8_t previous = 0;
+    uint8_t address  = previous;
+    int     group    = -1;
+
+    int64_t  pressures[3]    = {0};
+    uint16_t group_counts[3] = {0};
+
+    do {
+        previous = address;
+        address  = model_get_next_device_address_by_modes(pmodel, previous, (uint16_t *)modes,
+                                                          sizeof(modes) / sizeof(modes[0]));
+
+        if (previous == address) {
+            break;
+        }
+
+        device_t device = model_get_device(pmodel, address);
+        if (CLASS_GET_GROUP(device.class) > group) {
+            group = CLASS_GET_GROUP(device.class);
+        }
+
+        group_counts[group]++;
+        pressures[group] += device.sensor_data.pressure;
+    } while (previous != address);
+
+    if (pressure_1 != NULL) {
+        if (group_counts[0] > 0) {
+            *pressure_1 = (int16_t)(pressures[0] / group_counts[0]);
+        } else {
+            *pressure_1 = 0;
+        }
+    }
+
+    if (pressure_2 != NULL) {
+        if (group_counts[1] > 0) {
+            *pressure_2 = (int16_t)(pressures[1] / group_counts[1]);
+        } else {
+            *pressure_2 = 0;
+        }
+    }
+
+    if (pressure_3 != NULL) {
+        if (group_counts[2] > 0) {
+            *pressure_3 = (int16_t)(pressures[2] / group_counts[2]);
+        } else {
+            *pressure_3 = 0;
+        }
+    }
+
+    return group;
+}
+
+
+int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *temperature_2, int16_t *temperature_3) {
+    assert(pmodel != NULL);
+
+    uint16_t const modes[] = {DEVICE_MODE_TEMPERATURE_HUMIDITY, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
+
+    uint8_t previous = 0;
+    uint8_t address  = previous;
+    int     group    = -1;
+
+    int64_t  temperatures[3] = {0};
+    uint16_t group_counts[3] = {0};
+
+    do {
+        previous = address;
+        address  = model_get_next_device_address_by_modes(pmodel, previous, (uint16_t *)modes,
+                                                          sizeof(modes) / sizeof(modes[0]));
+
+        if (previous == address) {
+            break;
+        }
+
+        device_t device = model_get_device(pmodel, address);
+        if (CLASS_GET_GROUP(device.class) > group) {
+            group = CLASS_GET_GROUP(device.class);
+        }
+
+        group_counts[group]++;
+        temperatures[group] += device.sensor_data.temperature;
+    } while (previous != address);
+
+    if (group_counts[0] > 0) {
+        *temperature_1 = (int16_t)(temperatures[0] / group_counts[0]);
+    } else {
+        *temperature_1 = 0;
+    }
+
+    if (group_counts[1] > 0) {
+        *temperature_2 = (int16_t)(temperatures[1] / group_counts[1]);
+    } else {
+        *temperature_2 = 0;
+    }
+
+    if (group_counts[2] > 0) {
+        *temperature_3 = (int16_t)(temperatures[2] / group_counts[2]);
+    } else {
+        *temperature_3 = 0;
+    }
+
+    return group;
+}
+
+
+int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity_2, int16_t *humidity_3) {
+    assert(pmodel != NULL);
+
+    uint16_t const modes[] = {DEVICE_MODE_TEMPERATURE_HUMIDITY, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
+
+    uint8_t previous = 0;
+    uint8_t address  = previous;
+    int     group    = -1;
+
+    int64_t  temperatures[3] = {0};
+    uint16_t group_counts[3] = {0};
+
+    do {
+        previous = address;
+        address  = model_get_next_device_address_by_modes(pmodel, previous, (uint16_t *)modes,
+                                                          sizeof(modes) / sizeof(modes[0]));
+
+        if (previous == address) {
+            break;
+        }
+
+        device_t device = model_get_device(pmodel, address);
+        if (CLASS_GET_GROUP(device.class) > group) {
+            group = CLASS_GET_GROUP(device.class);
+        }
+
+        group_counts[group]++;
+        temperatures[group] += device.sensor_data.humidity;
+    } while (previous != address);
+
+    if (group_counts[0] > 0) {
+        *humidity_1 = (int16_t)(temperatures[0] / group_counts[0]);
+    } else {
+        *humidity_1 = 0;
+    }
+
+    if (group_counts[1] > 0) {
+        *humidity_2 = (int16_t)(temperatures[1] / group_counts[1]);
+    } else {
+        *humidity_2 = 0;
+    }
+
+    if (group_counts[2] > 0) {
+        *humidity_3 = (int16_t)(temperatures[2] / group_counts[2]);
+    } else {
+        *humidity_3 = 0;
+    }
+
+    return group;
 }
 
 
