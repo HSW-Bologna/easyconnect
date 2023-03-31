@@ -36,7 +36,11 @@ typedef struct {
             uint16_t alarms;
             uint16_t state;
         };
-        uint16_t pressure;
+        struct {
+            int16_t temperature;
+            int16_t pressure;
+            int16_t humidity;
+        };
         uint16_t work_hours;
         struct {
             uint16_t event_count;

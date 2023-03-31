@@ -169,51 +169,51 @@ int modbus_get_response(modbus_response_t *response) {
 void modbus_automatic_commissioning(uint16_t expected_devices) {
     struct task_message message = {.code             = TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING,
                                    .expected_devices = expected_devices};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_update_events(uint8_t address, uint16_t previous_event_count) {
     struct task_message message = {
         .code = TASK_MESSAGE_CODE_UPDATE_EVENTS, .address = address, .event_count = previous_event_count};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_update_time(void) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_UPDATE_TIME};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_set_class_output(uint16_t class, int value) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_SET_CLASS_OUTPUT, .class = class, .value = value};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_set_fan_percentage(uint8_t address, uint8_t percentage) {
     struct task_message message = {
         .code = TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE, .address = address, .value = percentage};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_scan(void) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_SCAN};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_set_device_output(uint8_t address, int value) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT, .address = address, .value = value};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_read_device_info(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_INFO, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
@@ -230,38 +230,38 @@ void modbus_read_device_messages(uint8_t address, uint8_t device_model) {
             break;
     }
 
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_read_device_state(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_STATE, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_read_device_pressure(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_PRESSURE, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_read_device_work_hours(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_WORK_HOURS, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_reset_device_work_hours(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_RESET_DEVICE_WORK_HOURS, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
     modbus_read_device_work_hours(address);
 }
 
 
 void modbus_read_device_inputs(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_INPUTS, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
@@ -360,7 +360,6 @@ static void modbus_task(void *args) {
                 case TASK_MESSAGE_CODE_READ_DEVICE_INFO: {
                     response.code    = MODBUS_RESPONSE_CODE_INFO;
                     response.address = message.address;
-                    ESP_LOGI(TAG, "Reading info from %i", message.address);
 
                     uint16_t registers[5];
                     if (read_holding_registers(&master, registers, message.address,
@@ -636,13 +635,16 @@ static void modbus_task(void *args) {
                 }
 
                 case TASK_MESSAGE_CODE_READ_DEVICE_PRESSURE: {
-                    response.code    = MODBUS_RESPONSE_CODE_PRESSURE;
-                    response.address = message.address;
+                    response.code         = MODBUS_RESPONSE_CODE_PRESSURE;
+                    response.address      = message.address;
+                    uint16_t registers[3] = {0};
 
-                    if (read_holding_registers(&master, &response.pressure, message.address, HOLDING_REGISTER_PRESSURE,
-                                               1)) {
+                    if (read_holding_registers(&master, registers, message.address, HOLDING_REGISTER_PRESSURE, 2)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
+                        response.pressure    = registers[0];
+                        response.temperature = registers[1];
+                        response.humidity    = registers[2];
                         xQueueSend(responseq, &response, portMAX_DELAY);
                     }
                     break;

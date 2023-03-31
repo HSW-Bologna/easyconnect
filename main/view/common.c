@@ -202,49 +202,39 @@ void view_common_set_hidden(lv_obj_t *obj, int hidden) {
 
 
 void view_common_get_class_string(model_t *pmodel, uint16_t class, char *string, size_t len) {
-    switch (class) {
-        case DEVICE_CLASS_LIGHT_1:
-        case DEVICE_CLASS_LIGHT_2:
-        case DEVICE_CLASS_LIGHT_3:
+    switch (CLASS_GET_MODE(class)) {
+        case DEVICE_MODE_LIGHT:
             strncpy(string, view_intl_get_string(pmodel, STRINGS_LUCE), len);
             break;
 
-        case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+        case DEVICE_MODE_ESF:
             strncpy(string, "ESF", len);
             break;
 
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+        case DEVICE_MODE_UVC:
             strncpy(string, "UVC", len);
             break;
 
-        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1):
-        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2):
-        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_3):
+        case DEVICE_MODE_PRESSURE:
             strncpy(string, view_intl_get_string(pmodel, STRINGS_PRESSIONE), len);
             break;
 
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
+        case DEVICE_MODE_TEMPERATURE_HUMIDITY:
             snprintf(string, len, "%s/%s", view_intl_get_string(pmodel, STRINGS_TEMPERATURA),
                      view_intl_get_string(pmodel, STRINGS_UMIDITA));
             break;
 
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
+        case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
             snprintf(string, len, "%s/%s", view_intl_get_string(pmodel, STRINGS_PRESSIONE),
                      view_intl_get_string(pmodel, STRINGS_UMIDITA));
             break;
 
-        case DEVICE_CLASS_SIPHONING_FAN:
-            strncpy(string, view_intl_get_string(pmodel, STRINGS_ASPIRAZIONE), len);
-            break;
-
-        case DEVICE_CLASS_IMMISSION_FAN:
-            strncpy(string, view_intl_get_string(pmodel, STRINGS_IMMISSIONE), len);
+        case DEVICE_MODE_FAN:
+            if (class == DEVICE_CLASS_SIPHONING_FAN) {
+                strncpy(string, view_intl_get_string(pmodel, STRINGS_ASPIRAZIONE), len);
+            } else {
+                strncpy(string, view_intl_get_string(pmodel, STRINGS_IMMISSIONE), len);
+            }
             break;
 
         default:
@@ -283,19 +273,16 @@ void view_common_get_class_icon(uint16_t class, lv_obj_t *img) {
         case DEVICE_CLASS_SIPHONING_FAN:
             lv_img_set_src(img, &img_icona_aspirazione);
             break;
-        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1):
-        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2):
-        case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_3):
+
+            CASE_ALL_GROUPS_FOR(DEVICE_CLASS_PRESSURE_SAFETY)
             lv_img_set_src(img, &img_icon_pressure_temperature_sm);
             break;
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
-        case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
+
+            CASE_ALL_GROUPS_FOR(DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY)
             lv_img_set_src(img, &img_icon_temperature_humidity_sm);
             break;
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
+
+            CASE_ALL_GROUPS_FOR(DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY)
             lv_img_set_src(img, &img_icon_pressure_temperature_humidity_sm);
             break;
 

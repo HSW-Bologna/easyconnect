@@ -104,6 +104,9 @@ static int off_event_manager(model_t *pmodel, state_event_code_t event) {
             cleaning_period = model_get_environment_cleaning_start_period(pmodel);
             return MODEL_FAN_STATE_SF_ENV_CLEANING;
 
+        case STATE_EVENT_FAN_START_CALIBRATION:
+            return MODEL_FAN_STATE_PRESSURE_CALIBRATION;
+
         default:
             break;
     }
@@ -282,8 +285,9 @@ static int calibration_entry(model_t *pmodel) {
     view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     model_set_fan_speed(pmodel, 0);
 
-    controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 0);
-    controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 0);
+    controller_update_fan_percentage(pmodel, model_get_fan_speed(pmodel));
+    controller_update_class_output(pmodel, DEVICE_CLASS_SIPHONING_FAN, 1);
+    controller_update_class_output(pmodel, DEVICE_CLASS_IMMISSION_FAN, 1);
     controller_update_class_output(pmodel, DEVICE_CLASS_GAS, 0);
 
     model_uvc_filter_off(pmodel);

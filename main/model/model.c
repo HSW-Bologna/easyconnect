@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#include "model.h"
 #include "easyconnect_interface.h"
+#include "model.h"
 
 
 static uint8_t alarm_for_device(model_t *pmodel, size_t i);
@@ -21,8 +21,8 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.active_backlight                   = 100;
     pmodel->configuration.buzzer_volume                      = MAX_BUZZER_VOLUME;
     pmodel->configuration.use_fahrenheit                     = 0;
-    pmodel->configuration.environment_cleaning_start_period  = 4;
-    pmodel->configuration.environment_cleaning_finish_period = 4;
+    pmodel->configuration.environment_cleaning_start_period  = 15;
+    pmodel->configuration.environment_cleaning_finish_period = 15;
 
     pmodel->configuration.pressure_differences_for_speed[0] = 0;
     pmodel->configuration.pressure_differences_for_speed[1] = 1;
@@ -33,17 +33,17 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.pressure_difference_deviation_warn = 30;
     pmodel->configuration.pressure_difference_deviation_stop = 50;
 
-    pmodel->configuration.siphoning_percentages[0] = 0;
-    pmodel->configuration.siphoning_percentages[1] = 20;
-    pmodel->configuration.siphoning_percentages[2] = 30;
-    pmodel->configuration.siphoning_percentages[3] = 80;
-    pmodel->configuration.siphoning_percentages[4] = 100;
+    pmodel->configuration.siphoning_percentages[0] = 10;
+    pmodel->configuration.siphoning_percentages[1] = 25;
+    pmodel->configuration.siphoning_percentages[2] = 35;
+    pmodel->configuration.siphoning_percentages[3] = 60;
+    pmodel->configuration.siphoning_percentages[4] = 95;
 
-    pmodel->configuration.immission_percentages[0] = 0;
-    pmodel->configuration.immission_percentages[1] = 5;
+    pmodel->configuration.immission_percentages[0] = 5;
+    pmodel->configuration.immission_percentages[1] = 15;
     pmodel->configuration.immission_percentages[2] = 20;
-    pmodel->configuration.immission_percentages[3] = 60;
-    pmodel->configuration.immission_percentages[4] = 80;
+    pmodel->configuration.immission_percentages[3] = 35;
+    pmodel->configuration.immission_percentages[4] = 55;
 
     for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
         pmodel->configuration.uvc_filters_for_speed[i] = 1;
@@ -477,48 +477,46 @@ uint8_t model_is_device_sensor(model_t *pmodel, uint8_t address) {
 }
 
 
-void model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressure) {
+void model_set_sensors_values(model_t *pmodel, uint8_t address, int16_t pressure, int16_t temperature,
+                              int16_t humidity) {
     assert(pmodel != NULL);
 
     device_t *device = model_get_device_mut(pmodel, address);
     uint16_t  mode   = CLASS_GET_MODE(device->class);
     if (device->status == DEVICE_STATUS_OK &&
-        (mode == DEVICE_MODE_PRESSURE || mode == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY)) {
-        device->sensor_data.pressure = pressure;
+        (mode == DEVICE_MODE_PRESSURE || mode == DEVICE_MODE_TEMPERATURE_HUMIDITY ||
+         mode == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY)) {
+        device->sensor_data.pressure    = pressure;
+        device->sensor_data.temperature = temperature;
+        device->sensor_data.humidity    = humidity;
     }
 }
 
 
-void model_set_pressure_offset(model_t *pmodel, device_group_t group, int16_t offset) {
+void model_set_pressure_offset(model_t *pmodel, int group, int16_t offset) {
     assert(pmodel != NULL);
 
     pmodel->configuration.pressure_offsets[group] = offset;
 }
 
 
-int16_t model_get_pressure_offset(model_t *pmodel, device_group_t group) {
+int16_t model_get_pressure_offset(model_t *pmodel, int group) {
     assert(pmodel != NULL);
 
     return pmodel->configuration.pressure_offsets[group];
 }
 
 
-int model_get_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *pressure_2, int16_t *pressure_3) {
-    int res = model_get_raw_pressures(pmodel, pressure_1, pressure_2, pressure_3);
-    if (pressure_1 != NULL) {
-        *pressure_1 += pmodel->configuration.pressure_offsets[0];
-    }
-    if (pressure_2 != NULL) {
-        *pressure_2 += pmodel->configuration.pressure_offsets[1];
-    }
-    if (pressure_3 != NULL) {
-        *pressure_3 += pmodel->configuration.pressure_offsets[2];
+int model_get_pressures(model_t *pmodel, int16_t *pressures) {
+    int res = model_get_raw_pressures(pmodel, pressures);
+    for (size_t i = 0; i < DEVICE_GROUPS; i++) {
+        pressures[i] += pmodel->configuration.pressure_offsets[i];
     }
     return res;
 }
 
 
-int model_get_raw_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *pressure_2, int16_t *pressure_3) {
+int model_get_raw_pressures(model_t *pmodel, int16_t *pressures) {
     assert(pmodel != NULL);
 
     uint16_t const modes[] = {DEVICE_MODE_PRESSURE, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
@@ -527,8 +525,8 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *press
     uint8_t address  = previous;
     int     group    = -1;
 
-    int64_t  pressures[3]    = {0};
-    uint16_t group_counts[3] = {0};
+    int64_t  pressure_sums[DEVICE_GROUPS] = {0};
+    uint16_t group_counts[DEVICE_GROUPS]  = {0};
 
     do {
         previous = address;
@@ -545,30 +543,14 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *press
         }
 
         group_counts[group]++;
-        pressures[group] += device.sensor_data.pressure;
+        pressure_sums[group] += device.sensor_data.pressure;
     } while (previous != address);
 
-    if (pressure_1 != NULL) {
-        if (group_counts[0] > 0) {
-            *pressure_1 = (int16_t)(pressures[0] / group_counts[0]);
+    for (size_t i = 0; i < DEVICE_GROUPS; i++) {
+        if (group_counts[i] != 0) {
+            pressures[i] = (int16_t)(pressure_sums[i] / group_counts[i]);
         } else {
-            *pressure_1 = 0;
-        }
-    }
-
-    if (pressure_2 != NULL) {
-        if (group_counts[1] > 0) {
-            *pressure_2 = (int16_t)(pressures[1] / group_counts[1]);
-        } else {
-            *pressure_2 = 0;
-        }
-    }
-
-    if (pressure_3 != NULL) {
-        if (group_counts[2] > 0) {
-            *pressure_3 = (int16_t)(pressures[2] / group_counts[2]);
-        } else {
-            *pressure_3 = 0;
+            pressures[i] = 0;
         }
     }
 

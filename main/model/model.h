@@ -6,7 +6,6 @@
 #include "address_map.h"
 #include "device.h"
 #include "gel/collections/queue.h"
-#include "easyconnect_interface.h"
 
 
 #define NUM_PARAMETERS    3
@@ -31,6 +30,25 @@
 #define GETTERNSETTER(name, field)                                                                                     \
     GETTER(name, field)                                                                                                \
     SETTER(name, field)
+
+
+#define CASE_ALL_GROUPS_FOR(CLASS)                                                                                     \
+    case CLASS(DEVICE_GROUP_1):                                                                                        \
+    case CLASS(DEVICE_GROUP_2):                                                                                        \
+    case CLASS(DEVICE_GROUP_3):                                                                                        \
+    case CLASS(DEVICE_GROUP_4):                                                                                        \
+    case CLASS(DEVICE_GROUP_5):                                                                                        \
+    case CLASS(DEVICE_GROUP_6):                                                                                        \
+    case CLASS(DEVICE_GROUP_7):                                                                                        \
+    case CLASS(DEVICE_GROUP_8):                                                                                        \
+    case CLASS(DEVICE_GROUP_9):                                                                                        \
+    case CLASS(DEVICE_GROUP_10):                                                                                       \
+    case CLASS(DEVICE_GROUP_11):                                                                                       \
+    case CLASS(DEVICE_GROUP_12):                                                                                       \
+    case CLASS(DEVICE_GROUP_13):                                                                                       \
+    case CLASS(DEVICE_GROUP_14):                                                                                       \
+    case CLASS(DEVICE_GROUP_15):                                                                                       \
+    case CLASS(DEVICE_GROUP_16):
 
 
 typedef enum {
@@ -100,7 +118,7 @@ typedef struct {
         uint16_t temperature_warn;
         uint16_t temperature_stop;
 
-        int16_t pressure_offsets[3];
+        int16_t pressure_offsets[16];
     } configuration;
 
     struct {
@@ -155,7 +173,8 @@ uint8_t           model_is_there_an_alarm(model_t *pmodel);
 uint8_t           model_is_there_any_alarm_for_class(model_t *pmodel, uint16_t class);
 uint8_t           model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms);
 uint8_t           model_is_there_a_fan_alarm(model_t *pmodel);
-void              model_set_device_pressure(model_t *pmodel, uint8_t address, uint16_t pressure);
+void              model_set_sensors_values(model_t *pmodel, uint8_t address, int16_t pressure, int16_t temperature,
+                                           int16_t humidity);
 device_t         *model_get_device_mut(model_t *pmodel, uint8_t address);
 void              model_light_switch(model_t *model);
 uint8_t           model_get_siphoning_percentage(model_t *pmodel, uint8_t fan_speed);
@@ -181,11 +200,11 @@ uint16_t model_get_pressure_difference(model_t *pmodel, uint8_t fan_speed);
 void     model_set_pressure_difference(model_t *pmodel, uint8_t fan_speed, uint16_t difference);
 uint8_t  model_get_filter_device_stop(model_t *pmodel, uint8_t address);
 uint8_t  model_is_device_sensor(model_t *pmodel, uint8_t address);
-void     model_set_pressure_offset(model_t *pmodel, device_group_t group, int16_t offset);
-int16_t  model_get_pressure_offset(model_t *pmodel, device_group_t group);
+void     model_set_pressure_offset(model_t *pmodel, int group, int16_t offset);
+int16_t  model_get_pressure_offset(model_t *pmodel, int group);
 
-int model_get_raw_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *pressure_2, int16_t *pressure_3);
-int model_get_pressures(model_t *pmodel, int16_t *pressure_1, int16_t *pressure_2, int16_t *pressure_3);
+int model_get_raw_pressures(model_t *pmodel, int16_t *pressures);
+int model_get_pressures(model_t *pmodel, int16_t *pressures);
 int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *temperature_2, int16_t *temperature_3);
 int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity_2, int16_t *humidity_3);
 

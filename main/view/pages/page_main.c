@@ -321,10 +321,12 @@ static void     update_menus(model_t *pmodel, struct page_data *pdata);
 static void     update_device_list(model_t *pmodel, struct page_data *pdata);
 
 
-static const char *TAG = "MainPage";
+static const char *TAG         = "MainPage";
+static uint8_t     popup_shown = 0;
 
 
 static lv_res_t drawer_drag_cb(lv_obj_t *obj, lv_signal_t signal, void *arg) {
+    (void)TAG;
     const int start  = -DRAWER_HEIGHT;
     const int end    = -DRAWER_RADIUS;
     const int midway = (end - start) / 2;
@@ -333,15 +335,19 @@ static lv_res_t drawer_drag_cb(lv_obj_t *obj, lv_signal_t signal, void *arg) {
 
     if (signal == LV_SIGNAL_COORD_CHG) {
         if (lv_obj_get_y(obj) < start) {
+            popup_shown = 0;
             lv_obj_set_y(obj, start);
         } else if (lv_obj_get_y(obj) > end) {
+            popup_shown = 1;
             lv_obj_set_y(obj, end);
         }
         lv_obj_align(data.sibling, obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
     } else if (signal == LV_SIGNAL_DRAG_END) {
         if (lv_obj_get_y(obj) < midway) {
+            popup_shown = 0;
             lv_obj_set_y(obj, start);
         } else {
+            popup_shown = 1;
             lv_obj_set_y(obj, end);
         }
     }
@@ -360,15 +366,19 @@ static lv_res_t tab_drag_cb(lv_obj_t *obj, lv_signal_t signal, void *arg) {
 
     if (signal == LV_SIGNAL_COORD_CHG) {
         if (lv_obj_get_y(obj) < start) {
+            popup_shown = 0;
             lv_obj_set_y(obj, start);
         } else if (lv_obj_get_y(obj) > end) {
+            popup_shown = 1;
             lv_obj_set_y(obj, end);
         }
         lv_obj_align(data.sibling, obj, LV_ALIGN_OUT_TOP_MID, 0, 0);
     } else if (signal == LV_SIGNAL_DRAG_END) {
         if (lv_obj_get_y(obj) < midway) {
+            popup_shown = 0;
             lv_obj_set_y(obj, start);
         } else {
+            popup_shown = 1;
             lv_obj_set_y(obj, end);
         }
     }
@@ -568,7 +578,6 @@ static void update_light_buttons(model_t *pmodel, struct page_data *pdata) {
                 assert(0);
         }
     } else {
-        ESP_LOGI(TAG, "no light class");
         lv_obj_set_hidden(pdata->btn_light, 1);
     }
 }
@@ -589,13 +598,16 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
 
 
 static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
-    int16_t pressure_1 = 0;
-    int16_t pressure_2 = 0;
-    int16_t pressure_3 = 0;
-    model_get_pressures(pmodel, &pressure_1, &pressure_2, &pressure_3);
+    int16_t pressures[DEVICE_GROUPS] = {0};
+    model_get_pressures(pmodel, pressures);
 
-    char string[64] = {0};
-    snprintf(string, sizeof(string), "%4i %4i %4i Pa", pressure_1, pressure_2, pressure_3);
+    char string[128] = {0};
+    snprintf(string, sizeof(string),
+             "1-2:%3i    2-3:%3i    3-4:%3i    4-5:%3i\n"
+             "5-6:%3i    6-7:%3i    7-8:%3i    8-9:%3i",
+             pressures[0] - pressures[1], pressures[1] - pressures[2], pressures[2] - pressures[3],
+             pressures[3] - pressures[4], pressures[4] - pressures[5], pressures[5] - pressures[6],
+             pressures[6] - pressures[7], pressures[7] - pressures[8]);
     lv_label_set_text(pdata->lbl_pressure, string);
 }
 
@@ -793,6 +805,10 @@ static void open_page(model_t *model, void *arg) {
     view_new_signal_handler(cont_drag, tab_drag_cb);
     view_new_signal_handler(drawer, drawer_drag_cb);
 
+    if (popup_shown) {
+        lv_obj_align(drawer, NULL, LV_ALIGN_IN_TOP_MID, 0, -DRAWER_RADIUS);
+    }
+
     lv_obj_t *warnings = view_common_menu_button(drawer, "Record errori", 300, ERRORS_BTN_ID);
     lv_obj_set_drag_parent(warnings, true);
 
@@ -809,6 +825,7 @@ static void open_page(model_t *model, void *arg) {
 
     lbl = lv_label_create(lv_scr_act(), NULL);
     lv_obj_align(lbl, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -4);
+    lv_obj_set_auto_realign(lbl, 1);
     data->lbl_pressure = lbl;
 
     update_device_sensors(model, data);
@@ -1232,6 +1249,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_START_CALIBRATION:
+                            model_set_fan_speed(model, 0);
                             msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_FAN_OFF;
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
                             msg.vmsg.page = &page_pressure_calibration;
@@ -1485,38 +1503,27 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
         view_common_get_class_icon(device.class, img);
 
         // State
-        switch (device.class) {
-            case DEVICE_CLASS_LIGHT_1:
-            case DEVICE_CLASS_LIGHT_2:
-            case DEVICE_CLASS_LIGHT_3:
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
-            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
-            case DEVICE_CLASS_GAS:
+        switch (CLASS_GET_MODE(device.class)) {
+            case DEVICE_MODE_LIGHT:
+            case DEVICE_MODE_UVC:
+            case DEVICE_MODE_ESF:
+            case DEVICE_MODE_GAS:
                 lv_label_set_text_fmt(lbl_state, "Output: %s", device.actuator_data.ourput_state ? "ON" : "OFF");
                 break;
-            case DEVICE_CLASS_IMMISSION_FAN:
-            case DEVICE_CLASS_SIPHONING_FAN:
+            case DEVICE_MODE_FAN:
                 lv_label_set_text_fmt(lbl_state, "Output: %s - %i%%",
                                       (device.actuator_data.ourput_state & 0xFF) > 0 ? "ON" : "OFF",
                                       (device.actuator_data.ourput_state >> 8) & 0xFF);
                 break;
-            case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1):
-            case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2):
-            case DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_3):
-                lv_label_set_text_fmt(lbl_state, "%i%s %imB", device.sensor_data.temperature,
+            case DEVICE_MODE_PRESSURE:
+                lv_label_set_text_fmt(lbl_state, "%i%s %iPa", device.sensor_data.temperature,
                                       model_get_degrees_symbol(pmodel), device.sensor_data.pressure);
                 break;
-            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
-            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
-            case DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
+            case DEVICE_MODE_TEMPERATURE_HUMIDITY:
                 lv_label_set_text_fmt(lbl_state, "%i%% %i%s", device.sensor_data.humidity,
                                       device.sensor_data.temperature, model_get_degrees_symbol(pmodel));
                 break;
-            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1):
-            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2):
-            case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_3):
+            case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
                 lv_label_set_text_fmt(lbl_state, "%i%% %i%s %imB", device.sensor_data.humidity,
                                       device.sensor_data.temperature, model_get_degrees_symbol(pmodel),
                                       device.sensor_data.pressure);
@@ -1527,12 +1534,10 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
         }
 
         // Alarms
-        switch (device.class) {
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
-            case DEVICE_CLASS_ELECTROSTATIC_FILTER:
-            case DEVICE_CLASS_GAS:
+        switch (CLASS_GET_MODE(device.class)) {
+            case DEVICE_MODE_UVC:
+            case DEVICE_MODE_ESF:
+            case DEVICE_MODE_GAS:
                 lv_label_set_text_fmt(lbl_alarms, "%s: %s  FB: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
                                       (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0 ? "OK" : "KO",
                                       (device.alarms & EASYCONNECT_FEEDBACK_ALARM) > 0 ? "OK" : "KO");
@@ -1545,16 +1550,15 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
 
 
         // Group
-        switch (device.class) {
-            case DEVICE_CLASS_LIGHT_1:
-            case DEVICE_CLASS_LIGHT_2:
-            case DEVICE_CLASS_LIGHT_3:
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
-            case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
-            case DEVICE_CLASS_SIPHONING_FAN:
-            case DEVICE_CLASS_IMMISSION_FAN:
-                lv_label_set_text_fmt(lbl_address, "IP: %03i Gr.: %i", device.address, CLASS_GET_GROUP(device.class));
+        switch (CLASS_GET_MODE(device.class)) {
+            case DEVICE_MODE_LIGHT:
+            case DEVICE_MODE_UVC:
+            case DEVICE_MODE_FAN:
+            case DEVICE_MODE_PRESSURE:
+            case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
+            case DEVICE_MODE_TEMPERATURE_HUMIDITY:
+                lv_label_set_text_fmt(lbl_address, "IP: %03i Gr.: %i", device.address,
+                                      CLASS_GET_GROUP(device.class) + 1);
                 break;
 
             default:

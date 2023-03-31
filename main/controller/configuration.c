@@ -6,6 +6,7 @@
 #include "gel/data_structures/watcher.h"
 #include "peripherals/tft.h"
 #include "utils/utils.h"
+#include "easyconnect_interface.h"
 
 
 #define NUM_CONFIGURATION_PARAMETERS 34
@@ -193,7 +194,7 @@ void configuration_load(model_t *pmodel) {
     watchlist[i++] = WATCHER(&pmodel->stats.passive_filters_work_seconds, storage_save_uint32,
                              (void *)PASSIVE_FILTERS_WORK_HOURS_KEY);
     watchlist[i++] =
-        WATCHER_ARRAY(&pmodel->configuration.pressure_offsets, 3, save_pressure_offsets, (void *)PRESSURE_OFFSETS_KEY);
+        WATCHER_ARRAY(&pmodel->configuration.pressure_offsets, DEVICE_GROUPS, save_pressure_offsets, (void *)PRESSURE_OFFSETS_KEY);
     assert(i == NUM_CONFIGURATION_PARAMETERS);
     watchlist[i++] = WATCHER_NULL;
     watcher_list_init(watchlist);
@@ -230,5 +231,5 @@ static void save_double_byte_array(void *mem, void *arg) {
 
 
 static void save_pressure_offsets(void *mem, void *arg) {
-    storage_save_blob(mem, 6, arg);
+    storage_save_blob(mem, DEVICE_GROUPS, arg);
 }

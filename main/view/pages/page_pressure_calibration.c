@@ -93,27 +93,15 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
                         case BTN_NEXT_ID:
                             if (model_get_fan_state(pmodel) == MODEL_FAN_STATE_OFF) {
-                                msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN;
-
-                                int16_t pressure_1 = 0;
-                                int16_t pressure_2 = 0;
-
-                                // Align 1 and 2
-                                model_get_raw_pressures(pmodel, &pressure_1, &pressure_2, NULL);
-                                model_set_pressure_offset(pmodel, DEVICE_GROUP_2, -(pressure_2 - pressure_1));
-
+                                msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_PRESSURE_CALIBRATION;
                             } else {
                                 uint8_t speed = model_get_fan_speed(pmodel);
 
-                                int16_t pressure_1 = 0;
-                                int16_t pressure_2 = 0;
-                                model_get_pressures(pmodel, &pressure_1, &pressure_2, NULL);
+                                int16_t pressures[DEVICE_GROUPS] = {0};
+                                model_get_pressures(pmodel, pressures);
 
-                                if (pressure_1 < pressure_2) {
-                                    model_set_pressure_difference(pmodel, speed, pressure_2 - pressure_1);
-                                } else {
-                                    model_set_pressure_difference(pmodel, speed, 0);
-                                }
+                                int16_t result = pressures[1] - pressures[0];
+                                model_set_pressure_difference(pmodel, speed, result < 0 ? -result : result);
 
                                 if (speed < MAX_FAN_SPEED - 1) {
                                     speed++;
@@ -154,11 +142,10 @@ static void update_page(model_t *pmodel, struct page_data *pdata) {
         lv_label_set_text_fmt(pdata->lbl_speed, "%i", model_get_fan_speed(pmodel) + 1);
     }
 
-    int16_t pressure_1 = 0;
-    int16_t pressure_2 = 0;
+    int16_t pressures[DEVICE_GROUPS] = {0};
 
-    model_get_pressures(pmodel, &pressure_1, &pressure_2, NULL);
-    lv_label_set_text_fmt(pdata->lbl_pressure, "Gruppo 1: %4i Pa      Gruppo 2: %4i Pa", pressure_1, pressure_2);
+    model_get_pressures(pmodel, pressures);
+    lv_label_set_text_fmt(pdata->lbl_pressure, "Gruppo 1: %4i Pa      Gruppo 2: %4i Pa", pressures[0], pressures[1]);
 }
 
 

@@ -99,6 +99,10 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             }
             break;
 
+        case VIEW_CONTROLLER_MESSAGE_CODE_PRESSURE_CALIBRATION:
+            controller_state_event(pmodel, STATE_EVENT_FAN_START_CALIBRATION);
+            break;
+
         case VIEW_CONTROLLER_MESSAGE_CODE_FAN_OFF:
             controller_state_event(pmodel, STATE_EVENT_FAN_STOP);
             break;
@@ -189,7 +193,7 @@ void controller_manage(model_t *pmodel) {
 
     configuration_manage();
 
-    if (is_expired(poll_ts, get_millis(), 200UL)) {
+    if (is_expired(poll_ts, get_millis(), 500UL)) {
         if (poll_address == 0) {
             poll_address = model_get_next_device_address(pmodel, poll_address);
         } else {
@@ -197,6 +201,7 @@ void controller_manage(model_t *pmodel) {
 
             switch (CLASS_GET_MODE(model_get_device(pmodel, poll_address).class)) {
                 case DEVICE_MODE_PRESSURE:
+                case DEVICE_MODE_TEMPERATURE_HUMIDITY:
                 case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
                     modbus_read_device_pressure(poll_address);
                     break;
@@ -334,7 +339,8 @@ void controller_manage(model_t *pmodel) {
                 break;
 
             case MODBUS_RESPONSE_CODE_PRESSURE:
-                model_set_device_pressure(pmodel, response.address, response.pressure);
+                model_set_sensors_values(pmodel, response.address, response.pressure, response.temperature,
+                                         response.humidity);
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE});
                 break;
         }
