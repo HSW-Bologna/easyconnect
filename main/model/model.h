@@ -53,9 +53,7 @@
 
 typedef enum {
     MODEL_FAN_STATE_OFF = 0,
-    MODEL_FAN_STATE_SF_ENV_CLEANING,
-    MODEL_FAN_STATE_SF_IF_ENV_CLEANING,
-    MODEL_FAN_STATE_IF_ENV_CLEANING,
+    MODEL_FAN_STATE_CLEANING,
     MODEL_FAN_STATE_FAN_RUNNING,
     MODEL_FAN_STATE_PRESSURE_CALIBRATION,
 } model_fan_state_t;
@@ -96,13 +94,9 @@ typedef struct {
         uint8_t  siphoning_percentages[MAX_FAN_SPEED];
         uint8_t  immission_percentages[MAX_FAN_SPEED];
         uint16_t pressure_threshold_mb;
-        uint16_t passive_filters_hours_warning_threshold;
-        uint16_t passive_filters_hours_stop_threshold;
         uint16_t num_passive_filters;
         uint16_t uvc_filters_hours_warning_threshold;
         uint16_t uvc_filters_hours_stop_threshold;
-        uint16_t esf_filters_hours_warning_threshold;
-        uint16_t esf_filters_hours_stop_threshold;
 
         uint8_t first_humidity_delta;
         uint8_t second_humidity_delta;
@@ -120,10 +114,6 @@ typedef struct {
 
         int16_t pressure_offsets[16];
     } configuration;
-
-    struct {
-        uint32_t passive_filters_work_seconds;
-    } stats;
 
     uint8_t fan_speed;
 
@@ -187,12 +177,6 @@ uint8_t           model_get_esf_filters_for_speed(model_t *pmodel, uint8_t fan_s
 void              model_set_esf_filters_for_speed(model_t *pmodel, uint8_t fan_speed, uint8_t filters);
 uint8_t           model_get_problematic_filter_device(model_t *pmodel, uint8_t previous);
 void     model_get_alarms_for_classes(model_t *pmodel, uint8_t *uvc, uint8_t *esf, uint8_t *siph, uint8_t *imm);
-void     model_reset_passive_filters_work_hours(model_t *pmodel);
-uint8_t  model_add_passive_filters_work_seconds(model_t *pmodel, uint32_t seconds);
-uint16_t model_get_passive_filters_remaining_hours(model_t *pmodel);
-uint8_t  model_get_passive_filter_warning(model_t *pmodel);
-uint8_t  model_get_passive_filter_stop(model_t *pmodel);
-uint16_t model_get_passive_filters_work_hours(model_t *pmodel);
 uint16_t model_get_filter_device_work_hours(model_t *pmodel, uint8_t address);
 uint16_t model_get_filter_device_remaining_hours(model_t *pmodel, uint8_t address);
 uint8_t  model_get_filter_device_warning(model_t *pmodel, uint8_t address);
@@ -217,13 +201,9 @@ GETTERNSETTER(use_fahrenheit, configuration.use_fahrenheit);
 GETTERNSETTER(environment_cleaning_start_period, configuration.environment_cleaning_start_period);
 GETTERNSETTER(environment_cleaning_finish_period, configuration.environment_cleaning_finish_period);
 GETTERNSETTER(pressure_threshold_mb, configuration.pressure_threshold_mb);
-GETTERNSETTER(passive_filters_hours_warning_threshold, configuration.passive_filters_hours_warning_threshold);
-GETTERNSETTER(passive_filters_hours_stop_threshold, configuration.passive_filters_hours_stop_threshold);
 GETTERNSETTER(num_passive_filters, configuration.num_passive_filters);
 GETTERNSETTER(uvc_filters_hours_warning_threshold, configuration.uvc_filters_hours_warning_threshold);
 GETTERNSETTER(uvc_filters_hours_stop_threshold, configuration.uvc_filters_hours_stop_threshold);
-GETTERNSETTER(esf_filters_hours_warning_threshold, configuration.esf_filters_hours_warning_threshold);
-GETTERNSETTER(esf_filters_hours_stop_threshold, configuration.esf_filters_hours_stop_threshold);
 GETTERNSETTER(pressure_difference_deviation_warn, configuration.pressure_difference_deviation_warn);
 GETTERNSETTER(pressure_difference_deviation_stop, configuration.pressure_difference_deviation_stop);
 

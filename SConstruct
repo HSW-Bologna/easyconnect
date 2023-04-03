@@ -217,7 +217,10 @@ def main():
                 File(f'{B64}/decode.c'), File(f'{B64}/buffer.c')]
     sources += [File(f"{LIGHTMODBUS}/src/impl.c")]
 
-    prog = env.Program(PROGRAM, sources + freertos + gel_objects + i2c_objects)
+    total_sources = sources + freertos + gel_objects + i2c_objects
+    ctags = env.Command("", "", "ctags -R .")
+    prog = env.Program(PROGRAM, total_sources)
+    env.Depends(ctags, total_sources)
     PhonyTargets('run', './simulated', prog, env)
     env.Alias('mingw', prog)
     env.CompilationDatabase('build/compile_commands.json')

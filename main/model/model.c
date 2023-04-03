@@ -52,12 +52,8 @@ void model_init(model_t *pmodel) {
 
     pmodel->configuration.pressure_threshold_mb = 0;
 
-    pmodel->configuration.passive_filters_hours_warning_threshold = 1000;
-    pmodel->configuration.passive_filters_hours_stop_threshold    = 2000;
     pmodel->configuration.uvc_filters_hours_warning_threshold     = 8000;
     pmodel->configuration.uvc_filters_hours_stop_threshold        = 10000;
-    pmodel->configuration.esf_filters_hours_warning_threshold     = 1000;
-    pmodel->configuration.esf_filters_hours_stop_threshold        = 2000;
 
     pmodel->configuration.first_temperature_delta        = 25;
     pmodel->configuration.second_temperature_delta       = 35;
@@ -76,44 +72,7 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.pressure_offsets[1]         = 0;
     pmodel->configuration.pressure_offsets[2]         = 0;
 
-    pmodel->stats.passive_filters_work_seconds = 0;
-
     pmodel->show_work_hours_state = 0;
-}
-
-
-void model_reset_passive_filters_work_hours(model_t *pmodel) {
-    assert(pmodel != NULL);
-    pmodel->stats.passive_filters_work_seconds = 0;
-}
-
-
-uint8_t model_add_passive_filters_work_seconds(model_t *pmodel, uint32_t seconds) {
-    assert(pmodel != NULL);
-    uint8_t previous_warn = model_get_passive_filter_warning(pmodel);
-    uint8_t previous_stop = model_get_passive_filter_stop(pmodel);
-    pmodel->stats.passive_filters_work_seconds += seconds;
-    uint8_t next_warn = model_get_passive_filter_warning(pmodel);
-    uint8_t next_stop = model_get_passive_filter_stop(pmodel);
-
-    return (next_warn || next_stop) && (previous_warn != next_warn || previous_stop != next_stop);
-}
-
-
-uint16_t model_get_passive_filters_work_hours(model_t *pmodel) {
-    assert(pmodel != NULL);
-    return pmodel->stats.passive_filters_work_seconds / (60UL * 60UL);
-}
-
-
-uint16_t model_get_passive_filters_remaining_hours(model_t *pmodel) {
-    assert(pmodel != NULL);
-    if (model_get_passive_filters_work_hours(pmodel) < pmodel->configuration.passive_filters_hours_stop_threshold) {
-        return pmodel->configuration.passive_filters_hours_stop_threshold -
-               model_get_passive_filters_work_hours(pmodel);
-    } else {
-        return 0;
-    }
 }
 
 
@@ -140,12 +99,6 @@ uint16_t model_get_filter_device_remaining_hours(model_t *pmodel, uint8_t addres
             } else {
                 return pmodel->configuration.uvc_filters_hours_stop_threshold - device.actuator_data.work_hours;
             }
-        case DEVICE_MODE_ESF:
-            if (device.actuator_data.work_hours > pmodel->configuration.esf_filters_hours_stop_threshold) {
-                return 0;
-            } else {
-                return pmodel->configuration.esf_filters_hours_stop_threshold - device.actuator_data.work_hours;
-            }
         default:
             return 0;
     }
@@ -158,8 +111,6 @@ uint8_t model_get_filter_device_warning(model_t *pmodel, uint8_t address) {
     switch (CLASS_GET_MODE(device.class)) {
         case DEVICE_MODE_UVC:
             return device.actuator_data.work_hours > pmodel->configuration.uvc_filters_hours_warning_threshold;
-        case DEVICE_MODE_ESF:
-            return device.actuator_data.work_hours > pmodel->configuration.esf_filters_hours_warning_threshold;
         default:
             return 0;
     }
@@ -169,18 +120,6 @@ uint8_t model_get_filter_device_warning(model_t *pmodel, uint8_t address) {
 uint8_t model_get_filter_device_stop(model_t *pmodel, uint8_t address) {
     assert(pmodel != NULL);
     return model_get_filter_device_remaining_hours(pmodel, address) == 0;
-}
-
-
-uint8_t model_get_passive_filter_warning(model_t *pmodel) {
-    assert(pmodel != NULL);
-    return model_get_passive_filters_work_hours(pmodel) > pmodel->configuration.passive_filters_hours_warning_threshold;
-}
-
-
-uint8_t model_get_passive_filter_stop(model_t *pmodel) {
-    assert(pmodel != NULL);
-    return model_get_passive_filters_remaining_hours(pmodel) == 0;
 }
 
 

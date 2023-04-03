@@ -61,8 +61,6 @@ LV_IMG_DECLARE(img_aspirazione_accesa);
 LV_IMG_DECLARE(img_aspirazione_spenta);
 LV_IMG_DECLARE(img_aspirazione_immissione_accese);
 LV_IMG_DECLARE(img_aspirazione_immissione_spente);
-LV_IMG_DECLARE(img_aspirazione_accesa_immissione_spenta);
-LV_IMG_DECLARE(img_aspirazione_spenta_immissione_accesa);
 
 LV_IMG_DECLARE(img_lampada_uvc_spenta);
 LV_IMG_DECLARE(img_lampada_uvc_accesa);
@@ -167,16 +165,11 @@ enum {
     BTN_PRESSURE_THRESHOLD_MOD,
 
     // Maintenance popup
-    BTN_RESET_PASSIVE_FILTERS_HOURS,
     BTN_RESET_FILTER_HOURS,
 
     // Filters popup
     BTN_UVC_FILTERS_HOURS_THRESHOLD_WARN_MOD,
     BTN_UVC_FILTERS_HOURS_THRESHOLD_STOP_MOD,
-    BTN_ESF_FILTERS_HOURS_THRESHOLD_WARN_MOD,
-    BTN_ESF_FILTERS_HOURS_THRESHOLD_STOP_MOD,
-    BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_MOD,
-    BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_MOD,
     BTN_PASSIVE_FILTERS_NUM_MOD,
 
     // Rec system group
@@ -285,11 +278,6 @@ struct page_data {
         struct {
             lv_obj_t *lbl_uvc_filters_hours_threshold_warn;
             lv_obj_t *lbl_uvc_filters_hours_threshold_stop;
-            lv_obj_t *lbl_esf_filters_hours_threshold_warn;
-            lv_obj_t *lbl_esf_filters_hours_threshold_stop;
-            lv_obj_t *lbl_passive_filters_hours_threshold_warn;
-            lv_obj_t *lbl_passive_filters_hours_threshold_stop;
-            lv_obj_t *lbl_num_passive_filters;
         } filters;
         struct {
             lv_obj_t *lbl_pressure_differences[MAX_FAN_SPEED];
@@ -440,21 +428,9 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
         lv_obj_set_hidden(data->btn_fan, 0);
 
         switch (model_get_fan_state(pmodel)) {
-            case MODEL_FAN_STATE_SF_ENV_CLEANING:
+            case MODEL_FAN_STATE_CLEANING:
                 lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL), data->blink
-                                                                          ? &img_aspirazione_accesa_immissione_spenta
-                                                                          : &img_aspirazione_immissione_spente);
-                break;
-
-            case MODEL_FAN_STATE_SF_IF_ENV_CLEANING:
-                lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL), data->blink
-                                                                          ? &img_aspirazione_accesa_immissione_spenta
-                                                                          : &img_aspirazione_immissione_accese);
-                break;
-
-            case MODEL_FAN_STATE_IF_ENV_CLEANING:
-                lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL), data->blink
-                                                                          ? &img_aspirazione_spenta_immissione_accesa
+                                                                          ? &img_aspirazione_immissione_accese
                                                                           : &img_aspirazione_immissione_spente);
                 break;
 
@@ -478,7 +454,7 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
         lv_obj_set_hidden(data->btn_fan, 0);
 
         switch (model_get_fan_state(pmodel)) {
-            case MODEL_FAN_STATE_SF_ENV_CLEANING:
+            case MODEL_FAN_STATE_CLEANING:
                 lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL),
                                data->blink ? &img_aspirazione_accesa : &img_aspirazione_spenta);
                 break;
@@ -489,11 +465,6 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
 
             case MODEL_FAN_STATE_OFF:
                 lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL), &img_aspirazione_spenta);
-                break;
-
-            case MODEL_FAN_STATE_SF_IF_ENV_CLEANING:
-            case MODEL_FAN_STATE_IF_ENV_CLEANING:
-                assert(0);
                 break;
 
             case MODEL_FAN_STATE_PRESSURE_CALIBRATION:
@@ -981,20 +952,6 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             update_menus(model, data);
                             break;
 
-                        case BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_MOD:
-                            model_set_passive_filters_hours_warning_threshold(
-                                model, modify_parameter(model_get_passive_filters_hours_warning_threshold(model),
-                                                        event.data.number * 100, 100, 10000));
-                            update_menus(model, data);
-                            break;
-
-                        case BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_MOD:
-                            model_set_passive_filters_hours_stop_threshold(
-                                model, modify_parameter(model_get_passive_filters_hours_stop_threshold(model),
-                                                        event.data.number * 100, 100, 10000));
-                            update_menus(model, data);
-                            break;
-
                         case BTN_UVC_FILTERS_HOURS_THRESHOLD_WARN_MOD:
                             model_set_uvc_filters_hours_warning_threshold(
                                 model, modify_parameter(model_get_uvc_filters_hours_warning_threshold(model),
@@ -1005,20 +962,6 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case BTN_UVC_FILTERS_HOURS_THRESHOLD_STOP_MOD:
                             model_set_uvc_filters_hours_stop_threshold(
                                 model, modify_parameter(model_get_uvc_filters_hours_stop_threshold(model),
-                                                        event.data.number * 100, 100, 10000));
-                            update_menus(model, data);
-                            break;
-
-                        case BTN_ESF_FILTERS_HOURS_THRESHOLD_WARN_MOD:
-                            model_set_esf_filters_hours_warning_threshold(
-                                model, modify_parameter(model_get_esf_filters_hours_warning_threshold(model),
-                                                        event.data.number * 100, 100, 10000));
-                            update_menus(model, data);
-                            break;
-
-                        case BTN_ESF_FILTERS_HOURS_THRESHOLD_STOP_MOD:
-                            model_set_esf_filters_hours_stop_threshold(
-                                model, modify_parameter(model_get_esf_filters_hours_stop_threshold(model),
                                                         event.data.number * 100, 100, 10000));
                             update_menus(model, data);
                             break;
@@ -1126,11 +1069,6 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             }
                             break;
                         }
-
-                        case BTN_RESET_PASSIVE_FILTERS_HOURS:
-                            model_reset_passive_filters_work_hours(model);
-                            change_page_route(model, data, data->page_route);
-                            break;
 
                         case BTN_RESET_FILTER_HOURS:
                             msg.cmsg.code    = VIEW_CONTROLLER_MESSAGE_CODE_RESET_FILTER_HOURS;
@@ -1783,11 +1721,6 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_obj_set_style_local_pad_inner(page, LV_PAGE_PART_SCROLLABLE, LV_STATE_DEFAULT, 0);
             lv_obj_set_style_local_pad_top(page, LV_PAGE_PART_SCROLLABLE, LV_STATE_DEFAULT, 0);
 
-            filter_info_create(pmodel, page, view_intl_get_string(pmodel, STRINGS_FILTRO), DEVICE_GROUP_1,
-                               model_get_passive_filters_work_hours(pmodel),
-                               model_get_passive_filters_remaining_hours(pmodel), &img_icon_passive_filter_md,
-                               model_get_passive_filter_warning(pmodel), BTN_RESET_PASSIVE_FILTERS_HOURS, 0);
-
             uint8_t starting_address = 0;
             uint8_t address          = model_get_next_device_address_by_mode(pmodel, starting_address, DEVICE_MODE_UVC);
 
@@ -1984,7 +1917,6 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
 
             int16_t cont_y = 90;
 
-            size_t esf_count = model_get_class_count(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER);
             size_t ulf_count = model_get_mode_count(pmodel, DEVICE_MODE_UVC);
 
             if (ulf_count > 0) {
@@ -2021,62 +1953,12 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 pdata->filters.lbl_uvc_filters_hours_threshold_stop = NULL;
             }
 
-            if (esf_count > 0) {
-                cont = bordered_cont(pdata->cont_subpage);
-                lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_LEFT, 32, cont_y);
-
-                img = lv_img_create(cont, NULL);
-                lv_img_set_src(img, &img_icon_esf_md);
-                lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
-
-                lv_obj_t **labels[] = {
-                    &pdata->filters.lbl_esf_filters_hours_threshold_warn,
-                    &pdata->filters.lbl_esf_filters_hours_threshold_stop,
-                };
-                int identifiers[] = {
-                    BTN_ESF_FILTERS_HOURS_THRESHOLD_WARN_MOD,
-                    BTN_ESF_FILTERS_HOURS_THRESHOLD_STOP_MOD,
-                };
-
-                for (size_t i = 0; i < 2; i++) {
-                    lv_obj_t *par_cont = par_control_cont(pdata->cont_subpage, labels[i], identifiers[i]);
-                    lv_obj_align(par_cont, cont, LV_ALIGN_OUT_RIGHT_MID, 8 + 78 * i, 0);
-                }
-
-                lv_obj_t *par_cont = bordered_cont(pdata->cont_subpage);
-                lv_obj_t *lbl      = lv_label_create(par_cont, NULL);
-                lv_label_set_text_fmt(lbl, "%zu", esf_count);
-                lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
-                lv_obj_align(par_cont, cont, LV_ALIGN_OUT_RIGHT_MID, 8 + 78 * 2, 0);
-
-                cont_y += 72;
-            } else {
-                pdata->filters.lbl_esf_filters_hours_threshold_warn = NULL;
-                pdata->filters.lbl_esf_filters_hours_threshold_stop = NULL;
-            }
-
             cont = bordered_cont(pdata->cont_subpage);
             lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_LEFT, 32, cont_y);
 
             img = lv_img_create(cont, NULL);
             lv_img_set_src(img, &img_icon_passive_filter_md);
             lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
-
-            lv_obj_t **labels[] = {
-                &pdata->filters.lbl_passive_filters_hours_threshold_warn,
-                &pdata->filters.lbl_passive_filters_hours_threshold_stop,
-                &pdata->filters.lbl_num_passive_filters,
-            };
-            int identifiers[] = {
-                BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_MOD,
-                BTN_PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_MOD,
-                BTN_PASSIVE_FILTERS_NUM_MOD,
-            };
-
-            for (size_t i = 0; i < 3; i++) {
-                lv_obj_t *par_cont = par_control_cont(pdata->cont_subpage, labels[i], identifiers[i]);
-                lv_obj_align(par_cont, cont, LV_ALIGN_OUT_RIGHT_MID, 8 + 78 * i, 0);
-            }
 
             break;
         }
@@ -2319,21 +2201,6 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 address          = model_get_problematic_filter_device(pmodel, starting_address);
             }
 
-            if (model_get_passive_filter_warning(pmodel) || model_get_passive_filter_stop(pmodel)) {
-                lv_obj_t *lbl = lv_label_create(page, NULL);
-                lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
-                lv_obj_set_width(lbl, lv_obj_get_width(page) - 32);
-
-                if (model_get_passive_filter_stop(pmodel)) {
-                    lv_obj_set_style_local_text_color(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
-                    lv_label_set_text_fmt(lbl, view_intl_get_string(pmodel, STRINGS_STOP_MANUTENZIONE),
-                                          view_intl_get_string(pmodel, STRINGS_PASSIVO));
-                } else {
-                    lv_obj_set_style_local_text_color(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ORANGE);
-                    lv_label_set_text_fmt(lbl, view_intl_get_string(pmodel, STRINGS_WARNING_MANUTENZIONE),
-                                          view_intl_get_string(pmodel, STRINGS_PASSIVO));
-                }
-            }
             break;
         }
     }
@@ -2380,19 +2247,6 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
                 lv_label_set_text_fmt(pdata->filters.lbl_uvc_filters_hours_threshold_stop, "%i",
                                       model_get_uvc_filters_hours_stop_threshold(pmodel));
             }
-            if (pdata->filters.lbl_esf_filters_hours_threshold_warn != NULL) {
-                lv_label_set_text_fmt(pdata->filters.lbl_esf_filters_hours_threshold_warn, "%i",
-                                      model_get_esf_filters_hours_warning_threshold(pmodel));
-            }
-            if (pdata->filters.lbl_esf_filters_hours_threshold_stop != NULL) {
-                lv_label_set_text_fmt(pdata->filters.lbl_esf_filters_hours_threshold_stop, "%i",
-                                      model_get_esf_filters_hours_stop_threshold(pmodel));
-            }
-            lv_label_set_text_fmt(pdata->filters.lbl_passive_filters_hours_threshold_warn, "%i",
-                                  model_get_passive_filters_hours_warning_threshold(pmodel));
-            lv_label_set_text_fmt(pdata->filters.lbl_passive_filters_hours_threshold_stop, "%i",
-                                  model_get_passive_filters_hours_stop_threshold(pmodel));
-            lv_label_set_text_fmt(pdata->filters.lbl_num_passive_filters, "%i", model_get_num_passive_filters(pmodel));
             break;
 
         case PAGE_ROUTE_PRESSURE:

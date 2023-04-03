@@ -9,7 +9,7 @@
 #include "easyconnect_interface.h"
 
 
-#define NUM_CONFIGURATION_PARAMETERS 34
+#define NUM_CONFIGURATION_PARAMETERS 29
 
 
 static void save_backlight(void *mem, void *arg);
@@ -30,16 +30,11 @@ static const char *IMMISSION_PERCENTAGES_KEY                = "IMMPERC";
 static const char *CLEANING_START_PERIOD_KEY                = "CLEANSTART";
 static const char *CLEANING_FINISH_PERIOD_KEY               = "CLEANFINISH";
 static const char *NUM_PASSIVE_FILTERS_KEY                  = "PASSIVENUM";
-static const char *PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_KEY = "PASSTHRESWARN";
-static const char *PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_KEY = "PASSTHRESSTOP";
-static const char *PASSIVE_FILTERS_WORK_HOURS_KEY           = "PASSWORKHOURS";
 static const char *PRESSURE_DIFFERENCES_KEY                 = "PRESSDIFFS";
 static const char *PRESSURE_DIFFERENCE_WARN_KEY             = "PDIFFWARN";
 static const char *PRESSURE_DIFFERENCE_STOP_KEY             = "PDIFFSTOP";
 static const char *UVC_FILTERS_HOURS_THRESHOLD_WARN_KEY     = "UVCTHRESWARN";
 static const char *UVC_FILTERS_HOURS_THRESHOLD_STOP_KEY     = "UVCTHRESSTOP";
-static const char *ESF_FILTERS_HOURS_THRESHOLD_WARN_KEY     = "ESFTHRESWARN";
-static const char *ESF_FILTERS_HOURS_THRESHOLD_STOP_KEY     = "ESFTHRESSTOP";
 
 static const char *FIRST_HUMIDITY_DELTA_KEY        = "FSTHUMDELTA";
 static const char *SECOND_HUMIDITY_DELTA_KEY       = "SNDHUMDELTA";
@@ -82,18 +77,10 @@ void configuration_load(model_t *pmodel) {
     storage_load_uint16(&pmodel->configuration.environment_cleaning_start_period, (char *)CLEANING_START_PERIOD_KEY);
     storage_load_uint16(&pmodel->configuration.environment_cleaning_finish_period, (char *)CLEANING_START_PERIOD_KEY);
     storage_load_uint16(&pmodel->configuration.num_passive_filters, (char *)NUM_PASSIVE_FILTERS_KEY);
-    storage_load_uint16(&pmodel->configuration.passive_filters_hours_warning_threshold,
-                        (char *)PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_KEY);
-    storage_load_uint16(&pmodel->configuration.passive_filters_hours_stop_threshold,
-                        (char *)PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_KEY);
     storage_load_uint16(&pmodel->configuration.uvc_filters_hours_warning_threshold,
                         (char *)UVC_FILTERS_HOURS_THRESHOLD_WARN_KEY);
     storage_load_uint16(&pmodel->configuration.uvc_filters_hours_stop_threshold,
                         (char *)UVC_FILTERS_HOURS_THRESHOLD_STOP_KEY);
-    storage_load_uint16(&pmodel->configuration.esf_filters_hours_warning_threshold,
-                        (char *)ESF_FILTERS_HOURS_THRESHOLD_WARN_KEY);
-    storage_load_uint16(&pmodel->configuration.esf_filters_hours_stop_threshold,
-                        (char *)ESF_FILTERS_HOURS_THRESHOLD_STOP_KEY);
     storage_load_uint8(&pmodel->configuration.use_fahrenheit, (char *)DEGREES_KEY);
     storage_load_blob(&pmodel->configuration.uvc_filters_for_speed, MAX_FAN_SPEED, (char *)UVC_FILTERS_KEY);
     storage_load_blob(&pmodel->configuration.esf_filters_for_speed, MAX_FAN_SPEED, (char *)ESF_FILTERS_KEY);
@@ -121,7 +108,6 @@ void configuration_load(model_t *pmodel) {
     storage_load_uint16(&pmodel->configuration.temperature_warn, (char *)TEMPERATURE_WARN_KEY);
     storage_load_uint16(&pmodel->configuration.temperature_stop, (char *)TEMPERATURE_STOP_KEY);
 
-    storage_load_uint32(&pmodel->stats.passive_filters_work_seconds, (char *)PASSIVE_FILTERS_WORK_HOURS_KEY);
 
     storage_load_blob(&pmodel->configuration.pressure_offsets, sizeof(pmodel->configuration.pressure_offsets),
                       (char *)PRESSURE_OFFSETS_KEY);
@@ -134,18 +120,10 @@ void configuration_load(model_t *pmodel) {
     watchlist[i++] = WATCHER(&pmodel->configuration.use_fahrenheit, storage_save_uint8, (void *)DEGREES_KEY);
     watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.num_passive_filters, storage_save_uint16,
                                      (void *)NUM_PASSIVE_FILTERS_KEY, 4000UL);
-    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.passive_filters_hours_warning_threshold,
-                                     storage_save_uint16, (void *)PASSIVE_FILTERS_HOURS_THRESHOLD_WARN_KEY, 4000UL);
-    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.passive_filters_hours_stop_threshold, storage_save_uint16,
-                                     (void *)PASSIVE_FILTERS_HOURS_THRESHOLD_STOP_KEY, 4000UL);
     watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.uvc_filters_hours_warning_threshold, storage_save_uint16,
                                      (void *)UVC_FILTERS_HOURS_THRESHOLD_WARN_KEY, 4000UL);
     watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.uvc_filters_hours_stop_threshold, storage_save_uint16,
                                      (void *)UVC_FILTERS_HOURS_THRESHOLD_STOP_KEY, 4000UL);
-    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.esf_filters_hours_warning_threshold, storage_save_uint16,
-                                     (void *)ESF_FILTERS_HOURS_THRESHOLD_WARN_KEY, 4000UL);
-    watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.esf_filters_hours_stop_threshold, storage_save_uint16,
-                                     (void *)ESF_FILTERS_HOURS_THRESHOLD_STOP_KEY, 4000UL);
     watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.environment_cleaning_start_period, storage_save_uint16,
                                      (void *)CLEANING_START_PERIOD_KEY, 4000UL);
     watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.environment_cleaning_finish_period, storage_save_uint16,
@@ -191,8 +169,6 @@ void configuration_load(model_t *pmodel) {
     watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.temperature_stop, storage_save_uint16,
                                      (void *)TEMPERATURE_STOP_KEY, 4000UL);
 
-    watchlist[i++] = WATCHER(&pmodel->stats.passive_filters_work_seconds, storage_save_uint32,
-                             (void *)PASSIVE_FILTERS_WORK_HOURS_KEY);
     watchlist[i++] =
         WATCHER_ARRAY(&pmodel->configuration.pressure_offsets, DEVICE_GROUPS, save_pressure_offsets, (void *)PRESSURE_OFFSETS_KEY);
     assert(i == NUM_CONFIGURATION_PARAMETERS);

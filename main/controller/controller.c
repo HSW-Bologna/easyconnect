@@ -37,10 +37,6 @@ void controller_init(model_t *pmodel) {
     configuration_load(pmodel);
     view_start(pmodel);
 
-    if (model_get_passive_filter_warning(pmodel) || model_get_passive_filter_stop(pmodel)) {
-        model_set_show_work_hours_state(pmodel, 1);
-    }
-
     tft_backlight_set(model_get_active_backlight(pmodel));
 
     if (ds1307_is_clock_halted(rtc_driver)) {

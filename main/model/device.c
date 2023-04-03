@@ -189,6 +189,9 @@ void device_list_delete_device(device_t *devices, uint8_t address) {
 }
 
 
+/**
+ * @brief Get device from list
+ */
 device_t device_list_get_device(device_t *devices, uint8_t address) {
     assert(devices != NULL);
     ASSERT_ADDRESS(address);
