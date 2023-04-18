@@ -9,7 +9,7 @@
 #include "easyconnect_interface.h"
 
 
-#define NUM_CONFIGURATION_PARAMETERS 29
+#define NUM_CONFIGURATION_PARAMETERS 30
 
 
 static void save_backlight(void *mem, void *arg);
@@ -18,23 +18,23 @@ static void save_double_byte_array(void *mem, void *arg);
 static void save_pressure_offsets(void *mem, void *arg);
 
 
-static const char *DEVICE_MAP_KEY                           = "DMAP";
-static const char *LANGUAGE_KEY                             = "LANGUAGE";
-static const char *BACKLIGHT_KEY                            = "BACKLIGHT";
-static const char *BUZZER_KEY                               = "BUZZER";
-static const char *DEGREES_KEY                              = "DEGREES";
-static const char *UVC_FILTERS_KEY                          = "UVCFILT";
-static const char *ESF_FILTERS_KEY                          = "ESFFILT";
-static const char *SIPHONING_PERCENTAGES_KEY                = "SIPPERC";
-static const char *IMMISSION_PERCENTAGES_KEY                = "IMMPERC";
-static const char *CLEANING_START_PERIOD_KEY                = "CLEANSTART";
-static const char *CLEANING_FINISH_PERIOD_KEY               = "CLEANFINISH";
-static const char *NUM_PASSIVE_FILTERS_KEY                  = "PASSIVENUM";
-static const char *PRESSURE_DIFFERENCES_KEY                 = "PRESSDIFFS";
-static const char *PRESSURE_DIFFERENCE_WARN_KEY             = "PDIFFWARN";
-static const char *PRESSURE_DIFFERENCE_STOP_KEY             = "PDIFFSTOP";
-static const char *UVC_FILTERS_HOURS_THRESHOLD_WARN_KEY     = "UVCTHRESWARN";
-static const char *UVC_FILTERS_HOURS_THRESHOLD_STOP_KEY     = "UVCTHRESSTOP";
+static const char *DEVICE_MAP_KEY                       = "DMAP";
+static const char *LANGUAGE_KEY                         = "LANGUAGE";
+static const char *BACKLIGHT_KEY                        = "BACKLIGHT";
+static const char *BUZZER_KEY                           = "BUZZER";
+static const char *DEGREES_KEY                          = "DEGREES";
+static const char *UVC_FILTERS_KEY                      = "UVCFILT";
+static const char *ESF_FILTERS_KEY                      = "ESFFILT";
+static const char *SIPHONING_PERCENTAGES_KEY            = "SIPPERC";
+static const char *IMMISSION_PERCENTAGES_KEY            = "IMMPERC";
+static const char *CLEANING_START_PERIOD_KEY            = "CLEANSTART";
+static const char *CLEANING_FINISH_PERIOD_KEY           = "CLEANFINISH";
+static const char *NUM_PASSIVE_FILTERS_KEY              = "PASSIVENUM";
+static const char *PRESSURE_DIFFERENCES_KEY             = "PRESSDIFFS";
+static const char *PRESSURE_DIFFERENCE_WARN_KEY         = "PDIFFWARN";
+static const char *PRESSURE_DIFFERENCE_STOP_KEY         = "PDIFFSTOP";
+static const char *UVC_FILTERS_HOURS_THRESHOLD_WARN_KEY = "UVCTHRESWARN";
+static const char *UVC_FILTERS_HOURS_THRESHOLD_STOP_KEY = "UVCTHRESSTOP";
 
 static const char *FIRST_HUMIDITY_DELTA_KEY        = "FSTHUMDELTA";
 static const char *SECOND_HUMIDITY_DELTA_KEY       = "SNDHUMDELTA";
@@ -51,6 +51,8 @@ static const char *TEMPERATURE_WARN_KEY               = "TEMPWARN";
 static const char *TEMPERATURE_STOP_KEY               = "TEMPSTOP";
 
 static const char *PRESSURE_OFFSETS_KEY = "PRESSOFF";
+
+static const char *WIFI_KEY = "WIFI";
 
 static const char *TAG = "Devices";
 
@@ -71,6 +73,7 @@ void configuration_load(model_t *pmodel) {
         address++;
     }
 
+    storage_load_uint8(&pmodel->configuration.wifi_enabled, (char *)WIFI_KEY);
     storage_load_uint16(&pmodel->configuration.language, (char *)LANGUAGE_KEY);
     storage_load_uint16(&pmodel->configuration.active_backlight, (char *)BACKLIGHT_KEY);
     storage_load_uint16(&pmodel->configuration.buzzer_volume, (char *)BUZZER_KEY);
@@ -113,6 +116,7 @@ void configuration_load(model_t *pmodel) {
                       (char *)PRESSURE_OFFSETS_KEY);
 
     size_t i       = 0;
+    watchlist[i++] = WATCHER(&pmodel->configuration.wifi_enabled, storage_save_uint8, (void *)WIFI_KEY);
     watchlist[i++] = WATCHER(&pmodel->configuration.language, storage_save_uint16, (void *)LANGUAGE_KEY);
     watchlist[i++] =
         WATCHER_DELAYED(&pmodel->configuration.active_backlight, save_backlight, (void *)BACKLIGHT_KEY, 1000UL);
@@ -169,8 +173,8 @@ void configuration_load(model_t *pmodel) {
     watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.temperature_stop, storage_save_uint16,
                                      (void *)TEMPERATURE_STOP_KEY, 4000UL);
 
-    watchlist[i++] =
-        WATCHER_ARRAY(&pmodel->configuration.pressure_offsets, DEVICE_GROUPS, save_pressure_offsets, (void *)PRESSURE_OFFSETS_KEY);
+    watchlist[i++] = WATCHER_ARRAY(&pmodel->configuration.pressure_offsets, DEVICE_GROUPS, save_pressure_offsets,
+                                   (void *)PRESSURE_OFFSETS_KEY);
     assert(i == NUM_CONFIGURATION_PARAMETERS);
     watchlist[i++] = WATCHER_NULL;
     watcher_list_init(watchlist);

@@ -12,6 +12,7 @@
 #define MAX_FAN_SPEED     5
 #define TOP_FAN_SPEED     4
 #define MAX_BUZZER_VOLUME 3
+#define IP_PART(ip, p)    ((ip >> (8 * p)) & 0xFF)
 
 #define GETTER(name, field)                                                                                            \
     static inline                                                                                                      \
@@ -26,6 +27,13 @@
         assert(pmodel != NULL);                                                                                        \
         pmodel->field = value;                                                                                         \
     }
+
+#define TOGGLER(name, field)                                                                                           \
+    static inline __attribute__((always_inline)) void model_toggle_##name(model_t *pmodel) {                           \
+        assert(pmodel != NULL);                                                                                        \
+        pmodel->field = !pmodel->field;                                                                                \
+    }
+
 
 #define GETTERNSETTER(name, field)                                                                                     \
     GETTER(name, field)                                                                                                \
@@ -49,6 +57,32 @@
     case CLASS(DEVICE_GROUP_14):                                                                                       \
     case CLASS(DEVICE_GROUP_15):                                                                                       \
     case CLASS(DEVICE_GROUP_16):
+
+
+#define MAX_AP_SCAN_LIST_SIZE 8
+#define LOG_BUFFER_SIZE       10
+
+
+typedef enum {
+    LOG_EVENT_POWER_ON = 0,
+    LOG_EVENT_COMMUNICATION_ERROR,
+    LOG_EVENT_ALARM,
+} log_event_code_t;
+
+
+typedef struct {
+    uint64_t timestamp;
+    uint16_t code;
+    uint8_t  target_address;
+    uint16_t description;
+} log_t;
+
+
+typedef enum {
+    WIFI_STATE_DISCONNECTED = 0,
+    WIFI_STATE_CONNECTING,
+    WIFI_STATE_CONNECTED,
+} wifi_state_t;
 
 
 typedef enum {
@@ -79,7 +113,19 @@ typedef struct {
     model_fan_state_t state;
     light_state_t     light_state;
 
+    size_t       ap_list_size;
+    char         ap_list[MAX_AP_SCAN_LIST_SIZE][33];
+    uint8_t      scanning;
+    wifi_state_t wifi_state;
+    uint32_t     ip_addr;
+    char         ssid[33];
+
+    log_t  logs[LOG_BUFFER_SIZE];
+    size_t logs_from;
+    size_t logs_num;
+
     struct {
+        uint8_t  wifi_enabled;
         uint16_t language;
         uint16_t active_backlight;
         uint16_t buzzer_volume;
@@ -191,6 +237,8 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressures);
 int model_get_pressures(model_t *pmodel, int16_t *pressures);
 int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *temperature_2, int16_t *temperature_3);
 int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity_2, int16_t *humidity_3);
+int model_get_max_group_per_mode(model_t *pmodel, uint16_t mode);
+const char *model_get_ssid(model_t *pmodel);
 
 GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);
@@ -221,5 +269,15 @@ GETTERNSETTER(second_temperature_speed_raise, configuration.second_temperature_s
 GETTERNSETTER(temperature_warn, configuration.temperature_warn);
 GETTERNSETTER(temperature_stop, configuration.temperature_stop);
 GETTERNSETTER(show_work_hours_state, show_work_hours_state);
+
+GETTERNSETTER(wifi_state, wifi_state);
+GETTERNSETTER(scanning, scanning);
+GETTERNSETTER(available_networks_count, ap_list_size);
+GETTERNSETTER(ip_addr, ip_addr);
+GETTERNSETTER(wifi_enabled, configuration.wifi_enabled);
+
+GETTERNSETTER(logs_num, logs_num);
+
+TOGGLER(wifi_enabled, configuration.wifi_enabled);
 
 #endif

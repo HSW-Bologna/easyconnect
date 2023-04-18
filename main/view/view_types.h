@@ -17,6 +17,8 @@ typedef enum {
     VIEW_EVENT_CODE_STATE_UPDATE,
     VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE,
     VIEW_EVENT_CODE_UPDATE_WORK_HOURS,
+    VIEW_EVENT_CODE_WIFI_UPDATE,
+    VIEW_EVENT_CODE_LOG_UPDATE,
 } view_event_code_t;
 
 typedef struct {
@@ -47,6 +49,7 @@ typedef enum {
     VIEW_COMMAND_CODE_CHANGE_PAGE,
     VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA,
     VIEW_COMMAND_CODE_BACK,
+    VIEW_COMMAND_CODE_BACK_TWICE,
 } view_page_command_code_t;
 
 typedef struct {
@@ -79,6 +82,10 @@ typedef enum {
     VIEW_CONTROLLER_MESSAGE_CODE_REFRESH_DEVICES,
     VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED,
     VIEW_CONTROLLER_MESSAGE_CODE_RESET_FILTER_HOURS,
+    VIEW_CONTROLLER_MESSAGE_CODE_UPDATE_WIFI,
+    VIEW_CONTROLLER_MESSAGE_CODE_SCAN_WIFI,
+    VIEW_CONTROLLER_MESSAGE_CODE_CONNECT_TO_WIFI,
+    VIEW_CONTROLLER_MESSAGE_CODE_READ_LOGS,
 } view_controller_message_code_t;
 
 
@@ -93,6 +100,11 @@ typedef struct {
         uint8_t  light_value;
         uint8_t  speed;
         uint16_t expected_devices;
+        struct {
+            char ssid[33];
+            char psk[33];
+        };
+        uint32_t logs_from;
     };
 } view_controller_message_t;
 

@@ -83,3 +83,15 @@ ERRORE, Errore!, Error!
 WARNING_MANUTENZIONE, E' necessaria la manutenzione del filtro %s; contattare l'assistenza per prenotare un appuntamento, Maintenance of filter %s is required; contact the assistance to book the maintenance intervention
 STOP_MANUTENZIONE, E' necessaria la manutenzione del filtro %s; contattare l'assistenza, Filter maintenance for %s is required; contact the assistance
 PASSIVO, Passivo, passive
+WIFI, WiFi, WiFi
+ON, On, On
+OFF, Off, Off
+CONNESSO, Connesso, Connected
+CONNESSIONE_IN_CORSO, Connessione in corso, Connecting
+NON_CONNESSO, Non connesso, Not connected
+OPZIONI, Opzioni, Options
+RETI, Reti, Networks
+NESSUNA_RETE_TROVATA, Nessuna rete trovata, No network found
+CORRENTI, Correnti, Current
+LOG, Log, log
+ACCENSIONE, Accensione, Power on

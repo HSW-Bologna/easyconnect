@@ -16,6 +16,9 @@
 #include "temperature.h"
 #include "peripherals/tft.h"
 #include "peripherals/buzzer.h"
+#include "services/network.h"
+#include "services/server.h"
+#include "view/view_types.h"
 
 
 static void update_work_hours_cycle(model_t *pmodel);
@@ -37,6 +40,11 @@ void controller_init(model_t *pmodel) {
     configuration_load(pmodel);
     view_start(pmodel);
 
+    server_init();
+    network_init();
+
+    LOG_POWER_ON();
+
     tft_backlight_set(model_get_active_backlight(pmodel));
 
     if (ds1307_is_clock_halted(rtc_driver)) {
@@ -48,6 +56,10 @@ void controller_init(model_t *pmodel) {
         ds1307_get_time(rtc_driver, &rtc_time);
         struct tm tm = ds1307_tm_from_rtc(rtc_time);
         utils_set_system_time(tm);
+    }
+
+    if (model_get_wifi_enabled(pmodel)) {
+        network_start_sta();
     }
 }
 
@@ -174,6 +186,35 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
         case VIEW_CONTROLLER_MESSAGE_CODE_RESET_FILTER_HOURS:
             modbus_reset_device_work_hours(msg->address);
             break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_UPDATE_WIFI:
+            if (model_get_wifi_enabled(pmodel)) {
+                network_start_sta();
+                if (model_get_wifi_state(pmodel) == WIFI_STATE_CONNECTED) {
+                    server_start();
+                }
+            } else {
+                network_stop();
+                server_stop();
+            }
+            break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_SCAN_WIFI:
+            network_scan_access_points(0);
+            model_set_scanning(pmodel, 1);
+            view_event((view_event_t){.code = VIEW_EVENT_CODE_WIFI_UPDATE});
+            break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_CONNECT_TO_WIFI:
+            network_connect_to(msg->ssid, msg->psk);
+            view_event((view_event_t){.code = VIEW_EVENT_CODE_WIFI_UPDATE});
+            break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_READ_LOGS:
+            pmodel->logs_num  = log_read(pmodel->logs, msg->logs_from, LOG_BUFFER_SIZE);
+            pmodel->logs_from = msg->logs_from;
+            view_event((view_event_t){.code = VIEW_EVENT_CODE_LOG_UPDATE});
+            break;
     }
 }
 
@@ -185,9 +226,30 @@ void controller_manage(model_t *pmodel) {
     static unsigned long poll_ts       = 0;
     static unsigned long heapts        = 0;
     static unsigned long time_ts       = 0;
+    static unsigned long server_ts     = 0;
     static uint8_t       poll_address  = 0;
 
     configuration_manage();
+
+    if (model_get_scanning(pmodel) && network_get_scan_result(pmodel)) {
+        model_set_scanning(pmodel, 0);
+        view_event((view_event_t){.code = VIEW_EVENT_CODE_WIFI_UPDATE});
+    }
+
+    uint32_t     ip         = 0;
+    wifi_state_t wifi_state = network_get_wifi_state();
+    if (model_get_wifi_state(pmodel) != wifi_state) {
+        network_is_connected(&ip, pmodel->ssid);
+        model_set_wifi_state(pmodel, wifi_state);
+        model_set_ip_addr(pmodel, ip);
+
+        if (wifi_state == WIFI_STATE_CONNECTED) {
+            server_start();
+        }
+
+        view_event((view_event_t){.code = VIEW_EVENT_CODE_WIFI_UPDATE});
+    }
+
 
     if (is_expired(poll_ts, get_millis(), 500UL)) {
         if (poll_address == 0) {
@@ -211,6 +273,11 @@ void controller_manage(model_t *pmodel) {
         pmodel->temperature = (int)temperature_get();
         view_event((view_event_t){.code = VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE});
         tempts = get_millis();
+    }
+
+    if (is_expired(server_ts, get_millis(), 4000UL) || server_is_there_a_new_connection()) {
+        server_notify_state_change(pmodel);
+        server_ts = get_millis();
     }
 
     if (refresh_devices || is_expired(refreshts, get_millis(), 1UL * 30UL * 1000UL)) {
@@ -246,6 +313,7 @@ void controller_manage(model_t *pmodel) {
 
             case MODBUS_RESPONSE_CODE_ERROR:
                 if (model_set_device_error(pmodel, response.address, 1)) {
+                    LOG_DEVICE_COMMUNICATION_ERROR(response.address);
                     ESP_LOGW(TAG, "Device %i did not respond!", response.address);
                     error_condition_on_device(pmodel, response.address, 0, 1);
                     view_event(
@@ -320,6 +388,7 @@ void controller_manage(model_t *pmodel) {
             case MODBUS_RESPONSE_CODE_STATE:
                 model_set_device_error(pmodel, response.address, 0);
                 if (model_set_device_alarms(pmodel, response.address, response.alarms)) {
+                    LOG_DEVICE_ALARM(response.address, response.alarms);
                     error_condition_on_device(pmodel, response.address, response.alarms, 0);
                     view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_ALARM, .address = response.address});
                 }

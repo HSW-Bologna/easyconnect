@@ -8,4 +8,9 @@
 #define HAP_BACKLIGHT GPIO_NUM_23
 #define HAP_BUZZER    GPIO_NUM_2
 
+#define HAP_MISO GPIO_NUM_35
+#define HAP_MOSI GPIO_NUM_25
+#define HAP_CLK  GPIO_NUM_26
+#define HAP_CS   GPIO_NUM_5
+
 #endif

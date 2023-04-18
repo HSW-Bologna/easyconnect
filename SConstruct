@@ -1,6 +1,6 @@
 import kconfiglib
 import os
-import multiprocessing
+import multiprocessing 
 from pathlib import Path
 import tools.meta.csv2carray as csv2carray
 import platform
@@ -120,6 +120,7 @@ CFLAGS = [
     "-DI2C_DEVICES_STRUCT_TM_CONVERSION",
     "-DLV_LVGL_H_INCLUDE_SIMPLE",
     "-DPC_SIMULATOR",
+    "-DAPP_CONFIG_SD_MOUNTPOINT='\"/tmp\"'",
     '-DprojCOVERAGE_TEST=1',
     "-DLV_KCONFIG_IGNORE",
     '-DGEL_PARAMETER_CONFIGURATION_HEADER="\\"gel_parameter_conf.h\\""',

@@ -46,6 +46,14 @@ void app_main(void *arg) {
     add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_5));
     model_set_sensors_values(&model, i++, 765, 0, 0);
 
+    model.ap_list_size = 6;
+    strcpy(model.ap_list[0], "rete 1");
+    strcpy(model.ap_list[1], "rete 2");
+    strcpy(model.ap_list[2], "rete 3");
+    strcpy(model.ap_list[3], "rete 4");
+    strcpy(model.ap_list[4], "rete 5");
+    strcpy(model.ap_list[5], "rete 6");
+
     view_init(monitor_flush, mouse_read);
     controller_init(&model);
 

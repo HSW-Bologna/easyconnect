@@ -1,4 +1,4 @@
-const char *strings[82][2] = {
+const char *strings[94][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -81,5 +81,17 @@ const char *strings[82][2] = {
     {"E' necessaria la manutenzione del filtro %s; contattare l'assistenza per prenotare un appuntamento", "Maintenance of filter %s is required; contact the assistance to book the maintenance intervention", },
     {"E' necessaria la manutenzione del filtro %s; contattare l'assistenza", "Filter maintenance for %s is required; contact the assistance", },
     {"Passivo", "passive", },
+    {"WiFi", "WiFi", },
+    {"On", "On", },
+    {"Off", "Off", },
+    {"Connesso", "Connected", },
+    {"Connessione in corso", "Connecting", },
+    {"Non connesso", "Not connected", },
+    {"Opzioni", "Options", },
+    {"Reti", "Networks", },
+    {"Nessuna rete trovata", "No network found", },
+    {"Correnti", "Current", },
+    {"Log", "log", },
+    {"Accensione", "Power on", },
 };
 

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include "lvgl.h"
+#include "src/lv_widgets/lv_keyboard.h"
 #include "view.h"
 #include "gel/pagemanager/page_manager.h"
 #include "gel/collections/queue.h"
@@ -16,6 +17,8 @@ QUEUE_DEFINITION(event_queue, view_event_t);
 
 static void change_page_extra(model_t *model, const pman_page_t *page, void *extra);
 static void change_page(model_t *model, const pman_page_t *page);
+static void page_event_cb(lv_obj_t *obj, lv_event_t event);
+static void kb_event_cb(lv_obj_t *obj, lv_event_t event);
 
 static struct event_queue q;
 static page_manager_t     pman;
@@ -88,6 +91,14 @@ void view_process_message(view_page_command_t vmsg, model_t *model) {
             view_event((view_event_t){.code = VIEW_EVENT_CODE_OPEN});
             break;
 
+        case VIEW_COMMAND_CODE_BACK_TWICE:
+            lv_indev_wait_release(touch_dev);
+            pman_back(&pman, model);
+            pman_back(&pman, model);
+            event_queue_init(&q);
+            view_event((view_event_t){.code = VIEW_EVENT_CODE_OPEN});
+            break;
+
         case VIEW_COMMAND_CODE_REBASE:
             assert(vmsg.page != NULL);
             lv_indev_wait_release(touch_dev);
@@ -114,6 +125,13 @@ void view_destroy_all(void *data, void *extra) {
 void view_close_all(void *data) {
     lv_obj_clean(lv_scr_act());
 }
+
+
+static void kb_event_cb(lv_obj_t *obj, lv_event_t event) {
+    lv_keyboard_def_event_cb(obj, event);
+    page_event_cb(obj, event);
+}
+
 
 static void page_event_cb(lv_obj_t *obj, lv_event_t event) {
     view_event_t myevent;
@@ -168,6 +186,15 @@ void view_register_default_callback_number(lv_obj_t *obj, int id, int number) {
     data.number             = number;
     lv_obj_set_user_data(obj, data);
     lv_obj_set_event_cb(obj, page_event_cb);
+}
+
+
+void view_register_keyboard_default_callback_number(lv_obj_t *obj, int id, int number) {
+    lv_obj_user_data_t data = lv_obj_get_user_data(obj);
+    data.id                 = id;
+    data.number             = number;
+    lv_obj_set_user_data(obj, data);
+    lv_obj_set_event_cb(obj, kb_event_cb);
 }
 
 

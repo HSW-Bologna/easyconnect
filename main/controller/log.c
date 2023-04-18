@@ -1,99 +1,140 @@
-/* Demo ESP LittleFS Example
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
+#include <string.h>
+#include <errno.h>
 #include <stdio.h>
+#include <time.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
-#ifndef PC_SIMULATOR
-#include "esp_littlefs.h"
-#endif
+
+#include "log.h"
+#include "config/app_config.h"
 
 
-static const char *TAG = "Log";
+#define LOG_FILE_PATH           APP_CONFIG_SD_MOUNTPOINT "/log.csv"
+#define LOG_POSITION_CACHE_SIZE 10
+
+
+static uint8_t  find_in_cache(uint32_t *position, uint32_t number);
+static uint32_t read_logs_from(log_t *logs, uint32_t position, uint32_t num, FILE *fp);
+
+
+static const char *TAG = "SdLog";
+
+static SemaphoreHandle_t sem = NULL;
+static struct {
+    uint32_t number;
+    uint32_t position;
+} log_position_cache[LOG_POSITION_CACHE_SIZE] = {0};
+static size_t   log_position_cache_index      = 0;
+
 
 void log_init(void) {
-    ESP_LOGI(TAG, "Initializing LittelFS");
-#ifndef PC_SIMULATOR
-    esp_vfs_littlefs_conf_t conf = {
-        .base_path              = "/littlefs",
-        .partition_label        = "littlefs",
-        .format_if_mount_failed = true,
-        .dont_mount             = false,
-    };
+    sem = xSemaphoreCreateMutex();
+    ESP_LOGI(TAG, "Log initialized");
+}
 
-    // Use settings defined above to initialize and mount LittleFS filesystem.
-    // Note: esp_vfs_littlefs_register is an all-in-one convenience function.
-    esp_err_t ret = esp_vfs_littlefs_register(&conf);
 
-    if (ret != ESP_OK) {
-        if (ret == ESP_FAIL) {
-            ESP_LOGE(TAG, "Failed to mount or format filesystem");
-        } else if (ret == ESP_ERR_NOT_FOUND) {
-            ESP_LOGE(TAG, "Failed to find LittleFS partition");
-        } else {
-            ESP_LOGE(TAG, "Failed to initialize LittleFS (%s)", esp_err_to_name(ret));
+void log_event(log_event_code_t code, uint8_t target, uint16_t description) {
+    return;
+    xSemaphoreTake(sem, portMAX_DELAY);
+    FILE *fp = fopen(LOG_FILE_PATH, "a+");
+    if (fp == NULL) {
+        xSemaphoreGive(sem);
+        ESP_LOGW(TAG, "Unable to open %s: %s", LOG_FILE_PATH, strerror(errno));
+        return;
+    }
+
+    fprintf(fp, "%llu,%i,%i,%i\n", (unsigned long long)time(NULL), code, target, description);
+    fclose(fp);
+    xSemaphoreGive(sem);
+}
+
+
+uint32_t log_read(log_t *logs, uint32_t from, uint32_t num) {
+    uint32_t position = 0;
+
+    xSemaphoreTake(sem, portMAX_DELAY);
+    FILE *fp = fopen(LOG_FILE_PATH, "r");
+    if (fp == NULL) {
+        xSemaphoreGive(sem);
+        ESP_LOGW(TAG, "Unable to open %s: %s", LOG_FILE_PATH, strerror(errno));
+        return 0;
+    }
+
+    // If the position is found, use it. Otherwise it needs to be searched linearly in the file
+    if (!find_in_cache(&position, from)) {
+        for (position = 0; position < from; position++) {
+            char string[64] = {0};
+            if (fgets(string, sizeof(string), fp) == 0) {
+                // There requested logs aren't present
+                fclose(fp);
+                xSemaphoreGive(sem);
+                return 0;
+            }
         }
-        return;
+
+        // Update the cache
+        log_position_cache[log_position_cache_index].number   = from;
+        log_position_cache[log_position_cache_index].position = position;
+        log_position_cache_index = (log_position_cache_index + 1) % LOG_POSITION_CACHE_SIZE;
     }
 
-    size_t total = 0, used = 0;
-    ret = esp_littlefs_info(conf.partition_label, &total, &used);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get LittleFS partition information (%s)", esp_err_to_name(ret));
-    } else {
-        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    uint32_t res = read_logs_from(logs, position, num, fp);
+    fclose(fp);
+
+    xSemaphoreGive(sem);
+    return res;
+}
+
+
+static uint8_t find_in_cache(uint32_t *position, uint32_t number) {
+    for (size_t i = 0; i < LOG_POSITION_CACHE_SIZE; i++) {
+        if (log_position_cache[i].number == number) {
+            *position = log_position_cache[i].position;
+            return 1;
+        }
     }
 
-    // Use POSIX and C standard library functions to work with files.
-    // First create a file.
-    ESP_LOGI(TAG, "Opening file");
-    FILE *f = fopen("/littlefs/hello.txt", "w");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for writing");
-        return;
-    }
-    fprintf(f, "LittleFS Rocks!\n");
-    fclose(f);
-    ESP_LOGI(TAG, "File written");
+    return 0;
+}
 
-    // Check if destination file exists before renaming
-    struct stat st;
-    if (stat("/littlefs/foo.txt", &st) == 0) {
-        // Delete it if it exists
-        unlink("/littlefs/foo.txt");
-    }
 
-    // Rename original file
-    ESP_LOGI(TAG, "Renaming file");
-    if (rename("/littlefs/hello.txt", "/littlefs/foo.txt") != 0) {
-        ESP_LOGE(TAG, "Rename failed");
-        return;
+static uint32_t read_logs_from(log_t *logs, uint32_t position, uint32_t num, FILE *fp) {
+#define PARSE_COLUMN(string, start, after, c, count, field)                                                            \
+    {                                                                                                                  \
+        char  csv_column[32] = {0};                                                                                    \
+        char *before         = start;                                                                                  \
+        after                = strchr(before, c);                                                                      \
+        if (after == NULL) {                                                                                           \
+            ESP_LOGW(TAG, "Invalid csv line: %s", string);                                                             \
+            continue;                                                                                                  \
+        }                                                                                                              \
+        memcpy(csv_column, before, after - before);                                                                    \
+        logs[count].field = atoll(csv_column);                                                                         \
     }
 
-    // Open renamed file for reading
-    ESP_LOGI(TAG, "Reading file");
-    f = fopen("/littlefs/foo.txt", "r");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for reading");
-        return;
-    }
-    char line[64];
-    fgets(line, sizeof(line), f);
-    fclose(f);
-    // strip newline
-    char *pos = strchr(line, '\n');
-    if (pos) {
-        *pos = '\0';
-    }
-    ESP_LOGI(TAG, "Read from file: '%s'", line);
+    fseek(fp, position, SEEK_SET);
 
-    // All done, unmount partition and disable LittleFS
-    esp_vfs_littlefs_unregister(conf.partition_label);
-    ESP_LOGI(TAG, "LittleFS unmounted");
-#endif
+    uint32_t count = 0;
+
+    while (count < num) {
+        char string[64] = {0};
+        if (fgets(string, sizeof(string), fp) == 0) {
+            ESP_LOGW(TAG, "Unable to read %s: %s", LOG_FILE_PATH, strerror(errno));
+            return count;
+        }
+
+        char *after_column = string;
+
+        PARSE_COLUMN(string, string, after_column, ',', count, timestamp);
+        PARSE_COLUMN(string, after_column + 1, after_column, ',', count, code);
+        PARSE_COLUMN(string, after_column + 1, after_column, ',', count, target_address);
+        PARSE_COLUMN(string, after_column + 1, after_column, '\n', count, description);
+
+        count++;
+    }
+
+    return count;
+#undef PARSE_COLUMN
 }

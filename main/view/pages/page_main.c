@@ -429,9 +429,8 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
 
         switch (model_get_fan_state(pmodel)) {
             case MODEL_FAN_STATE_CLEANING:
-                lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL), data->blink
-                                                                          ? &img_aspirazione_immissione_accese
-                                                                          : &img_aspirazione_immissione_spente);
+                lv_img_set_src(lv_obj_get_child(data->btn_fan, NULL),
+                               data->blink ? &img_aspirazione_immissione_accese : &img_aspirazione_immissione_spente);
                 break;
 
             case MODEL_FAN_STATE_FAN_RUNNING:
@@ -897,10 +896,17 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case BTN_UVC_FILTER_2_MOD:
                         case BTN_UVC_FILTER_3_MOD:
                         case BTN_UVC_FILTER_4_MOD: {
-                            uint8_t i = event.data.id - BTN_UVC_FILTER_0_MOD;
-                            model_set_uvc_filters_for_speed(
-                                model, i,
-                                modify_parameter(model_get_uvc_filters_for_speed(model, i), event.data.number, 1, 3));
+                            int     max = model_get_max_group_per_mode(model, DEVICE_MODE_UVC);
+                            uint8_t i   = event.data.id - BTN_UVC_FILTER_0_MOD;
+
+                            if (max < 0) {
+                                model_set_uvc_filters_for_speed(model, i, 1);
+                            } else {
+                                model_set_uvc_filters_for_speed(
+                                    model, i,
+                                    modify_parameter(model_get_uvc_filters_for_speed(model, i), event.data.number, 1,
+                                                     max + 1));
+                            }
                             update_menus(model, data);
                             break;
                         }
@@ -910,10 +916,18 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case BTN_ESF_FILTER_2_MOD:
                         case BTN_ESF_FILTER_3_MOD:
                         case BTN_ESF_FILTER_4_MOD: {
-                            uint8_t i = event.data.id - BTN_ESF_FILTER_0_MOD;
-                            model_set_esf_filters_for_speed(
-                                model, i,
-                                modify_parameter(model_get_esf_filters_for_speed(model, i), event.data.number, 0, 3));
+                            int     max = model_get_max_group_per_mode(model, DEVICE_MODE_ESF);
+                            uint8_t i   = event.data.id - BTN_ESF_FILTER_0_MOD;
+
+                            if (max < 0) {
+                                model_set_esf_filters_for_speed(model, i, 0);
+
+                            } else {
+                                model_set_esf_filters_for_speed(
+                                    model, i,
+                                    modify_parameter(model_get_esf_filters_for_speed(model, i), event.data.number, 0,
+                                                     max + 1));
+                            }
                             update_menus(model, data);
                             break;
                         }

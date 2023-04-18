@@ -7,6 +7,10 @@
 
 #define APP_CONFIG_FIRMWARE_VERSION "3.0.0"
 
+#ifndef APP_CONFIG_SD_MOUNTPOINT
+#define APP_CONFIG_SD_MOUNTPOINT "/sdcard"
+#endif
+
 #define BASE_TASK_SIZE 1024
 
 #endif

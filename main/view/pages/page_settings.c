@@ -12,6 +12,7 @@ enum {
     DEGREES_BTN_ID,
     VOLUME_BTN_ID,
     BRIGHTNESS_BTN_ID,
+    WIFI_BTN_ID,
 };
 
 struct page_data {};
@@ -48,6 +49,10 @@ static void open_page(model_t *pmodel, void *arg) {
     btn_previous = btn;
 
     btn = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_GRADI), 230, DEGREES_BTN_ID);
+    lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
+    btn_previous = btn;
+
+    btn = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_WIFI), 230, WIFI_BTN_ID);
     lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
     btn_previous = btn;
 }
@@ -101,6 +106,12 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
                             msg.vmsg.page  = &page_parameter_slider;
                             msg.vmsg.extra = args;
+                            break;
+                        }
+
+                        case WIFI_BTN_ID: {
+                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page  = &page_wifi;
                             break;
                         }
                     }

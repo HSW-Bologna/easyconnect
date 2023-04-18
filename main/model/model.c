@@ -12,6 +12,8 @@ static uint8_t alarm_for_device(model_t *pmodel, size_t i);
 void model_init(model_t *pmodel) {
     assert(pmodel != NULL);
 
+    pmodel->configuration.wifi_enabled = 0;
+
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature = 32;
     device_list_init(pmodel->devices);
@@ -52,8 +54,8 @@ void model_init(model_t *pmodel) {
 
     pmodel->configuration.pressure_threshold_mb = 0;
 
-    pmodel->configuration.uvc_filters_hours_warning_threshold     = 8000;
-    pmodel->configuration.uvc_filters_hours_stop_threshold        = 10000;
+    pmodel->configuration.uvc_filters_hours_warning_threshold = 8000;
+    pmodel->configuration.uvc_filters_hours_stop_threshold    = 10000;
 
     pmodel->configuration.first_temperature_delta        = 25;
     pmodel->configuration.second_temperature_delta       = 35;
@@ -73,6 +75,13 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.pressure_offsets[2]         = 0;
 
     pmodel->show_work_hours_state = 0;
+
+    pmodel->ap_list_size = 0;
+    pmodel->scanning     = 0;
+    pmodel->wifi_state   = WIFI_STATE_DISCONNECTED;
+
+    pmodel->logs_num = 0;
+    pmodel->logs_from = 0;
 }
 
 
@@ -371,6 +380,26 @@ uint8_t model_get_problematic_filter_device(model_t *pmodel, uint8_t previous) {
     } while (previous != address && warn == 0 && stop == 0);
 
     return previous == address ? original : address;
+}
+
+
+int model_get_max_group_per_mode(model_t *pmodel, uint16_t mode) {
+    uint8_t previous = 0;
+    uint8_t address  = previous;
+    int     max      = -1;
+
+    do {
+        previous = address;
+        address  = model_get_next_device_address_by_modes(pmodel, previous, (uint16_t *)&mode, 1);
+
+        if (address != previous) {
+            if (CLASS_GET_GROUP(model_get_device(pmodel, address).class) > max) {
+                max = CLASS_GET_GROUP(model_get_device(pmodel, address).class);
+            }
+        }
+    } while (previous != address);
+
+    return max;
 }
 
 
@@ -789,6 +818,12 @@ uint8_t model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms) {
 uint8_t model_is_there_a_fan_alarm(model_t *pmodel) {
     return model_is_there_any_alarm_for_class(pmodel, DEVICE_CLASS_SIPHONING_FAN) ||
            model_is_there_any_alarm_for_class(pmodel, DEVICE_CLASS_IMMISSION_FAN);
+}
+
+
+const char *model_get_ssid(model_t *pmodel) {
+    assert(pmodel != NULL);
+    return pmodel->ssid;
 }
 
 
