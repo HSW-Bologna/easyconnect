@@ -1,5 +1,8 @@
 #include <sys/time.h>
 #include <time.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/projdefs.h"
+#include "freertos/queue.h"
 #include "controller.h"
 #include "model/model.h"
 #include "view/view.h"
@@ -27,13 +30,16 @@ static void system_shutdown(model_t *pmodel);
 static void print_heap_status(void);
 
 
-static const char *TAG               = "Controller";
-static uint8_t     refresh_devices   = 1;
-static uint8_t     update_time       = 1;
-static uint8_t     first_update_loop = 1;
+static const char   *TAG               = "Controller";
+static uint8_t       refresh_devices   = 1;
+static uint8_t       update_time       = 1;
+static uint8_t       first_update_loop = 1;
+static QueueHandle_t queue             = NULL;
 
 
 void controller_init(model_t *pmodel) {
+    queue = xQueueCreate(4, sizeof(view_controller_message_t));
+
     modbus_init();
     temperature_init();
     log_init();
@@ -42,8 +48,6 @@ void controller_init(model_t *pmodel) {
 
     server_init();
     network_init();
-
-    LOG_POWER_ON();
 
     tft_backlight_set(model_get_active_backlight(pmodel));
 
@@ -57,6 +61,8 @@ void controller_init(model_t *pmodel) {
         struct tm tm = ds1307_tm_from_rtc(rtc_time);
         utils_set_system_time(tm);
     }
+
+    LOG_POWER_ON();
 
     if (model_get_wifi_enabled(pmodel)) {
         network_start_sta();
@@ -99,10 +105,12 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN:
             switch (model_get_fan_state(pmodel)) {
                 case MODEL_FAN_STATE_OFF:
+                    ESP_LOGI(TAG, "Turning fan on");
                     controller_state_event(pmodel, STATE_EVENT_FAN_START);
                     break;
 
                 default:
+                    ESP_LOGI(TAG, "Turning fan off");
                     controller_state_event(pmodel, STATE_EVENT_FAN_STOP);
             }
             break;
@@ -210,12 +218,28 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             view_event((view_event_t){.code = VIEW_EVENT_CODE_WIFI_UPDATE});
             break;
 
-        case VIEW_CONTROLLER_MESSAGE_CODE_READ_LOGS:
-            pmodel->logs_num  = log_read(pmodel->logs, msg->logs_from, LOG_BUFFER_SIZE);
-            pmodel->logs_from = msg->logs_from;
-            view_event((view_event_t){.code = VIEW_EVENT_CODE_LOG_UPDATE});
+        case VIEW_CONTROLLER_MESSAGE_CODE_READ_LOGS: {
+            size_t num = log_read(pmodel->logs, msg->logs_from, LOG_BUFFER_SIZE);
+            if (num > 0) {
+                pmodel->logs_num  = num;
+                pmodel->logs_from = msg->logs_from;
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_LOG_UPDATE});
+            }
+            break;
+        }
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_CHANGE_SPEED:
+            ESP_LOGI(TAG, "Changing speed: %i", msg->speed);
+            model_set_fan_speed(pmodel, msg->speed < 5 ? msg->speed : 4);
+            controller_state_event(pmodel, STATE_EVENT_FAN_CHANGE_SPEED);
+            view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
             break;
     }
+}
+
+
+void controller_send_message(view_controller_message_t msg) {
+    xQueueSend(queue, &msg, pdMS_TO_TICKS(10));
 }
 
 
@@ -230,6 +254,12 @@ void controller_manage(model_t *pmodel) {
     static uint8_t       poll_address  = 0;
 
     configuration_manage();
+
+    view_controller_message_t server_msg = {0};
+    // Handle messages from the server
+    if (xQueueReceive(queue, &server_msg, 0)) {
+        controller_manage_message(pmodel, &server_msg);
+    }
 
     if (model_get_scanning(pmodel) && network_get_scan_result(pmodel)) {
         model_set_scanning(pmodel, 0);
@@ -275,7 +305,7 @@ void controller_manage(model_t *pmodel) {
         tempts = get_millis();
     }
 
-    if (is_expired(server_ts, get_millis(), 4000UL) || server_is_there_a_new_connection()) {
+    if (is_expired(server_ts, get_millis(), 1000UL) || server_is_there_a_new_connection()) {
         server_notify_state_change(pmodel);
         server_ts = get_millis();
     }
@@ -313,6 +343,7 @@ void controller_manage(model_t *pmodel) {
 
             case MODBUS_RESPONSE_CODE_ERROR:
                 if (model_set_device_error(pmodel, response.address, 1)) {
+                    ESP_LOGW(TAG, "Errore di comunicazione con %i", response.address);
                     LOG_DEVICE_COMMUNICATION_ERROR(response.address);
                     ESP_LOGW(TAG, "Device %i did not respond!", response.address);
                     error_condition_on_device(pmodel, response.address, 0, 1);

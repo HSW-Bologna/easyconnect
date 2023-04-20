@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -6,27 +7,27 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
+#include "gel/serializer/serializer.h"
 
 #include "log.h"
 #include "config/app_config.h"
 
 
-#define LOG_FILE_PATH           APP_CONFIG_SD_MOUNTPOINT "/log.csv"
+#define LOG_FILE_PATH           APP_CONFIG_SD_MOUNTPOINT "/log.bin"
 #define LOG_POSITION_CACHE_SIZE 10
+#define LOG_SERIALIZED_SIZE     13
 
 
 static uint8_t  find_in_cache(uint32_t *position, uint32_t number);
 static uint32_t read_logs_from(log_t *logs, uint32_t position, uint32_t num, FILE *fp);
+static size_t   serialize_log(uint8_t *buffer, log_t log);
+static size_t   deserialize_log(log_t *log, uint8_t *buffer);
+static size_t   log_file_size(void);
 
 
 static const char *TAG = "SdLog";
 
 static SemaphoreHandle_t sem = NULL;
-static struct {
-    uint32_t number;
-    uint32_t position;
-} log_position_cache[LOG_POSITION_CACHE_SIZE] = {0};
-static size_t   log_position_cache_index      = 0;
 
 
 void log_init(void) {
@@ -36,24 +37,31 @@ void log_init(void) {
 
 
 void log_event(log_event_code_t code, uint8_t target, uint16_t description) {
-    return;
     xSemaphoreTake(sem, portMAX_DELAY);
-    FILE *fp = fopen(LOG_FILE_PATH, "a+");
+    FILE *fp = fopen(LOG_FILE_PATH, "a");
     if (fp == NULL) {
         xSemaphoreGive(sem);
-        ESP_LOGW(TAG, "Unable to open %s: %s", LOG_FILE_PATH, strerror(errno));
+        ESP_LOGW(TAG, "Unable to open for writing %s: %s", LOG_FILE_PATH, strerror(errno));
         return;
     }
 
-    fprintf(fp, "%llu,%i,%i,%i\n", (unsigned long long)time(NULL), code, target, description);
+    log_t log = {
+        .timestamp      = time(NULL),
+        .code           = code,
+        .description    = description,
+        .target_address = target,
+    };
+    uint8_t buffer[LOG_SERIALIZED_SIZE];
+    serialize_log(buffer, log);
+
+    fwrite(buffer, sizeof(buffer), 1, fp);
     fclose(fp);
+
     xSemaphoreGive(sem);
 }
 
 
 uint32_t log_read(log_t *logs, uint32_t from, uint32_t num) {
-    uint32_t position = 0;
-
     xSemaphoreTake(sem, portMAX_DELAY);
     FILE *fp = fopen(LOG_FILE_PATH, "r");
     if (fp == NULL) {
@@ -62,24 +70,23 @@ uint32_t log_read(log_t *logs, uint32_t from, uint32_t num) {
         return 0;
     }
 
-    // If the position is found, use it. Otherwise it needs to be searched linearly in the file
-    if (!find_in_cache(&position, from)) {
-        for (position = 0; position < from; position++) {
-            char string[64] = {0};
-            if (fgets(string, sizeof(string), fp) == 0) {
-                // There requested logs aren't present
-                fclose(fp);
-                xSemaphoreGive(sem);
-                return 0;
-            }
-        }
+    size_t size     = log_file_size();
+    size_t num_logs = size / LOG_SERIALIZED_SIZE;
 
-        // Update the cache
-        log_position_cache[log_position_cache_index].number   = from;
-        log_position_cache[log_position_cache_index].position = position;
-        log_position_cache_index = (log_position_cache_index + 1) % LOG_POSITION_CACHE_SIZE;
+    if (num_logs < from) {
+        fclose(fp);
+        xSemaphoreGive(sem);
+        return 0;
     }
 
+    if (num_logs - from < num) {
+        // Cap to available logs
+        num = num_logs - from;
+    }
+
+    uint32_t position = size - (from + num) * LOG_SERIALIZED_SIZE;
+
+    // If the position is found, use it. Otherwise it needs to be searched linearly in the file
     uint32_t res = read_logs_from(logs, position, num, fp);
     fclose(fp);
 
@@ -87,54 +94,61 @@ uint32_t log_read(log_t *logs, uint32_t from, uint32_t num) {
     return res;
 }
 
-
-static uint8_t find_in_cache(uint32_t *position, uint32_t number) {
-    for (size_t i = 0; i < LOG_POSITION_CACHE_SIZE; i++) {
-        if (log_position_cache[i].number == number) {
-            *position = log_position_cache[i].position;
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-
 static uint32_t read_logs_from(log_t *logs, uint32_t position, uint32_t num, FILE *fp) {
-#define PARSE_COLUMN(string, start, after, c, count, field)                                                            \
-    {                                                                                                                  \
-        char  csv_column[32] = {0};                                                                                    \
-        char *before         = start;                                                                                  \
-        after                = strchr(before, c);                                                                      \
-        if (after == NULL) {                                                                                           \
-            ESP_LOGW(TAG, "Invalid csv line: %s", string);                                                             \
-            continue;                                                                                                  \
-        }                                                                                                              \
-        memcpy(csv_column, before, after - before);                                                                    \
-        logs[count].field = atoll(csv_column);                                                                         \
-    }
-
     fseek(fp, position, SEEK_SET);
 
     uint32_t count = 0;
 
     while (count < num) {
-        char string[64] = {0};
-        if (fgets(string, sizeof(string), fp) == 0) {
+        uint8_t buffer[LOG_SERIALIZED_SIZE] = {0};
+        if (fread(buffer, sizeof(buffer), 1, fp) < 1) {
             ESP_LOGW(TAG, "Unable to read %s: %s", LOG_FILE_PATH, strerror(errno));
             return count;
         }
 
-        char *after_column = string;
-
-        PARSE_COLUMN(string, string, after_column, ',', count, timestamp);
-        PARSE_COLUMN(string, after_column + 1, after_column, ',', count, code);
-        PARSE_COLUMN(string, after_column + 1, after_column, ',', count, target_address);
-        PARSE_COLUMN(string, after_column + 1, after_column, '\n', count, description);
-
+        // logs should be saved in reverse order, from latest to oldest
+        deserialize_log(&logs[num - 1 - count], buffer);
         count++;
     }
 
     return count;
-#undef PARSE_COLUMN
+}
+
+
+static size_t serialize_log(uint8_t *buffer, log_t log) {
+    size_t i = 0;
+    i += serialize_uint64_be(&buffer[i], log.timestamp);
+    i += serialize_uint16_be(&buffer[i], log.code);
+    i += serialize_uint16_be(&buffer[i], log.description);
+    i += serialize_uint8(&buffer[i], log.target_address);
+
+    assert(i == LOG_SERIALIZED_SIZE);
+    return i;
+}
+
+
+static size_t deserialize_log(log_t *log, uint8_t *buffer) {
+    size_t i = 0;
+    i += deserialize_uint64_be(&log->timestamp, &buffer[i]);
+    i += deserialize_uint16_be(&log->code, &buffer[i]);
+    i += deserialize_uint16_be(&log->description, &buffer[i]);
+    i += deserialize_uint8(&log->target_address, &buffer[i]);
+
+    assert(i == LOG_SERIALIZED_SIZE);
+    return i;
+}
+
+
+static size_t log_file_size(void) {
+    FILE *fp = fopen(LOG_FILE_PATH, "r");
+    if (fp == NULL) {
+        ESP_LOGW(TAG, "Unable to open %s: %s", LOG_FILE_PATH, strerror(errno));
+        return 0;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    size_t size = ftell(fp);
+    fclose(fp);
+
+    return size;
 }

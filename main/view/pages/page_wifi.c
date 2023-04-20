@@ -68,7 +68,7 @@ static void open_page(model_t *pmodel, void *args) {
     pdata->btn_enable = btn;
 
     lbl = lv_label_create(lv_scr_act(), NULL);
-    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_small());
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
     lv_obj_set_width(lbl, 400);
     lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 32);

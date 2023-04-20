@@ -14,6 +14,7 @@ module Style exposing
     , hamburgerSize
     , iconFont
     , iconSize
+    , inputAttrs
     , logoWidth
     , padding
     , parameterPadding
@@ -25,6 +26,10 @@ import Element as Ui
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font exposing (center)
+
+
+inputAttrs =
+    [ Border.width 2, borderColor, Border.rounded 4, Ui.padding 8 ]
 
 
 padding =

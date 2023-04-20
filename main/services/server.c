@@ -20,11 +20,14 @@
 #include "server.h"
 #include "controller/controller.h"
 #include "controller/configuration.h"
+#include "controller/log.h"
+#include "view/view_types.h"
 #include "ws_list.h"
 #include <esp_ota_ops.h>
 
 
 #define JSON_UPDATE      "update"
+#define JSON_DEVICES     "devices"
 #define JSON_ADDRESS     "ip"
 #define JSON_SERIAL      "sn"
 #define JSON_CLASS       "class"
@@ -35,6 +38,9 @@
 #define JSON_TEMPERATURE "temp"
 #define JSON_HUMIDITY    "hum"
 #define JSON_SPEED       "speed"
+#define JSON_FAN         "fan"
+#define JSON_FILTER      "filt"
+#define JSON_LOGS        "logs"
 
 
 #define OK_RESPONSE "{\"status\":\"ok\"}\n"
@@ -99,12 +105,79 @@ static esp_err_t state_websocket_handler(httpd_req_t *req) {
             free(buffer);
             return ret;
         }
-        ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
-    }
-    ESP_LOGI(TAG, "Packet type: %d", ws_pkt.type);
-    ESP_LOGI(TAG, "Packet content: %s", ws_pkt.payload);
 
-    free(buffer);
+        cJSON *json = cJSON_Parse((const char *)ws_pkt.payload);
+
+        if (json != NULL) {
+            cJSON *json_logs = cJSON_GetObjectItem(json, JSON_LOGS);
+            if (cJSON_IsNumber(json_logs)) {
+                log_t  logs[50] = {0};
+                size_t from     = cJSON_GetNumberValue(json_logs);
+                size_t num      = log_read(logs, from, 50);
+                ESP_LOGI(TAG, "Read %zu logs from %zu", num, from);
+
+                cJSON *json_response = cJSON_CreateObject();
+                assert(json_response != NULL);
+
+                cJSON *json_logs = cJSON_CreateArray();
+                assert(json_logs != NULL);
+
+                for (size_t i = 0; i < num; i++) {
+                    cJSON *json_item = cJSON_CreateObject();
+                    assert(json_item != NULL);
+
+                    cJSON_AddNumberToObject(json_item, "ts", logs[i].timestamp);
+                    cJSON_AddNumberToObject(json_item, "code", logs[i].code);
+                    cJSON_AddNumberToObject(json_item, "desc", logs[i].description);
+                    cJSON_AddNumberToObject(json_item, "addr", logs[i].target_address);
+
+                    cJSON_AddItemToArray(json_logs, json_item);
+                }
+
+                cJSON_AddItemToObject(json_response, "logs", json_logs);
+
+                char *message = cJSON_PrintUnformatted(json_response);
+                ESP_LOGI(TAG, "Sending %s", message);
+
+                httpd_ws_frame_t ws_pkt = {0};
+                ws_pkt.payload          = (uint8_t *)message;
+                ws_pkt.len              = strlen(message);
+                ws_pkt.type             = HTTPD_WS_TYPE_TEXT;
+
+                httpd_ws_send_frame_async(server, httpd_req_to_sockfd(req), &ws_pkt);
+
+                cJSON_Delete(json_response);
+                free(message);
+            }
+
+            cJSON *json_fan = cJSON_GetObjectItem(json, JSON_FAN);
+            if (cJSON_IsBool(json_fan)) {
+                controller_send_message((view_controller_message_t){.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN});
+            }
+
+            cJSON *json_speed = cJSON_GetObjectItem(json, JSON_SPEED);
+            if (cJSON_IsNumber(json_speed)) {
+                controller_send_message((view_controller_message_t){
+                    .code  = VIEW_CONTROLLER_MESSAGE_CODE_CHANGE_SPEED,
+                    .speed = cJSON_GetNumberValue(json_speed),
+                });
+            }
+
+            cJSON *json_filter = cJSON_GetObjectItem(json, JSON_FILTER);
+            if (cJSON_IsBool(json_filter)) {
+                controller_send_message(
+                    (view_controller_message_t){.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER});
+            }
+
+            cJSON_Delete(json);
+        } else {
+            ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
+        }
+        free(buffer);
+    }
+    ESP_LOGD(TAG, "Packet type: %d", ws_pkt.type);
+    ESP_LOGD(TAG, "Packet content: %s", ws_pkt.payload);
+
     return ret;
 }
 
@@ -146,7 +219,7 @@ void server_start(void) {
     config.max_open_sockets = 3;
     config.close_fn         = close_cb;
     config.open_fn          = open_cb;
-    config.stack_size       = BASE_TASK_SIZE * 3;
+    config.stack_size       = BASE_TASK_SIZE * 4;
     config.lru_purge_enable = true;
     config.uri_match_fn     = httpd_uri_match_wildcard;
     config.max_uri_handlers = 20;
@@ -215,7 +288,7 @@ static void notify_connected_clients(void *arg) {
         int ws_fd = ws_list_get_fd(i);
 
         if (ws_fd > 0) {
-            ESP_LOGI(TAG, "notifica connessione %i: %s", ws_fd, message);
+            ESP_LOGD(TAG, "notifica connessione %i: %s", ws_fd, message);
             httpd_ws_frame_t ws_pkt = {0};
             ws_pkt.payload          = (uint8_t *)message;
             ws_pkt.len              = strlen(message);
@@ -245,9 +318,13 @@ void server_notify_state_change(model_t *pmodel) {
     cJSON *json = cJSON_CreateObject();
     CHECK_ALLOC(json);
 
-    cJSON *json_update = cJSON_AddArrayToObject(json, JSON_UPDATE);
+    cJSON *json_update = cJSON_AddObjectToObject(json, JSON_DEVICES);
     CHECK_ALLOC(json_update);
 
+    cJSON_AddNumberToObject(json_update, JSON_SPEED, model_get_fan_speed(pmodel));
+
+    cJSON *json_devices = cJSON_AddArrayToObject(json, JSON_DEVICES);
+    CHECK_ALLOC(json_devices);
 
     uint8_t starting_address = 0;
     uint8_t address          = model_get_next_device_address(pmodel, starting_address);
@@ -304,7 +381,7 @@ void server_notify_state_change(model_t *pmodel) {
                 break;
         }
 
-        cJSON_AddItemToArray(json_update, json_device);
+        cJSON_AddItemToArray(json_devices, json_device);
     }
 
     // TODO: report data

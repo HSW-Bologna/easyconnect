@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include "src/lv_core/lv_obj.h"
 #include "view/view.h"
 #include "view/intl/intl.h"
 #include "view/common.h"
@@ -579,6 +580,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
              pressures[3] - pressures[4], pressures[4] - pressures[5], pressures[5] - pressures[6],
              pressures[6] - pressures[7], pressures[7] - pressures[8]);
     lv_label_set_text(pdata->lbl_pressure, string);
+    lv_obj_set_hidden(pdata->lbl_pressure, 1);
 }
 
 
@@ -813,6 +815,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
     switch (event.code) {
         case VIEW_EVENT_CODE_STATE_UPDATE:
             update_all_buttons(model, data);
+            lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
             break;
 
         case VIEW_EVENT_CODE_OPEN:

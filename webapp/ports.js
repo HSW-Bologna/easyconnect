@@ -11,23 +11,31 @@ function wspath(local) {
         new_uri += "127.0.0.1:8080";
     } else {
         new_uri += "//" + loc.host;
-        //new_uri += "//192.168.8.247";
+        //new_uri += "//192.168.43.18";
         new_uri += loc.pathname + local;
     }
     return new_uri;
 }
 
+var didCommunicate = true;
 var socket;
 
 function connect() {
     socket = new WebSocket(wspath("ws"));
 
+    socket.onopen = function (e) {
+        app.ports.connectionError.send(false);
+    };
+
     socket.onmessage = function (e) {
+        didCommunicate = true;
         console.log(e)
         try {
             var msg = JSON.parse(e.data);
-            if (msg.hasOwnProperty("update")) {
-                app.ports.dataUpdate.send(msg.update);
+            for (const property in msg) {
+                if (app.ports[property] != undefined) {
+                    app.ports[property].send(msg[property]);
+                }
             }
         } catch (error) {
             console.log(error);
@@ -42,7 +50,7 @@ function connect() {
 
     socket.onclose = function (e) {
         console.log("Closed socket " + e);
-        //app.ports.connectionError.send(true);
+        app.ports.connectionError.send(true);
         setTimeout(function () {
             console.log("Retry connection");
             connect();
@@ -52,20 +60,31 @@ function connect() {
 
 connect();
 
+setInterval(function() {
+  if (didCommunicate) {
+      console.log("All good");
+    didCommunicate = false;
+  } else {
+      console.log("No communication!");
+    app.ports.connectionError.send(true);
+  }
+}, 10000);
+
 
 var app = Elm.Main.init({
     node: document.getElementById("elm-app"),
     flags: 0,
 });
 
-/*
-app.ports.updateRemotePars.subscribe(function (message) {
+
+app.ports.command.subscribe(function (message) {
+    console.log("sending " + JSON.stringify(message))
     if (socket.readyState == WebSocket.OPEN) {
-        if (message == null) {
-            socket.send('{"header":"update"}');
-        } else {
-            socket.send('{"header":"update", "registers":' + JSON.stringify(message) + "}");
-        }
+        socket.send(JSON.stringify(message));
+    } else {
+        socket.addEventListener("open", (event) => {
+            socket.send(JSON.stringify(message));
+        })
     }
 });
-*/
+

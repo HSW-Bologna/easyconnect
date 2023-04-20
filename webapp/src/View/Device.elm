@@ -10,7 +10,7 @@ view : DeviceModel.Device -> Ui.Element msg
 view { class, address, serial, alarm } =
     let
         leftColumn =
-            Ui.column [ Ui.height Ui.fill, Ui.width <| Ui.fillPortion 2, Ui.padding 8 ]
+            Ui.column [ Ui.height Ui.fill, Ui.width <| Ui.fillPortion 2, Ui.padding 4 ]
 
         simpleOutput on img fb =
             [ leftColumn
@@ -48,7 +48,7 @@ view { class, address, serial, alarm } =
                     , alarmsView alarm Nothing
                     ]
                 , deviceIcon
-                    (if group == 0 then
+                    (if group == 1 then
                         Image.fanImmission
 
                      else
@@ -96,10 +96,10 @@ alarmsView alarms feedback =
                 (\fb ->
                     "FB: "
                         ++ (if fb then
-                                "OK"
+                                "OK "
 
                             else
-                                "KO"
+                                "KO "
                            )
                 )
                 feedback
@@ -126,7 +126,7 @@ metadataView class address serial =
         stringGroup =
             DeviceModel.getGroup class |> Maybe.map String.fromInt |> Maybe.withDefault "-"
     in
-    Ui.column [ Ui.height Ui.fill, Ui.width <| Ui.fillPortion 2, Ui.padding 8 ]
+    Ui.column [ Ui.height Ui.fill, Ui.width <| Ui.fillPortion 2, Ui.padding 4 ]
         [ Ui.el [ Ui.alignTop ] <| Ui.text ("IP: " ++ String.fromInt address ++ " Gr:" ++ stringGroup)
         , Ui.el [ Ui.alignBottom ] <| Ui.text ("SN: " ++ String.fromInt serial)
         ]

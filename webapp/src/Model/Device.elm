@@ -118,3 +118,43 @@ deviceStateDecoder =
         (Decode.field "ip" Decode.int)
         (Decode.field "sn" Decode.int)
         (Decode.map toBool <| Decode.field "alarm" Decode.int)
+
+
+getFanState : List Device -> Maybe Bool
+getFanState =
+    let
+        isFan { class } accumulator =
+            case accumulator of
+                Just True ->
+                    Just True
+
+                _ ->
+                    case class of
+                        Fan { on } ->
+                            Just on
+
+                        _ ->
+                            accumulator
+    in
+    List.foldl isFan Nothing
+
+getFilterState : List Device -> Maybe Bool
+getFilterState =
+    let
+        isFilter { class } accumulator =
+            case accumulator of
+                Just True ->
+                    Just True
+
+                _ ->
+                    case class of
+                        Uvc { on } ->
+                            Just on
+
+                        Esf { on } ->
+                            Just on
+
+                        _ ->
+                            accumulator
+    in
+    List.foldl isFilter Nothing

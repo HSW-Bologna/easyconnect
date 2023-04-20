@@ -33,10 +33,11 @@ static const struct {
     {fan_running_entry, fan_running_event_manager},
     {calibration_entry, calibration_event_manager},
 };
-static const char   *TAG                     = "State";
-static stopwatch_t   environment_cleaning_sw = STOPWATCH_NULL;
-static int           auto_uvc_on             = 0;
-static uint16_t      cleaning_period         = 0;
+static const char *TAG                     = "State";
+static stopwatch_t environment_cleaning_sw = STOPWATCH_NULL;
+static int         auto_uvc_on             = 0;
+static uint16_t    cleaning_period         = 0;
+static uint8_t     stop_after_clean        = 0;
 
 
 void controller_state_event(model_t *pmodel, state_event_code_t event) {
@@ -80,13 +81,15 @@ static int off_entry(model_t *pmodel) {
 static int off_event_manager(model_t *pmodel, state_event_code_t event) {
     switch (event) {
         case STATE_EVENT_FAN_START:
-            auto_uvc_on     = 0;
-            cleaning_period = model_get_environment_cleaning_start_period(pmodel);
+            auto_uvc_on      = 0;
+            cleaning_period  = model_get_environment_cleaning_start_period(pmodel);
+            stop_after_clean = 0;
             return MODEL_FAN_STATE_CLEANING;
 
         case STATE_EVENT_FAN_UVC_ON:
-            auto_uvc_on     = 1;
-            cleaning_period = model_get_environment_cleaning_start_period(pmodel);
+            auto_uvc_on      = 1;
+            cleaning_period  = model_get_environment_cleaning_start_period(pmodel);
+            stop_after_clean = 0;
             return MODEL_FAN_STATE_CLEANING;
 
         case STATE_EVENT_FAN_START_CALIBRATION:
@@ -126,7 +129,7 @@ static int env_clean_event_manager(model_t *pmodel, state_event_code_t event) {
                 update_uvc_filters(pmodel, model_get_fan_speed(pmodel));
             }
 
-            return MODEL_FAN_STATE_FAN_RUNNING;
+            return stop_after_clean ? MODEL_FAN_STATE_OFF : MODEL_FAN_STATE_FAN_RUNNING;
 
         case STATE_EVENT_FAN_EMERGENCY_STOP:
             return MODEL_FAN_STATE_OFF;
@@ -154,7 +157,8 @@ static int fan_running_event_manager(model_t *pmodel, state_event_code_t event) 
     switch (event) {
         case STATE_EVENT_FAN_STOP:
             if (model_get_class_count(pmodel, DEVICE_CLASS_IMMISSION_FAN)) {
-                cleaning_period = model_get_environment_cleaning_finish_period(pmodel);
+                cleaning_period  = model_get_environment_cleaning_finish_period(pmodel);
+                stop_after_clean = 1;
                 return MODEL_FAN_STATE_CLEANING;
             } else {
                 return MODEL_FAN_STATE_OFF;
