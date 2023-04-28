@@ -26,7 +26,7 @@
 #define MODBUS_TIMEOUT                30
 #define MODBUS_MAX_PACKET_SIZE        256
 #define MODBUS_BROADCAST_ADDRESS      0
-#define MODBUS_COMMUNICATION_ATTEMPTS 3
+#define MODBUS_COMMUNICATION_ATTEMPTS 4
 
 #define HOLDING_REGISTER_MOTOR_SPEED 256
 #define HOLDING_REGISTER_PRESSURE    256
@@ -758,12 +758,11 @@ static int write_holding_registers(ModbusMaster *master, uint8_t address, uint16
     int     res                            = 0;
     size_t  counter                        = 0;
 
-    rs485_flush();
-
     do {
         res                 = 0;
         ModbusErrorInfo err = modbusBuildRequest16RTU(master, address, starting_address, num, data);
         assert(modbusIsOk(err));
+        rs485_flush();
         rs485_write(modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 
         int len = rs485_read(buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
@@ -791,11 +790,10 @@ static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int
     int     res                            = 0;
     size_t  counter                        = 0;
 
-    rs485_flush();
-
     do {
         ModbusErrorInfo err = modbusBuildRequest05RTU(master, address, index, value);
         assert(modbusIsOk(err));
+        rs485_flush();
         rs485_write(modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 
         int len = rs485_read(buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
@@ -803,7 +801,7 @@ static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int
                                          buffer, len);
 
         if (!modbusIsOk(err)) {
-            ESP_LOGD(TAG, "Write coil for %i error: %i %i", address, err.source, err.error);
+            ESP_LOGW(TAG, "Write coil for %i error: %i %i", address, err.source, err.error);
             res = 1;
             vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
         }
@@ -820,8 +818,6 @@ static int read_holding_registers(ModbusMaster *master, uint16_t *registers, uin
     int             res     = 0;
     size_t          counter = 0;
 
-    rs485_flush();
-
     master_context_t ctx = {.pointer = registers, .start = start};
     if (registers == NULL) {
         modbusMasterSetUserPointer(master, NULL);
@@ -833,6 +829,7 @@ static int read_holding_registers(ModbusMaster *master, uint16_t *registers, uin
         res = 0;
         err = modbusBuildRequest03RTU(master, address, start, count);
         assert(modbusIsOk(err));
+        rs485_flush();
         rs485_write(modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 
         int len = rs485_read(buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
@@ -840,7 +837,7 @@ static int read_holding_registers(ModbusMaster *master, uint16_t *registers, uin
                                          buffer, len);
 
         if (!modbusIsOk(err)) {
-            ESP_LOGD(TAG, "Read holding registers for %i error %zu: %i %i", address, counter, err.source, err.error);
+            ESP_LOGW(TAG, "Read holding registers for %i error %zu: %i %i", address, counter, err.source, err.error);
             if (len == 0) {
                 ESP_LOGD(TAG, "Empty packet!");
             } else {

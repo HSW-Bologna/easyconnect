@@ -215,8 +215,8 @@ void server_start(void) {
     }
 
     httpd_config_t config   = HTTPD_DEFAULT_CONFIG();
-    config.task_priority    = 5;
-    config.max_open_sockets = 3;
+    config.task_priority    = 6;
+    config.max_open_sockets = 4;
     config.close_fn         = close_cb;
     config.open_fn          = open_cb;
     config.stack_size       = BASE_TASK_SIZE * 4;
@@ -352,8 +352,9 @@ void server_notify_state_change(model_t *pmodel) {
 
             case DEVICE_MODE_UVC:
             case DEVICE_MODE_ESF:
+                CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_STATE, device.actuator_data.ourput_state));
                 CHECK_ALLOC(
-                    cJSON_AddNumberToObject(json_device, JSON_STATE, (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0));
+                    cJSON_AddNumberToObject(json_device, JSON_ALARMS, (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0));
                 CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_FEEDBACK,
                                                     (device.alarms & EASYCONNECT_FEEDBACK_ALARM) > 0));
                 break;

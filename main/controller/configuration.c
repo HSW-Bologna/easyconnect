@@ -173,8 +173,8 @@ void configuration_load(model_t *pmodel) {
     watchlist[i++] = WATCHER_DELAYED(&pmodel->configuration.temperature_stop, storage_save_uint16,
                                      (void *)TEMPERATURE_STOP_KEY, 4000UL);
 
-    watchlist[i++] = WATCHER_ARRAY(&pmodel->configuration.pressure_offsets, DEVICE_GROUPS, save_pressure_offsets,
-                                   (void *)PRESSURE_OFFSETS_KEY);
+    watchlist[i++] =
+        WATCHER(&pmodel->configuration.pressure_offsets, save_pressure_offsets, (void *)PRESSURE_OFFSETS_KEY);
     assert(i == NUM_CONFIGURATION_PARAMETERS);
     watchlist[i++] = WATCHER_NULL;
     watcher_list_init(watchlist);
@@ -211,5 +211,6 @@ static void save_double_byte_array(void *mem, void *arg) {
 
 
 static void save_pressure_offsets(void *mem, void *arg) {
+    int16_t *pressures = mem;
     storage_save_blob(mem, DEVICE_GROUPS, arg);
 }
