@@ -232,6 +232,8 @@ uint8_t  model_get_filter_device_stop(model_t *pmodel, uint8_t address);
 uint8_t  model_is_device_sensor(model_t *pmodel, uint8_t address);
 void     model_set_pressure_offset(model_t *pmodel, int group, int16_t offset);
 int16_t  model_get_pressure_offset(model_t *pmodel, int group);
+void     model_delete_all_devices(model_t *pmodel);
+uint16_t model_get_fan_percentage_correction(model_t *pmodel);
 
 int model_get_raw_pressures(model_t *pmodel, int16_t *pressures);
 int model_get_pressures(model_t *pmodel, int16_t *pressures);

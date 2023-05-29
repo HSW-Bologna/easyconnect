@@ -34,6 +34,7 @@ static const char   *TAG               = "Controller";
 static uint8_t       refresh_devices   = 1;
 static uint8_t       update_time       = 1;
 static uint8_t       first_update_loop = 1;
+static uint8_t       scanning          = 0;
 static QueueHandle_t queue             = NULL;
 
 
@@ -92,7 +93,12 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
         }
 
         case VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_SCAN:
-            modbus_scan();
+            if (!scanning) {
+                modbus_scan();
+                refresh_devices = 1;
+            } else {
+                ESP_LOGI(TAG, "Already scanning!");
+            }
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS: {
@@ -155,7 +161,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                 if (model_get_electrostatic_filter_state(pmodel)) {
                     controller_state_event(pmodel, STATE_EVENT_FAN_START);
                 }
-                // update = 1;
+                update = 1;
             }
 
             if (update) {
@@ -169,6 +175,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_AUTOMATIC_COMMISSIONING:
+            model_delete_all_devices(pmodel);
             modbus_automatic_commissioning(msg->expected_devices);
             break;
 
@@ -372,12 +379,15 @@ void controller_manage(model_t *pmodel) {
                 break;
 
             case MODBUS_RESPONSE_CODE_SCAN_DONE:
+                ESP_LOGI(TAG, "Scan done");
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_SEARCH_DONE});
+                scanning = 0;
+                configuration_save(pmodel);
                 break;
 
             case MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION_LISTENING_DONE:
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_LISTENING_DONE});
-
+                scanning = 0;
                 break;
 
             case MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION:
@@ -385,15 +395,27 @@ void controller_manage(model_t *pmodel) {
                                           .error       = response.error,
                                           .address     = response.address,
                                           .data.number = response.devices_number});
+                configuration_save(pmodel);
+                refresh_devices = 1;
                 break;
 
             case MODBUS_RESPONSE_CODE_INFO:
-                if (!response.scanning && model_is_address_configured(pmodel, response.address)) {
+                if (response.scanning && response.address != 0 && !response.error) {
+                    ESP_LOGI(TAG, "Scan info from %i", response.address);
+                    if (!model_is_address_configured(pmodel, response.address)) {
+                        model_new_device(pmodel, response.address);
+                        view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_NEW});
+                    }
+                    scanning = 1;
+                }
+
+                if (model_is_address_configured(pmodel, response.address)) {
                     model_set_device_error(pmodel, response.address, 0);
                     model_set_device_sn(pmodel, response.address, response.serial_number);
                     model_set_device_class(pmodel, response.address, response.class);
                     model_set_device_firmware(pmodel, response.address, response.firmware_version);
                 }
+
                 view_event((view_event_t){
                     .code = VIEW_EVENT_CODE_DEVICE_UPDATE, .address = response.address, .error = response.error});
                 break;
@@ -445,6 +467,7 @@ void controller_manage(model_t *pmodel) {
 
     if (is_expired(heapts, get_millis(), 5000UL)) {
         // print_heap_status();
+        controller_state_event(pmodel, STATE_EVENT_SENSORS_CHECK);
         heapts = get_millis();
     }
 
@@ -467,13 +490,16 @@ void controller_update_class_output(model_t *pmodel, uint16_t class, int value) 
 
 
 void controller_update_fan_percentage(model_t *pmodel, uint8_t fan_speed) {
+    uint16_t correction    = model_get_fan_percentage_correction(pmodel);
     uint16_t classes[]     = {DEVICE_CLASS_SIPHONING_FAN, DEVICE_CLASS_IMMISSION_FAN};
-    uint8_t  percentages[] = {
+    uint16_t percentages[] = {
         model_get_siphoning_percentage(pmodel, fan_speed),
         model_get_immission_percentage(pmodel, fan_speed),
     };
 
     for (size_t i = 0; i < sizeof(classes) / sizeof(classes[0]); i++) {
+        percentages[i] += percentages[i] * correction;
+
         uint8_t starting_address = 0;
         uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, classes[i]);
 
@@ -492,7 +518,7 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
              device.class, alarms);
 
     switch (CLASS_GET_MODE(device.class)) {
-        case DEVICE_MODE_ESF:
+        //case DEVICE_MODE_ESF:
         case DEVICE_MODE_UVC:
             if (communication || (alarms & EASYCONNECT_SAFETY_ALARM)) {
                 system_shutdown(pmodel);
@@ -503,20 +529,17 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
         case DEVICE_MODE_PRESSURE:
         case DEVICE_MODE_TEMPERATURE_HUMIDITY:
         case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
-            system_shutdown(pmodel);
             break;
     }
 }
 
 
 static void system_shutdown(model_t *pmodel) {
-    if (model_get_fan_state(pmodel) != MODEL_FAN_STATE_OFF) {
-        controller_state_event(pmodel, STATE_EVENT_FAN_EMERGENCY_STOP);
-    }
-    if (model_get_electrostatic_filter_state(pmodel)) {
+    // On system fault the only devices that must be stopped are UVC filters
+    /*if (model_get_electrostatic_filter_state(pmodel)) {
         controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
         model_electrostatic_filter_off(pmodel);
-    }
+    }*/
     if (model_get_uvc_filter_state(pmodel)) {
         controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
         controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);

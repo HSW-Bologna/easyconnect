@@ -487,16 +487,26 @@ static void modbus_task(void *args) {
 
                     for (size_t i = 1; i <= MODBUS_MAX_DEVICES; i++) {
                         if (ulTaskNotifyTake(pdTRUE, 0)) {
+                            ESP_LOGI(TAG, "Interrupting scan");
                             break;
                         }
 
-                        response.address = i;
-                        if (read_holding_registers(&master, NULL, i, EASYCONNECT_HOLDING_REGISTER_ADDRESS, 1) == 0) {
-                            response.error = 0;
+                        response.code     = MODBUS_RESPONSE_CODE_INFO;
+                        response.address  = i;
+                        response.scanning = 1;
+
+                        uint16_t registers[5];
+                        if (read_holding_registers(&master, registers, response.address,
+                                                   EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION,
+                                                   sizeof(registers) / sizeof(registers[0]))) {
+                            // No response
                         } else {
-                            response.error = 1;
+                            response.firmware_version = registers[0];
+                            response.class            = registers[1];
+                            response.serial_number    = (registers[2] << 16) | registers[3];
+                            xQueueSend(responseq, &response, portMAX_DELAY);
                         }
-                        xQueueSend(responseq, &response, portMAX_DELAY);
+
                         vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
                     }
 
@@ -523,17 +533,17 @@ static void modbus_task(void *args) {
                     uint16_t period = 0;
 
                     if (message.expected_devices < 5) {
-                        period = 4;
-                    } else if (message.expected_devices < 10) {
                         period = 10;
-                    } else if (message.expected_devices < 20) {
+                    } else if (message.expected_devices < 10) {
                         period = 20;
+                    } else if (message.expected_devices < 20) {
+                        period = 40;
                     } else if (message.expected_devices < 30) {
-                        period = 30;
-                    } else if (message.expected_devices < 50) {
                         period = 60;
-                    } else {
+                    } else if (message.expected_devices < 50) {
                         period = 120;
+                    } else {
+                        period = 300;
                     }
 
                     uint8_t data[] = {(period >> 8) & 0xFF, period & 0xFF};
@@ -606,10 +616,19 @@ static void modbus_task(void *args) {
                             ESP_LOGW(TAG, "Device %i did not have address %i", device.serial_number, address);
                         } else {
                             confirmed_devices++;
+
+                            modbus_response_t single_device_response = {
+                                .code     = MODBUS_RESPONSE_CODE_INFO,
+                                .scanning = 1,
+                                .address  = device.address,
+                            };
+                            xQueueSend(responseq, &single_device_response, portMAX_DELAY);
                         }
 
                         starting_address = address;
                         address = device_list_get_next_configured_device_address(found_devices, starting_address);
+
+                        vTaskDelay(MODBUS_TIMEOUT / 2);
                     }
 
                     response.code           = MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION;

@@ -2,6 +2,9 @@
 #include <time.h>
 #include <stdlib.h>
 #include "src/lv_core/lv_obj.h"
+#include "src/lv_font/lv_symbol_def.h"
+#include "src/lv_misc/lv_area.h"
+#include "src/lv_widgets/lv_btn.h"
 #include "view/view.h"
 #include "view/intl/intl.h"
 #include "view/common.h"
@@ -9,6 +12,7 @@
 #include "view/style.h"
 #include "esp_log.h"
 #include "config/app_config.h"
+#include "view/view_types.h"
 
 
 LV_IMG_DECLARE(img_icon_reset_md);
@@ -130,7 +134,6 @@ enum {
     BTN_SENSORS_ID,
     BTN_REC_DEVICE_ID,
     BTN_AUTOCONF_ID,
-    BTN_SEARCH_ID,
     BTN_MAINTENANCE_ID,
     BTN_ACTIVE_FILTERING_ID,
     BTN_SETUP_MAINTENANCE_FILTERING_ID,
@@ -175,6 +178,7 @@ enum {
 
     // Rec system group
     BTN_DEVICE_ID,
+    BTN_SCAN_ID,
 
     // Pressure group
     BTN_PRESSURE_DIFFERENCE_0_MOD,
@@ -839,6 +843,11 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
             update_device_list(model, data);
             break;
 
+        case VIEW_EVENT_CODE_DEVICE_NEW:
+            update_all_buttons(model, data);
+            change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
+            break;
+
         case VIEW_EVENT_CODE_TIMER:
             switch (event.timer_id) {
                 case TASK_BLINK_ID:
@@ -1118,6 +1127,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 
                                 case PAGE_ROUTE_REC_DEVICE:
                                     change_page_route(model, data, PAGE_ROUTE_REC_SYSTEM);
+                                    msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_STOP_CURRENT_OPERATION;
                                     break;
 
                                 case PAGE_ROUTE_PRESSURE:
@@ -1179,9 +1189,8 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             msg.vmsg.extra = (void *)(uintptr_t)event.data.number;
                             break;
 
-                        case BTN_SEARCH_ID:
-                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
-                            msg.vmsg.page = &page_devices_manage;
+                        case BTN_SCAN_ID:
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_SCAN;
                             break;
 
                         case BTN_AUTOCONF_ID:
@@ -1669,13 +1678,9 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_DISPOSITIVI_REC), BTN_REC_DEVICE_ID);
             lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, -68);
 
-            btn = view_common_default_menu_button(pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_RICERCA),
-                                                  BTN_SEARCH_ID);
-            lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, -4);
-
             btn = view_common_default_menu_button(
                 pdata->cont_subpage, view_intl_get_string(pmodel, STRINGS_CONF_AUTOMATICA), BTN_AUTOCONF_ID);
-            lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, 60);
+            lv_obj_align(btn, NULL, LV_ALIGN_CENTER, 0, -4);
             break;
         }
 
@@ -1723,6 +1728,13 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             pdata->rec_devices.count = count;
 
             update_device_list(pmodel, pdata);
+
+            lv_obj_t *btn = lv_btn_create(pdata->cont_subpage, NULL);
+            lv_obj_set_size(btn, 64, 64);
+            lv_obj_t *lbl = lv_label_create(btn, NULL);
+            lv_label_set_text(lbl, LV_SYMBOL_REFRESH);
+            lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -8);
+            view_register_default_callback(btn, BTN_SCAN_ID);
             break;
         }
 
@@ -1750,21 +1762,6 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
 
                 starting_address = address;
                 address          = model_get_next_device_address_by_mode(pmodel, starting_address, DEVICE_MODE_UVC);
-            }
-
-
-            starting_address = 0;
-            address          = model_get_next_device_address_by_mode(pmodel, starting_address, DEVICE_MODE_ESF);
-
-            while (address != starting_address) {
-                device_t device = model_get_device(pmodel, address);
-                filter_info_create(pmodel, page, "ESF", CLASS_GET_GROUP(device.class),
-                                   model_get_filter_device_work_hours(pmodel, address),
-                                   model_get_filter_device_remaining_hours(pmodel, address), &img_icon_esf_md,
-                                   model_get_filter_device_warning(pmodel, address), BTN_RESET_FILTER_HOURS, address);
-
-                starting_address = address;
-                address          = model_get_next_device_address_by_mode(pmodel, starting_address, DEVICE_MODE_ESF);
             }
 
             break;
@@ -2291,14 +2288,14 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
             break;
 
         case PAGE_ROUTE_TEMPERATURE:
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_delta, "%i%%",
-                                  model_get_first_temperature_delta(pmodel));
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_delta, "%i%%",
-                                  model_get_second_temperature_delta(pmodel));
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_speed_raise, "%i %s",
-                                  model_get_first_temperature_speed_raise(pmodel), model_get_degrees_symbol(pmodel));
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_speed_raise, "%i %s",
-                                  model_get_second_temperature_speed_raise(pmodel), model_get_degrees_symbol(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_delta, "%i %s",
+                                  model_get_first_temperature_delta(pmodel), model_get_degrees_symbol(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_delta, "%i %s",
+                                  model_get_second_temperature_delta(pmodel), model_get_degrees_symbol(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_speed_raise, "%i%%",
+                                  model_get_first_temperature_speed_raise(pmodel));
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_speed_raise, "%i%%",
+                                  model_get_second_temperature_speed_raise(pmodel));
             lv_label_set_text_fmt(pdata->humidity_temperature.lbl_warn, "%i %s", model_get_temperature_warn(pmodel),
                                   model_get_degrees_symbol(pmodel));
             lv_label_set_text_fmt(pdata->humidity_temperature.lbl_stop, "%i %s", model_get_temperature_stop(pmodel),

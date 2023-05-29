@@ -6,6 +6,9 @@
 #include "model.h"
 
 
+#define ABS(x) ((x) > 0 ? x : -x)
+
+
 static uint8_t alarm_for_device(model_t *pmodel, size_t i);
 
 
@@ -80,7 +83,7 @@ void model_init(model_t *pmodel) {
     pmodel->scanning     = 0;
     pmodel->wifi_state   = WIFI_STATE_DISCONNECTED;
 
-    pmodel->logs_num = 0;
+    pmodel->logs_num  = 0;
     pmodel->logs_from = 0;
 }
 
@@ -171,6 +174,75 @@ void model_set_immission_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t 
     assert(pmodel != NULL);
     assert(fan_speed < MAX_FAN_SPEED);
     pmodel->configuration.immission_percentages[fan_speed] = percentage;
+}
+
+
+uint16_t model_get_fan_percentage_correction(model_t *pmodel) {
+    assert(pmodel != NULL);
+
+    uint16_t const modes[] = {DEVICE_MODE_TEMPERATURE_HUMIDITY, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
+
+    uint8_t previous = 0;
+    uint8_t address  = previous;
+    int     group    = -1;
+
+    int64_t  temperature_sums[DEVICE_GROUPS] = {0};
+    int64_t  humidity_sums[DEVICE_GROUPS]    = {0};
+    uint16_t group_counts[DEVICE_GROUPS]     = {0};
+
+    do {
+        previous = address;
+        address  = model_get_next_device_address_by_modes(pmodel, previous, (uint16_t *)modes,
+                                                          sizeof(modes) / sizeof(modes[0]));
+
+        if (previous == address) {
+            break;
+        }
+
+        device_t device = model_get_device(pmodel, address);
+        if (CLASS_GET_GROUP(device.class) > group) {
+            group = CLASS_GET_GROUP(device.class);
+        }
+
+        group_counts[group]++;
+        temperature_sums[group] += device.sensor_data.temperature;
+        humidity_sums[group] += device.sensor_data.humidity;
+    } while (previous != address);
+
+    int16_t temperatures[DEVICE_GROUPS] = {0};
+    int16_t humidities[DEVICE_GROUPS]   = {0};
+
+    for (size_t i = 0; i < DEVICE_GROUPS; i++) {
+        if (group_counts[i] != 0) {
+            temperatures[i] = (int16_t)(temperature_sums[i] / group_counts[i]);
+            humidities[i]   = (int16_t)(humidity_sums[i] / group_counts[i]);
+        } else {
+            temperatures[i] = 0;
+            humidities[i]   = 0;
+        }
+    }
+
+    uint16_t correction = 0;
+
+    if (ABS(temperatures[DEVICE_GROUP_1] - temperatures[DEVICE_GROUP_2]) > model_get_second_temperature_delta(pmodel)) {
+        correction = correction == 0 ? 1 : correction;
+        correction *= model_get_second_temperature_speed_raise(pmodel);
+    } else if (ABS(temperatures[DEVICE_GROUP_1] - temperatures[DEVICE_GROUP_2]) >
+               model_get_first_temperature_delta(pmodel)) {
+        correction = correction == 0 ? 1 : correction;
+        correction *= model_get_first_temperature_speed_raise(pmodel);
+    }
+
+    if (ABS(humidities[DEVICE_GROUP_1] - humidities[DEVICE_GROUP_2]) > model_get_second_humidity_delta(pmodel)) {
+        correction = correction == 0 ? 1 : correction;
+        correction *= model_get_second_humidity_speed_raise(pmodel);
+    } else if (ABS(humidities[DEVICE_GROUP_1] - humidities[DEVICE_GROUP_2]) > model_get_first_humidity_delta(pmodel)) {
+        correction = correction == 0 ? 1 : correction;
+        correction *= model_get_first_humidity_speed_raise(pmodel);
+    }
+
+    correction = 1;     // TODO: introduce function
+    return correction;
 }
 
 
@@ -309,6 +381,15 @@ size_t model_get_configured_devices(model_t *pmodel) {
 void model_delete_device(model_t *pmodel, uint8_t address) {
     assert(pmodel != NULL);
     device_list_delete_device(pmodel->devices, address);
+}
+
+
+void model_delete_all_devices(model_t *pmodel) {
+    assert(pmodel != NULL);
+
+    for (size_t i = 1; i < MODBUS_MAX_DEVICES; i++) {
+        device_list_delete_device(pmodel->devices, i);
+    }
 }
 
 
