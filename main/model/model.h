@@ -241,6 +241,10 @@ int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *tem
 int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity_2, int16_t *humidity_3);
 int model_get_max_group_per_mode(model_t *pmodel, uint16_t mode);
 const char *model_get_ssid(model_t *pmodel);
+uint8_t     model_is_pressure_difference_ok(model_t *pmodel, int16_t p1, int16_t p2);
+size_t      model_get_temperature_difference_level(model_t *pmodel, int16_t t1, int16_t t2);
+size_t      model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t h2);
+
 
 GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);

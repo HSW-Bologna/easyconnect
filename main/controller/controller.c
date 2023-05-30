@@ -493,12 +493,12 @@ void controller_update_fan_percentage(model_t *pmodel, uint8_t fan_speed) {
     uint16_t correction    = model_get_fan_percentage_correction(pmodel);
     uint16_t classes[]     = {DEVICE_CLASS_SIPHONING_FAN, DEVICE_CLASS_IMMISSION_FAN};
     uint16_t percentages[] = {
-        model_get_siphoning_percentage(pmodel, fan_speed),
-        model_get_immission_percentage(pmodel, fan_speed),
+        model_get_siphoning_percentage(pmodel, fan_speed) + correction,
+        model_get_immission_percentage(pmodel, fan_speed) + correction,
     };
 
     for (size_t i = 0; i < sizeof(classes) / sizeof(classes[0]); i++) {
-        percentages[i] += percentages[i] * correction;
+        percentages[i] = percentages[i] > 100 ? 100 : percentages[i];     // Cap to 100
 
         uint8_t starting_address = 0;
         uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, classes[i]);
@@ -518,7 +518,7 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
              device.class, alarms);
 
     switch (CLASS_GET_MODE(device.class)) {
-        //case DEVICE_MODE_ESF:
+        // case DEVICE_MODE_ESF:
         case DEVICE_MODE_UVC:
             if (communication || (alarms & EASYCONNECT_SAFETY_ALARM)) {
                 system_shutdown(pmodel);

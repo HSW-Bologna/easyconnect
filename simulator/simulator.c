@@ -35,16 +35,10 @@ void app_main(void *arg) {
     add_simulated_device(&model, 8, 8, DEVICE_CLASS_GAS);
 
     uint16_t i = 9;
-    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1));
-    model_set_sensors_values(&model, i++, 738, 0, 0);
-    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2));
-    model_set_sensors_values(&model, i++, 914, 0, 0);
-    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_3));
-    model_set_sensors_values(&model, i++, 832, 0, 0);
-    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_4));
-    model_set_sensors_values(&model, i++, 585, 0, 0);
-    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_5));
-    model_set_sensors_values(&model, i++, 765, 0, 0);
+    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2));
+    model_set_sensors_values(&model, i++, 250, 20, 30);
+    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1));
+    model_set_sensors_values(&model, i++, 275, 25, 40);
 
     model.ap_list_size = 6;
     strcpy(model.ap_list[0], "rete 1");

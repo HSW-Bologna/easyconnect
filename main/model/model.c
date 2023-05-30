@@ -6,7 +6,8 @@
 #include "model.h"
 
 
-#define ABS(x) ((x) > 0 ? x : -x)
+#define ABS(x) ((x) > 0 ? (x) : -(x))
+
 
 
 static uint8_t alarm_for_device(model_t *pmodel, size_t i);
@@ -225,23 +226,18 @@ uint16_t model_get_fan_percentage_correction(model_t *pmodel) {
     uint16_t correction = 0;
 
     if (ABS(temperatures[DEVICE_GROUP_1] - temperatures[DEVICE_GROUP_2]) > model_get_second_temperature_delta(pmodel)) {
-        correction = correction == 0 ? 1 : correction;
-        correction *= model_get_second_temperature_speed_raise(pmodel);
+        correction += model_get_second_temperature_speed_raise(pmodel);
     } else if (ABS(temperatures[DEVICE_GROUP_1] - temperatures[DEVICE_GROUP_2]) >
                model_get_first_temperature_delta(pmodel)) {
-        correction = correction == 0 ? 1 : correction;
-        correction *= model_get_first_temperature_speed_raise(pmodel);
+        correction += model_get_first_temperature_speed_raise(pmodel);
     }
 
     if (ABS(humidities[DEVICE_GROUP_1] - humidities[DEVICE_GROUP_2]) > model_get_second_humidity_delta(pmodel)) {
-        correction = correction == 0 ? 1 : correction;
-        correction *= model_get_second_humidity_speed_raise(pmodel);
+        correction += model_get_second_humidity_speed_raise(pmodel);
     } else if (ABS(humidities[DEVICE_GROUP_1] - humidities[DEVICE_GROUP_2]) > model_get_first_humidity_delta(pmodel)) {
-        correction = correction == 0 ? 1 : correction;
-        correction *= model_get_first_humidity_speed_raise(pmodel);
+        correction += model_get_first_humidity_speed_raise(pmodel);
     }
 
-    correction = 1;     // TODO: introduce function
     return correction;
 }
 
@@ -570,9 +566,9 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressures) {
 
     uint16_t const modes[] = {DEVICE_MODE_PRESSURE, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
 
-    uint8_t previous = 0;
-    uint8_t address  = previous;
-    int     group    = -1;
+    uint8_t previous      = 0;
+    uint8_t address       = previous;
+    int     highest_group = -1;
 
     int64_t  pressure_sums[DEVICE_GROUPS] = {0};
     uint16_t group_counts[DEVICE_GROUPS]  = {0};
@@ -587,8 +583,9 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressures) {
         }
 
         device_t device = model_get_device(pmodel, address);
-        if (CLASS_GET_GROUP(device.class) > group) {
-            group = CLASS_GET_GROUP(device.class);
+        uint16_t group  = CLASS_GET_GROUP(device.class);
+        if (group > highest_group) {
+            highest_group = CLASS_GET_GROUP(device.class);
         }
 
         group_counts[group]++;
@@ -603,7 +600,7 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressures) {
         }
     }
 
-    return group;
+    return highest_group;
 }
 
 
@@ -614,7 +611,6 @@ int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *tem
 
     uint8_t previous = 0;
     uint8_t address  = previous;
-    int     group    = -1;
 
     int64_t  temperatures[3] = {0};
     uint16_t group_counts[3] = {0};
@@ -629,9 +625,7 @@ int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *tem
         }
 
         device_t device = model_get_device(pmodel, address);
-        if (CLASS_GET_GROUP(device.class) > group) {
-            group = CLASS_GET_GROUP(device.class);
-        }
+        uint16_t group  = CLASS_GET_GROUP(device.class);
 
         group_counts[group]++;
         temperatures[group] += device.sensor_data.temperature;
@@ -655,7 +649,7 @@ int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *tem
         *temperature_3 = 0;
     }
 
-    return group;
+    return 0;
 }
 
 
@@ -666,7 +660,6 @@ int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity
 
     uint8_t previous = 0;
     uint8_t address  = previous;
-    int     group    = -1;
 
     int64_t  temperatures[3] = {0};
     uint16_t group_counts[3] = {0};
@@ -681,9 +674,7 @@ int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity
         }
 
         device_t device = model_get_device(pmodel, address);
-        if (CLASS_GET_GROUP(device.class) > group) {
-            group = CLASS_GET_GROUP(device.class);
-        }
+        uint16_t group  = CLASS_GET_GROUP(device.class);
 
         group_counts[group]++;
         temperatures[group] += device.sensor_data.humidity;
@@ -707,7 +698,7 @@ int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity
         *humidity_3 = 0;
     }
 
-    return group;
+    return 0;
 }
 
 
@@ -935,6 +926,34 @@ void model_light_switch(model_t *model) {
 
         default:
             assert(0);
+    }
+}
+
+
+uint8_t model_is_pressure_difference_ok(model_t *pmodel, int16_t p1, int16_t p2) {
+    int16_t maximum_allowed_difference = (ABS(p1) * model_get_pressure_difference_deviation_warn(pmodel)) / 100;
+    return ABS(p1 - p2) < maximum_allowed_difference;
+}
+
+
+size_t model_get_temperature_difference_level(model_t *pmodel, int16_t t1, int16_t t2) {
+    if (ABS(t1 - t2) < model_get_first_temperature_delta(pmodel)) {
+        return 0;
+    } else if (ABS(t1 - t2) < model_get_second_temperature_delta(pmodel)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+
+size_t model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t h2) {
+    if (ABS(h1 - h2) < model_get_first_humidity_delta(pmodel)) {
+        return 0;
+    } else if (ABS(h1 - h2) < model_get_second_humidity_delta(pmodel)) {
+        return 1;
+    } else {
+        return 0;
     }
 }
 

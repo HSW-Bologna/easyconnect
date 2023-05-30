@@ -4,7 +4,10 @@
 #include "src/lv_core/lv_obj.h"
 #include "src/lv_font/lv_symbol_def.h"
 #include "src/lv_misc/lv_area.h"
+#include "src/lv_themes/lv_theme.h"
 #include "src/lv_widgets/lv_btn.h"
+#include "src/lv_widgets/lv_img.h"
+#include "src/lv_widgets/lv_label.h"
 #include "view/view.h"
 #include "view/intl/intl.h"
 #include "view/common.h"
@@ -15,14 +18,19 @@
 #include "view/view_types.h"
 
 
+
 LV_IMG_DECLARE(img_icon_reset_md);
 LV_IMG_DECLARE(img_icon_reset_warning_md);
 LV_IMG_DECLARE(img_icon_reset_stop_md);
 
 LV_IMG_DECLARE(img_error_sm);
 LV_IMG_DECLARE(img_error_md);
+LV_IMG_DECLARE(img_error_lg);
+
+LV_IMG_DECLARE(img_ok_lg);
 
 LV_IMG_DECLARE(img_stop);
+LV_IMG_DECLARE(img_delta);
 
 LV_IMG_DECLARE(img_icona_luce_1);
 LV_IMG_DECLARE(img_icona_luce_2);
@@ -37,6 +45,8 @@ LV_IMG_DECLARE(img_icon_gas_sm);
 LV_IMG_DECLARE(img_icon_pressure_temperature_sm);
 
 LV_IMG_DECLARE(img_icon_temperature_humidity_sm);
+LV_IMG_DECLARE(img_icon_tempearture_sm);
+LV_IMG_DECLARE(img_icon_humidity_sm);
 
 LV_IMG_DECLARE(img_icon_pressure_temperature_humidity_sm);
 
@@ -236,11 +246,22 @@ typedef struct {
     lv_obj_t *img_icon;
 } device_info_widget_t;
 
+
+typedef struct {
+    lv_obj_t *obj;
+
+    lv_obj_t *lbl_data_left;
+    lv_obj_t *lbl_unit_left;
+    lv_obj_t *img_status;
+    lv_obj_t *lbl_data_right;
+    lv_obj_t *lbl_unit_right;
+} status_row_t;
+
+
 struct page_data {
     lv_obj_t *btn_light;
     lv_obj_t *btn_fan;
     lv_obj_t *btn_filter;
-    lv_obj_t *lbl_temperature;
     lv_obj_t *lbl_time;
     lv_obj_t *lbl_date;
     lv_obj_t *slider;
@@ -257,7 +278,10 @@ struct page_data {
     lv_obj_t *img_error_motors_1;
     lv_obj_t *img_error_motors_2[2];
 
-    lv_obj_t *lbl_pressure;
+    status_row_t row_local_temperature;
+    status_row_t row_pressure;
+    status_row_t row_temperature;
+    status_row_t row_humidity;
 
     lv_task_t *blink_task;
 
@@ -307,11 +331,12 @@ struct page_data {
 };
 
 
-static void     change_page_route(model_t *pmodel, struct page_data *pdata, page_route_t route);
-static uint16_t modify_parameter(uint16_t value, int16_t mod, uint16_t min, uint16_t max);
-static uint16_t modify_percentage(uint16_t value, int16_t mod);
-static void     update_menus(model_t *pmodel, struct page_data *pdata);
-static void     update_device_list(model_t *pmodel, struct page_data *pdata);
+static void         change_page_route(model_t *pmodel, struct page_data *pdata, page_route_t route);
+static uint16_t     modify_parameter(uint16_t value, int16_t mod, uint16_t min, uint16_t max);
+static uint16_t     modify_percentage(uint16_t value, int16_t mod);
+static void         update_menus(model_t *pmodel, struct page_data *pdata);
+static void         update_device_list(model_t *pmodel, struct page_data *pdata);
+static status_row_t create_status_row(lv_obj_t *root);
 
 
 static const char *TAG         = "MainPage";
@@ -573,24 +598,88 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
 
 
 static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
-    int16_t pressures[DEVICE_GROUPS] = {0};
-    model_get_pressures(pmodel, pressures);
+    if (pdata->row_pressure.obj != NULL) {
+        int16_t pressures[DEVICE_GROUPS] = {0};
+        model_get_pressures(pmodel, pressures);
 
-    char string[128] = {0};
-    snprintf(string, sizeof(string),
-             "1-2:%3i    2-3:%3i    3-4:%3i    4-5:%3i\n"
-             "5-6:%3i    6-7:%3i    7-8:%3i    8-9:%3i",
-             pressures[0] - pressures[1], pressures[1] - pressures[2], pressures[2] - pressures[3],
-             pressures[3] - pressures[4], pressures[4] - pressures[5], pressures[5] - pressures[6],
-             pressures[6] - pressures[7], pressures[7] - pressures[8]);
-    lv_label_set_text(pdata->lbl_pressure, string);
-    lv_obj_set_hidden(pdata->lbl_pressure, 1);
+        lv_label_set_text_fmt(pdata->row_pressure.lbl_data_left, "%+i", pressures[0]);
+        lv_label_set_text(pdata->row_pressure.lbl_unit_left, "mB");
+
+        lv_img_set_src(pdata->row_pressure.img_status,
+                       model_is_pressure_difference_ok(pmodel, pressures[0], pressures[1]) ? &img_ok_lg
+                                                                                           : &img_error_lg);
+
+        lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "%+i", pressures[1]);
+        lv_label_set_text(pdata->row_pressure.lbl_unit_right, "mB");
+
+        lv_obj_align(pdata->row_pressure.lbl_unit_left, pdata->row_pressure.lbl_data_left, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
+                     0);
+        lv_obj_align(pdata->row_pressure.lbl_unit_right, pdata->row_pressure.lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
+                     0);
+    }
+
+    const lv_img_dsc_t *speed_dsc[] = {&img_ok_lg, &img_speed_1, &img_speed_2};
+
+    if (pdata->row_temperature.obj != NULL) {
+        int16_t temperature_1 = 0;
+        int16_t temperature_2 = 0;
+        int16_t temperature_3 = 0;
+        model_get_temperatures(pmodel, &temperature_1, &temperature_2, &temperature_3);
+
+        lv_label_set_text_fmt(pdata->row_temperature.lbl_data_left, "%i", temperature_1);
+        lv_label_set_text(pdata->row_temperature.lbl_unit_left, model_get_degrees_symbol(pmodel));
+
+        lv_img_set_src(pdata->row_temperature.img_status,
+                       speed_dsc[model_get_temperature_difference_level(pmodel, temperature_1, temperature_2)]);
+
+        lv_label_set_text_fmt(pdata->row_temperature.lbl_data_right, "%i", temperature_2);
+        lv_label_set_text(pdata->row_temperature.lbl_unit_right, model_get_degrees_symbol(pmodel));
+
+        lv_obj_align(pdata->row_temperature.lbl_unit_left, pdata->row_temperature.lbl_data_left, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
+                     0);
+        lv_obj_align(pdata->row_temperature.lbl_unit_right, pdata->row_temperature.lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
+                     0);
+
+        (void)temperature_3;
+    }
+
+
+    if (pdata->row_humidity.obj != NULL) {
+        int16_t humidity_1 = 0;
+        int16_t humidity_2 = 0;
+        int16_t humidity_3 = 0;
+        model_get_humidities(pmodel, &humidity_1, &humidity_2, &humidity_3);
+
+        lv_label_set_text_fmt(pdata->row_humidity.lbl_data_left, "%i", humidity_1);
+        lv_label_set_text(pdata->row_humidity.lbl_unit_left, model_get_degrees_symbol(pmodel));
+
+        lv_img_set_src(pdata->row_humidity.img_status,
+                       speed_dsc[model_get_humidity_difference_level(pmodel, humidity_1, humidity_2)]);
+
+        lv_label_set_text_fmt(pdata->row_humidity.lbl_data_right, "%i", humidity_2);
+        lv_label_set_text(pdata->row_humidity.lbl_unit_right, model_get_degrees_symbol(pmodel));
+
+        lv_obj_align(pdata->row_humidity.lbl_unit_left, pdata->row_humidity.lbl_data_left, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
+                     0);
+        lv_obj_align(pdata->row_humidity.lbl_unit_right, pdata->row_humidity.lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
+                     0);
+
+        (void)humidity_3;
+    }
 }
 
 
 static void update_info(model_t *pmodel, struct page_data *data) {
-    lv_label_set_text_fmt(data->lbl_temperature, "%i %s", model_get_temperature(pmodel),
-                          model_get_degrees_symbol(pmodel));
+    if (data->row_local_temperature.obj != NULL) {
+        lv_label_set_text_fmt(data->row_local_temperature.lbl_data_left, "%i", model_get_temperature(pmodel));
+        lv_label_set_text_fmt(data->row_local_temperature.lbl_unit_left, "%s", model_get_degrees_symbol(pmodel));
+
+        lv_img_set_src(data->row_local_temperature.img_status, &img_ok_lg);
+
+        // lv_label_set_text_fmt(data->row_local_temperature.lbl_data_right, "%i", model_get_humidity(pmodel));
+        lv_label_set_text(data->row_local_temperature.lbl_data_right, "");
+        lv_label_set_text(data->row_local_temperature.lbl_unit_right, "%");
+    }
 
     char   string[32] = {0};
     time_t rawtime;
@@ -624,25 +713,61 @@ static void open_page(model_t *model, void *arg) {
 
     lv_obj_t *logo = lv_img_create(lv_scr_act(), NULL);
     lv_img_set_src(logo, &img_logo);
-    lv_obj_align(logo, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 8);
+    lv_obj_align(logo, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 4);
+
+
+    const uint16_t row_base_x_shift = 20;
+    const uint16_t row_base_y_shift = 64;
+
+    uint16_t temperature_humidity_count = model_get_mode_count(model, DEVICE_MODE_TEMPERATURE_HUMIDITY);
+    uint16_t pressure_temperature_humidity_count =
+        model_get_mode_count(model, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY);
+    uint16_t pressure_count = model_get_mode_count(model, DEVICE_MODE_PRESSURE);
+
+    // If there are pressure sensors
+    if (pressure_count + pressure_temperature_humidity_count > 0) {
+        data->row_pressure = create_status_row(lv_scr_act());
+        lv_obj_align(data->row_pressure.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, row_base_y_shift);
+    } else {
+        data->row_pressure.obj = NULL;
+    }
+
+    if (temperature_humidity_count + pressure_temperature_humidity_count > 0) {
+        data->row_local_temperature.obj = NULL;
+
+        data->row_temperature = create_status_row(lv_scr_act());
+        if (data->row_pressure.obj == NULL) {
+            lv_obj_align(data->row_temperature.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, row_base_y_shift);
+        } else {
+            lv_obj_align(data->row_temperature.obj, data->row_pressure.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+        }
+
+        data->row_humidity = create_status_row(lv_scr_act());
+        lv_obj_align(data->row_humidity.obj, data->row_temperature.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    } else {
+        data->row_temperature.obj = NULL;
+        data->row_humidity.obj    = NULL;
+
+        data->row_local_temperature = create_status_row(lv_scr_act());
+        if (data->row_pressure.obj == NULL) {
+            lv_obj_align(data->row_local_temperature.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, 120);
+        } else {
+            lv_obj_align(data->row_local_temperature.obj, data->row_pressure.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+        }
+    }
+
 
     lbl = lv_label_create(lv_scr_act(), NULL);
     lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
     lv_obj_set_auto_realign(lbl, 1);
-    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, CENTER_X_DELTA, 0);
-    data->lbl_temperature = lbl;
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_BOTTOM_MID, 20, -4);
+    data->lbl_date = lbl;
 
     lbl = lv_label_create(lv_scr_act(), NULL);
     lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_title());
     lv_obj_set_auto_realign(lbl, 1);
-    lv_obj_align(lbl, data->lbl_temperature, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+    lv_obj_align(lbl, data->lbl_date, LV_ALIGN_OUT_TOP_MID, 0, 0);
     data->lbl_time = lbl;
-
-    lbl = lv_label_create(lv_scr_act(), NULL);
-    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
-    lv_obj_set_auto_realign(lbl, 1);
-    lv_obj_align(lbl, data->lbl_time, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
-    data->lbl_date = lbl;
 
     lv_obj_t *cont = lv_cont_create(lv_scr_act(), NULL);
     lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_transparent_cont);
@@ -743,8 +868,8 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_t *butn_minus = lv_btn_create(lv_scr_act(), NULL);
     lv_obj_set_size(butn_plus, 60, 60);
     lv_obj_set_size(butn_minus, 60, 60);
-    lv_obj_align(butn_plus, NULL, LV_ALIGN_IN_TOP_RIGHT, -16, 4);
-    lv_obj_align(butn_minus, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -16, -4);
+    lv_obj_align(butn_plus, NULL, LV_ALIGN_IN_TOP_RIGHT, -4, 4);
+    lv_obj_align(butn_minus, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -4, -4);
     lv_obj_t *lbl_plus  = lv_label_create(butn_plus, NULL);
     lv_obj_t *lbl_minus = lv_label_create(butn_minus, NULL);
     lv_label_set_text(lbl_plus, LV_SYMBOL_PLUS);
@@ -754,8 +879,7 @@ static void open_page(model_t *model, void *arg) {
 
     lv_obj_t *sl = lv_slider_create(lv_scr_act(), NULL);
     lv_obj_set_size(sl, 30, LV_VER_RES_MAX - lv_obj_get_height(butn_plus) * 2 - 58);
-    lv_obj_align(sl, NULL, LV_ALIGN_IN_RIGHT_MID, -16 - (lv_obj_get_width(butn_plus) / 2) + lv_obj_get_width(sl) / 2,
-                 0);
+    lv_obj_align(sl, NULL, LV_ALIGN_IN_RIGHT_MID, -4 - (lv_obj_get_width(butn_plus) / 2) + lv_obj_get_width(sl) / 2, 0);
     lv_slider_set_range(sl, 0, 4);
     data->slider = sl;
     view_register_default_callback(data->slider, SLIDER_ID);
@@ -798,11 +922,6 @@ static void open_page(model_t *model, void *arg) {
     update_info(model, data);
     update_all_buttons(model, data);
     lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
-
-    lbl = lv_label_create(lv_scr_act(), NULL);
-    lv_obj_align(lbl, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -4);
-    lv_obj_set_auto_realign(lbl, 1);
-    data->lbl_pressure = lbl;
 
     update_device_sensors(model, data);
 
@@ -962,6 +1081,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                                 model, modify_parameter(model_get_pressure_difference_deviation_warn(model),
                                                         event.data.number * 5, 0, 100));
                             update_menus(model, data);
+                            update_device_sensors(model, data);
                             break;
 
                         case BTN_PRESSURE_STOP_MOD:
@@ -969,6 +1089,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                                 model, modify_parameter(model_get_pressure_difference_deviation_stop(model),
                                                         event.data.number * 5, 0, 100));
                             update_menus(model, data);
+                            update_device_sensors(model, data);
                             break;
 
                         case BTN_PRESSURE_THRESHOLD_MOD:
@@ -1053,6 +1174,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                                                                                    event.data.number, 0, 100));
                             }
                             update_menus(model, data);
+                            update_device_sensors(model, data);
                             break;
 
                         case BTN_HUMTEMP_STOP_MOD:
@@ -1064,6 +1186,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                                                                                    event.data.number, 0, 100));
                             }
                             update_menus(model, data);
+                            update_device_sensors(model, data);
                             break;
 
                         case BTN_PASSIVE_FILTERS_NUM_MOD:
@@ -1402,6 +1525,76 @@ static lv_obj_t *bordered_cont(lv_obj_t *root) {
     lv_obj_set_style_local_radius(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 8);
     lv_obj_set_size(cont, 70, 70);
     return cont;
+}
+
+
+static status_row_t create_status_row(lv_obj_t *root) {
+    const uint16_t row_height        = 48;
+    const uint16_t cell_width        = 48;
+    const uint16_t cell_double_width = 120;
+    const uint16_t cell_spacing      = 4;
+
+    lv_obj_t *cont = lv_cont_create(root, NULL);
+    lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_transparent_cont);
+    lv_obj_set_size(cont, cell_width + cell_double_width * 2 + cell_spacing * 2, row_height);
+
+    lv_obj_t *cont_center = lv_cont_create(cont, NULL);
+    lv_obj_set_style_local_border_width(cont_center, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 2);
+    lv_obj_set_style_local_radius(cont_center, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 4);
+    lv_obj_set_size(cont_center, cell_width, row_height);
+
+    lv_obj_t *img = lv_img_create(cont_center, NULL);
+    lv_img_set_src(img, &img_ok_lg);
+    lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    lv_obj_align(cont_center, NULL, LV_ALIGN_CENTER, 0, 0);
+
+
+    lv_obj_t *cont_left = lv_cont_create(cont, NULL);
+    lv_obj_set_style_local_border_width(cont_left, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 2);
+    lv_obj_set_style_local_radius(cont_left, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 4);
+    lv_obj_set_size(cont_left, cell_double_width, row_height);
+
+    lv_obj_t *lbl_data_left = lv_label_create(cont_left, NULL);
+    lv_obj_set_style_local_text_font(lbl_data_left, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_obj_align(lbl_data_left, NULL, LV_ALIGN_IN_LEFT_MID, 4, 0);
+    lv_obj_set_auto_realign(lbl_data_left, 1);
+
+    lv_obj_t *lbl_unit_left = lv_label_create(cont_left, NULL);
+    lv_obj_set_style_local_text_font(lbl_unit_left, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_obj_align(lbl_unit_left, lbl_data_left, LV_ALIGN_OUT_RIGHT_BOTTOM, 0, 0);
+    lv_obj_set_auto_realign(lbl_unit_left, 1);
+
+    lv_obj_align(cont_left, cont_center, LV_ALIGN_OUT_LEFT_MID, -cell_spacing, 0);
+
+
+    lv_obj_t *cont_right = lv_cont_create(cont, NULL);
+    lv_obj_set_style_local_border_width(cont_right, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 2);
+    lv_obj_set_style_local_radius(cont_right, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 4);
+    lv_obj_set_size(cont_right, cell_double_width, row_height);
+
+    lv_obj_t *lbl_data_right = lv_label_create(cont_right, NULL);
+    lv_obj_set_style_local_text_font(lbl_data_right, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT,
+                                     lv_theme_get_font_subtitle());
+    lv_obj_align(lbl_data_right, NULL, LV_ALIGN_IN_LEFT_MID, 4, 0);
+    lv_obj_set_auto_realign(lbl_data_right, 1);
+
+    lv_obj_t *lbl_unit_right = lv_label_create(cont_right, NULL);
+    lv_obj_set_style_local_text_font(lbl_unit_right, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_normal());
+    lv_obj_align(lbl_unit_right, lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM, 0, 0);
+    lv_obj_set_auto_realign(lbl_unit_right, 1);
+
+    lv_obj_align(cont_right, cont_center, LV_ALIGN_OUT_RIGHT_MID, cell_spacing, 0);
+
+
+    return (status_row_t){
+        .obj            = cont,
+        .img_status     = img,
+        .lbl_data_left  = lbl_data_left,
+        .lbl_unit_left  = lbl_unit_left,
+        .lbl_data_right = lbl_data_right,
+        .lbl_unit_right = lbl_unit_right,
+    };
 }
 
 
@@ -2055,7 +2248,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             pdata->cont_subpage = cont_subpage_create(view_intl_get_string(pmodel, STRINGS_UMIDITA));
 
             const lv_img_dsc_t *top_imgs[2]  = {&img_speed_1, &img_speed_2};
-            const lv_img_dsc_t *left_imgs[2] = {&img_icon_temperature_humidity_sm, &img_icon_siphoning_immission_md};
+            const lv_img_dsc_t *left_imgs[2] = {&img_icon_humidity_sm, &img_icon_siphoning_immission_md};
             lv_obj_t          **labels[4]    = {
                 &pdata->humidity_temperature.lbl_first_delta,
                 &pdata->humidity_temperature.lbl_second_delta,
@@ -2112,6 +2305,20 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             img = lv_img_create(pdata->cont_subpage, NULL);
             lv_img_set_src(img, &img_stop);
             lv_obj_align(img, second_cont, LV_ALIGN_OUT_TOP_MID, 0, -16);
+
+            lv_obj_align(pdata->humidity_temperature.lbl_first_delta, NULL, LV_ALIGN_IN_TOP_MID, 4, 2);
+            lv_obj_align(pdata->humidity_temperature.lbl_second_delta, NULL, LV_ALIGN_IN_TOP_MID, 4, 2);
+
+            img = lv_img_create(pdata->cont_subpage, NULL);
+            lv_img_set_src(img, &img_delta);
+            lv_obj_set_auto_realign(img, 1);
+            lv_obj_align(img, pdata->humidity_temperature.lbl_first_delta, LV_ALIGN_OUT_LEFT_MID, -9, 0);
+
+            img = lv_img_create(pdata->cont_subpage, NULL);
+            lv_img_set_src(img, &img_delta);
+            lv_obj_set_auto_realign(img, 1);
+            lv_obj_align(img, pdata->humidity_temperature.lbl_second_delta, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+
             break;
         }
 
@@ -2119,7 +2326,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             pdata->cont_subpage = cont_subpage_create(view_intl_get_string(pmodel, STRINGS_TEMPERATURA));
 
             const lv_img_dsc_t *top_imgs[2]  = {&img_speed_1, &img_speed_2};
-            const lv_img_dsc_t *left_imgs[2] = {&img_icon_temperature_humidity_sm, &img_icon_siphoning_immission_md};
+            const lv_img_dsc_t *left_imgs[2] = {&img_icon_tempearture_sm, &img_icon_siphoning_immission_md};
             lv_obj_t          **labels[4]    = {
                 &pdata->humidity_temperature.lbl_first_delta,
                 &pdata->humidity_temperature.lbl_second_delta,
@@ -2176,6 +2383,19 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             img = lv_img_create(pdata->cont_subpage, NULL);
             lv_img_set_src(img, &img_stop);
             lv_obj_align(img, second_cont, LV_ALIGN_OUT_TOP_MID, 0, -16);
+
+            lv_obj_align(pdata->humidity_temperature.lbl_first_delta, NULL, LV_ALIGN_IN_TOP_MID, 4, 2);
+            lv_obj_align(pdata->humidity_temperature.lbl_second_delta, NULL, LV_ALIGN_IN_TOP_MID, 4, 2);
+
+            img = lv_img_create(pdata->cont_subpage, NULL);
+            lv_img_set_src(img, &img_delta);
+            lv_obj_set_auto_realign(img, 1);
+            lv_obj_align(img, pdata->humidity_temperature.lbl_first_delta, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+
+            img = lv_img_create(pdata->cont_subpage, NULL);
+            lv_img_set_src(img, &img_delta);
+            lv_obj_set_auto_realign(img, 1);
+            lv_obj_align(img, pdata->humidity_temperature.lbl_second_delta, LV_ALIGN_OUT_LEFT_MID, -8, 0);
             break;
         }
 
@@ -2279,9 +2499,9 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
                                   model_get_first_humidity_delta(pmodel));
             lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_delta, "%i%%",
                                   model_get_second_humidity_delta(pmodel));
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_speed_raise, "%i%%",
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_first_speed_raise, "+%i%%",
                                   model_get_first_humidity_speed_raise(pmodel));
-            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_speed_raise, "%i%%",
+            lv_label_set_text_fmt(pdata->humidity_temperature.lbl_second_speed_raise, "+%i%%",
                                   model_get_second_humidity_speed_raise(pmodel));
             lv_label_set_text_fmt(pdata->humidity_temperature.lbl_warn, "%i%%", model_get_humidity_warn(pmodel));
             lv_label_set_text_fmt(pdata->humidity_temperature.lbl_stop, "%i%%", model_get_humidity_stop(pmodel));
