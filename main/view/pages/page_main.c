@@ -614,8 +614,8 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
         lv_obj_align(pdata->row_pressure.lbl_unit_left, pdata->row_pressure.lbl_data_left, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
                      0);
-        lv_obj_align(pdata->row_pressure.lbl_unit_right, pdata->row_pressure.lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
-                     0);
+        lv_obj_align(pdata->row_pressure.lbl_unit_right, pdata->row_pressure.lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM,
+                     0, 0);
     }
 
     const lv_img_dsc_t *speed_dsc[] = {&img_ok_lg, &img_speed_1, &img_speed_2};
@@ -635,10 +635,10 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
         lv_label_set_text_fmt(pdata->row_temperature.lbl_data_right, "%i", temperature_2);
         lv_label_set_text(pdata->row_temperature.lbl_unit_right, model_get_degrees_symbol(pmodel));
 
-        lv_obj_align(pdata->row_temperature.lbl_unit_left, pdata->row_temperature.lbl_data_left, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
-                     0);
-        lv_obj_align(pdata->row_temperature.lbl_unit_right, pdata->row_temperature.lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
-                     0);
+        lv_obj_align(pdata->row_temperature.lbl_unit_left, pdata->row_temperature.lbl_data_left,
+                     LV_ALIGN_OUT_RIGHT_BOTTOM, 0, 0);
+        lv_obj_align(pdata->row_temperature.lbl_unit_right, pdata->row_temperature.lbl_data_right,
+                     LV_ALIGN_OUT_RIGHT_BOTTOM, 0, 0);
 
         (void)temperature_3;
     }
@@ -661,8 +661,8 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
         lv_obj_align(pdata->row_humidity.lbl_unit_left, pdata->row_humidity.lbl_data_left, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
                      0);
-        lv_obj_align(pdata->row_humidity.lbl_unit_right, pdata->row_humidity.lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
-                     0);
+        lv_obj_align(pdata->row_humidity.lbl_unit_right, pdata->row_humidity.lbl_data_right, LV_ALIGN_OUT_RIGHT_BOTTOM,
+                     0, 0);
 
         (void)humidity_3;
     }
@@ -670,14 +670,16 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
 
 static void update_info(model_t *pmodel, struct page_data *data) {
+    const lv_img_dsc_t *error_dsc[] = {&img_ok_lg, &img_error_lg, &img_stop};
+
     if (data->row_local_temperature.obj != NULL) {
         lv_label_set_text_fmt(data->row_local_temperature.lbl_data_left, "%i", model_get_temperature(pmodel));
         lv_label_set_text_fmt(data->row_local_temperature.lbl_unit_left, "%s", model_get_degrees_symbol(pmodel));
 
-        lv_img_set_src(data->row_local_temperature.img_status, &img_ok_lg);
+        lv_img_set_src(data->row_local_temperature.img_status,
+                       error_dsc[model_get_local_temperature_humidity_error_level(pmodel)]);
 
-        // lv_label_set_text_fmt(data->row_local_temperature.lbl_data_right, "%i", model_get_humidity(pmodel));
-        lv_label_set_text(data->row_local_temperature.lbl_data_right, "");
+        lv_label_set_text_fmt(data->row_local_temperature.lbl_data_right, "%i", model_get_humidity(pmodel));
         lv_label_set_text(data->row_local_temperature.lbl_unit_right, "%");
     }
 
@@ -1545,6 +1547,7 @@ static status_row_t create_status_row(lv_obj_t *root) {
 
     lv_obj_t *img = lv_img_create(cont_center, NULL);
     lv_img_set_src(img, &img_ok_lg);
+    lv_obj_set_auto_realign(img, 1);
     lv_obj_align(img, NULL, LV_ALIGN_CENTER, 0, 0);
 
     lv_obj_align(cont_center, NULL, LV_ALIGN_CENTER, 0, 0);
@@ -2252,14 +2255,14 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_obj_t          **labels[4]    = {
                 &pdata->humidity_temperature.lbl_first_delta,
                 &pdata->humidity_temperature.lbl_second_delta,
-                &pdata->humidity_temperature.lbl_warn,
-                &pdata->humidity_temperature.lbl_stop,
+                &pdata->humidity_temperature.lbl_first_speed_raise,
+                &pdata->humidity_temperature.lbl_second_speed_raise,
             };
             const int ids[] = {
                 BTN_HUMTEMP_FIRST_DELTA_MOD,
                 BTN_HUMTEMP_SECOND_DELTA_MOD,
-                BTN_HUMTEMP_WARN_MOD,
-                BTN_HUMTEMP_STOP_MOD,
+                BTN_HUMTEMP_FIRST_CORRECTION_MOD,
+                BTN_HUMTEMP_SECOND_CORRECTION_MOD,
             };
             size_t label_index = 0;
 
@@ -2289,8 +2292,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             }
 
             lv_obj_t *first_cont =
-                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_first_speed_raise,
-                                 BTN_HUMTEMP_FIRST_CORRECTION_MOD);
+                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_warn, BTN_HUMTEMP_WARN_MOD);
             lv_obj_align(first_cont, NULL, LV_ALIGN_IN_TOP_LEFT, 254, 100);
 
             lv_obj_t *img = lv_img_create(pdata->cont_subpage, NULL);
@@ -2298,8 +2300,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_obj_align(img, first_cont, LV_ALIGN_OUT_TOP_MID, 0, -16);
 
             lv_obj_t *second_cont =
-                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_second_speed_raise,
-                                 BTN_HUMTEMP_SECOND_CORRECTION_MOD);
+                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_stop, BTN_HUMTEMP_STOP_MOD);
             lv_obj_align(second_cont, first_cont, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 
             img = lv_img_create(pdata->cont_subpage, NULL);
@@ -2330,14 +2331,14 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_obj_t          **labels[4]    = {
                 &pdata->humidity_temperature.lbl_first_delta,
                 &pdata->humidity_temperature.lbl_second_delta,
-                &pdata->humidity_temperature.lbl_warn,
-                &pdata->humidity_temperature.lbl_stop,
+                &pdata->humidity_temperature.lbl_first_speed_raise,
+                &pdata->humidity_temperature.lbl_second_speed_raise,
             };
             const int ids[] = {
                 BTN_HUMTEMP_FIRST_DELTA_MOD,
                 BTN_HUMTEMP_SECOND_DELTA_MOD,
-                BTN_HUMTEMP_WARN_MOD,
-                BTN_HUMTEMP_STOP_MOD,
+                BTN_HUMTEMP_FIRST_CORRECTION_MOD,
+                BTN_HUMTEMP_FIRST_CORRECTION_MOD,
             };
             size_t label_index = 0;
 
@@ -2367,8 +2368,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             }
 
             lv_obj_t *first_cont =
-                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_first_speed_raise,
-                                 BTN_HUMTEMP_FIRST_CORRECTION_MOD);
+                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_warn, BTN_HUMTEMP_WARN_MOD);
             lv_obj_align(first_cont, NULL, LV_ALIGN_IN_TOP_LEFT, 254, 100);
 
             lv_obj_t *img = lv_img_create(pdata->cont_subpage, NULL);
@@ -2376,8 +2376,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_obj_align(img, first_cont, LV_ALIGN_OUT_TOP_MID, 0, -16);
 
             lv_obj_t *second_cont =
-                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_second_speed_raise,
-                                 BTN_HUMTEMP_SECOND_CORRECTION_MOD);
+                par_control_cont(pdata->cont_subpage, &pdata->humidity_temperature.lbl_stop, BTN_HUMTEMP_STOP_MOD);
             lv_obj_align(second_cont, first_cont, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 
             img = lv_img_create(pdata->cont_subpage, NULL);

@@ -958,6 +958,19 @@ size_t model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t 
 }
 
 
+size_t model_get_local_temperature_humidity_error_level(model_t *pmodel) {
+    if (model_get_temperature(pmodel) > model_get_temperature_stop(pmodel) ||
+        model_get_humidity(pmodel) > model_get_humidity_stop(pmodel)) {
+        return 2;
+    } else if (model_get_humidity(pmodel) > model_get_humidity_warn(pmodel) ||
+               model_get_temperature(pmodel) > model_get_temperature_warn(pmodel)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+
 static uint8_t alarm_for_device(model_t *pmodel, size_t i) {
     return ((pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED && (pmodel->devices[i].alarms & 0xFF) > 0) ||
             pmodel->devices[i].status == DEVICE_STATUS_COMMUNICATION_ERROR);

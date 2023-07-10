@@ -105,6 +105,7 @@ typedef enum {
 
 typedef struct {
     int temperature;
+    int humidity;
     int electrostatic_filter_on;
     int uvc_filter_on;
 
@@ -244,8 +245,10 @@ const char *model_get_ssid(model_t *pmodel);
 uint8_t     model_is_pressure_difference_ok(model_t *pmodel, int16_t p1, int16_t p2);
 size_t      model_get_temperature_difference_level(model_t *pmodel, int16_t t1, int16_t t2);
 size_t      model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t h2);
+size_t      model_get_local_temperature_humidity_error_level(model_t *pmodel);
 
 
+GETTERNSETTER(humidity, humidity);
 GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);
 GETTERNSETTER(active_backlight, configuration.active_backlight);

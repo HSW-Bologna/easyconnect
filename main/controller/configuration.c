@@ -211,6 +211,5 @@ static void save_double_byte_array(void *mem, void *arg) {
 
 
 static void save_pressure_offsets(void *mem, void *arg) {
-    int16_t *pressures = mem;
     storage_save_blob(mem, DEVICE_GROUPS, arg);
 }

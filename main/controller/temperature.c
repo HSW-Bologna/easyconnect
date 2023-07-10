@@ -17,6 +17,7 @@ static void temperature_task(void *args);
 static const char       *TAG                       = "Temperature";
 static SemaphoreHandle_t sem                       = NULL;
 static double            temperatures[AVERAGE_NUM] = {0};
+static double            humidities[AVERAGE_NUM]   = {0};
 static size_t            average_index             = 0;
 static int               full_circle               = 0;
 
@@ -50,6 +51,24 @@ double temperature_get(void) {
 }
 
 
+double temperature_get_humidity(void) {
+    double average = 0;
+    xSemaphoreTake(sem, portMAX_DELAY);
+    size_t end = full_circle ? AVERAGE_NUM : average_index;
+
+    if (end == 0) {
+        xSemaphoreGive(sem);
+        return 0;
+    }
+
+    for (size_t i = 0; i < end; i++) {
+        average += humidities[i];
+    }
+    xSemaphoreGive(sem);
+    return average / end;
+}
+
+
 static void temperature_task(void *args) {
     (void)args;
     // sht21_set_resolution(sht21_driver, SHT21_RESOLUTION_11_11);
@@ -57,14 +76,16 @@ static void temperature_task(void *args) {
 
     for (;;) {
         int16_t temperature = 0;
+        int16_t humidity    = 0;
 
 
-        if (shtc3_start_temperature_measurement(shtc3_driver) == 0) {
+        if (shtc3_start_temperature_humidity_measurement(shtc3_driver) == 0) {
             vTaskDelay(pdMS_TO_TICKS(SHTC3_NORMAL_MEASUREMENT_PERIOD_MS));
 
-            if (shtc3_read_temperature_measurement(shtc3_driver, &temperature) == 0) {
+            if (shtc3_read_temperature_humidity_measurement(shtc3_driver, &temperature, &humidity) == 0) {
                 xSemaphoreTake(sem, portMAX_DELAY);
                 temperatures[average_index] = (double)temperature;
+                humidities[average_index]   = (double)humidity;
                 if (average_index == AVERAGE_NUM - 1) {
                     full_circle = 1;
                 }
@@ -76,18 +97,6 @@ static void temperature_task(void *args) {
         } else {
             ESP_LOGD(TAG, "Error in starting temperature measurement");
         }
-
-#if 0
-        if (sht21_read(sht21_driver, &temperature, NULL, DELAY) == 0) {
-            xSemaphoreTake(sem, portMAX_DELAY);
-            temperatures[average_index] = temperature;
-            if (average_index == AVERAGE_NUM - 1) {
-                full_circle = 1;
-            }
-            average_index = (average_index + 1) % AVERAGE_NUM;
-            xSemaphoreGive(sem);
-        }
-#endif
 
         vTaskDelay(pdMS_TO_TICKS(200));
     }

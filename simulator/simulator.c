@@ -35,10 +35,10 @@ void app_main(void *arg) {
     add_simulated_device(&model, 8, 8, DEVICE_CLASS_GAS);
 
     uint16_t i = 9;
-    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2));
-    model_set_sensors_values(&model, i++, 250, 20, 30);
-    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1));
-    model_set_sensors_values(&model, i++, 275, 25, 40);
+    // add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_2));
+    // model_set_sensors_values(&model, i++, 250, 20, 30);
+    // add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1));
+    // model_set_sensors_values(&model, i++, 275, 25, 40);
 
     model.ap_list_size = 6;
     strcpy(model.ap_list[0], "rete 1");
@@ -51,8 +51,11 @@ void app_main(void *arg) {
     view_init(monitor_flush, mouse_read);
     controller_init(&model);
 
+
     ESP_LOGI(TAG, "Begin main loop");
     for (;;) {
+        model.temperature = 20;
+        model_set_humidity(&model, 30);
         controller_gui_manage(&model);
         controller_manage(&model);
 

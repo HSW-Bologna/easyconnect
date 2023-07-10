@@ -28,6 +28,7 @@ static void update_work_hours_cycle(model_t *pmodel);
 static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t alarms, uint8_t communication);
 static void system_shutdown(model_t *pmodel);
 static void print_heap_status(void);
+static void check_sensors_levels(model_t *pmodel);
 
 
 static const char   *TAG               = "Controller";
@@ -308,6 +309,10 @@ void controller_manage(model_t *pmodel) {
 
     if (is_expired(tempts, get_millis(), 500UL)) {
         pmodel->temperature = (int)temperature_get();
+        model_set_humidity(pmodel, temperature_get_humidity());
+
+        check_sensors_levels(pmodel);
+
         view_event((view_event_t){.code = VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE});
         tempts = get_millis();
     }
@@ -583,4 +588,73 @@ static void update_work_hours_cycle(model_t *pmodel) {
         address           = 0;
         first_update_loop = 0;
     }
+}
+
+
+static void check_sensors_levels(model_t *pmodel) {
+    static uint8_t       old_temperature_1_warning = 0;
+    static uint8_t       old_temperature_2_warning = 0;
+    static uint8_t       old_humidity_1_warning    = 0;
+    static uint8_t       old_humidity_2_warning    = 0;
+    static uint8_t       stop                      = 0;
+    static unsigned long timestamp                 = 0;
+
+    uint16_t temperature_humidity_count = model_get_mode_count(pmodel, DEVICE_MODE_TEMPERATURE_HUMIDITY);
+    uint16_t pressure_temperature_humidity_count =
+        model_get_mode_count(pmodel, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY);
+
+    uint8_t current_temperature_1_warning = 0;
+    uint8_t current_temperature_2_warning = 0;
+    uint8_t current_humidity_1_warning    = 0;
+    uint8_t current_humidity_2_warning    = 0;
+
+
+    if (pressure_temperature_humidity_count + temperature_humidity_count > 0) {
+        int16_t temperature_1 = 0;
+        int16_t temperature_2 = 0;
+        int16_t temperature_3 = 0;
+        model_get_temperatures(pmodel, &temperature_1, &temperature_2, &temperature_3);
+
+        int16_t humidity_1 = 0;
+        int16_t humidity_2 = 0;
+        int16_t humidity_3 = 0;
+        model_get_humidities(pmodel, &humidity_1, &humidity_2, &humidity_3);
+
+        current_temperature_1_warning = temperature_1 > model_get_temperature_warn(pmodel);
+        current_temperature_2_warning = temperature_2 > model_get_temperature_warn(pmodel);
+        (void)temperature_3;
+
+        current_humidity_1_warning = humidity_1 > model_get_humidity_warn(pmodel);
+        current_humidity_2_warning = humidity_2 > model_get_humidity_warn(pmodel);
+        (void)humidity_3;
+
+        stop = temperature_1 > model_get_temperature_stop(pmodel) ||
+               temperature_2 > model_get_temperature_stop(pmodel) || humidity_1 > model_get_humidity_stop(pmodel) ||
+               humidity_2 > model_get_humidity_stop(pmodel);
+    } else {
+        current_temperature_1_warning = model_get_temperature(pmodel) > model_get_temperature_warn(pmodel);
+        current_humidity_1_warning    = model_get_humidity(pmodel) > model_get_humidity_warn(pmodel);
+
+        stop = model_get_temperature(pmodel) > model_get_temperature_stop(pmodel) || model_get_humidity_stop(pmodel);
+    }
+
+    if (stop) {
+        if (is_expired(timestamp, get_millis(), 2000UL)) {
+            buzzer_beep(1, 500, 0, 3);
+            timestamp = get_millis();
+        }
+    } else if (current_temperature_1_warning && !old_temperature_1_warning) {
+        buzzer_beep(1, 500, 0, 3);
+    } else if (current_temperature_2_warning && !old_temperature_2_warning) {
+        buzzer_beep(1, 500, 0, 3);
+    } else if (current_humidity_1_warning && !old_humidity_1_warning) {
+        buzzer_beep(1, 500, 0, 3);
+    } else if (current_humidity_2_warning && !old_humidity_2_warning) {
+        buzzer_beep(1, 500, 0, 3);
+    }
+
+    old_temperature_1_warning = current_temperature_1_warning;
+    old_temperature_2_warning = current_temperature_2_warning;
+    old_humidity_1_warning    = current_humidity_1_warning;
+    old_humidity_2_warning    = current_humidity_2_warning;
 }
