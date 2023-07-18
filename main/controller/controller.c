@@ -22,13 +22,19 @@
 #include "services/network.h"
 #include "services/server.h"
 #include "view/view_types.h"
+#ifndef PC_SIMULATOR
+#include "esp32_commandline.h"
+#endif
 
 
-static void update_work_hours_cycle(model_t *pmodel);
-static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t alarms, uint8_t communication);
-static void system_shutdown(model_t *pmodel);
-static void print_heap_status(void);
-static void check_sensors_levels(model_t *pmodel);
+static void     update_work_hours_cycle(model_t *pmodel);
+static void     error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t alarms, uint8_t communication);
+static void     system_shutdown(model_t *pmodel);
+static void     print_heap_status(void);
+static void     check_sensors_levels(model_t *pmodel);
+static void     console_task(void *args);
+static uint32_t get_serial_number(void *arg);
+static int      initialize_time(void);
 
 
 static const char   *TAG               = "Controller";
@@ -37,6 +43,18 @@ static uint8_t       update_time       = 1;
 static uint8_t       first_update_loop = 1;
 static uint8_t       scanning          = 0;
 static QueueHandle_t queue             = NULL;
+
+
+static void delay_ms(unsigned long ms) {
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+
+static easyconnect_interface_t context = {
+    .save_serial_number = configuration_save_serial_number,
+    .get_serial_number  = get_serial_number,
+    .delay_ms           = delay_ms,
+};
 
 
 void controller_init(model_t *pmodel) {
@@ -53,22 +71,16 @@ void controller_init(model_t *pmodel) {
 
     tft_backlight_set(model_get_active_backlight(pmodel));
 
-    if (ds1307_is_clock_halted(rtc_driver)) {
-        rtc_time_t rtc_time = {.day = 6, .wday = 1, .month = 3, .year = 22};
-        ds1307_set_time(rtc_driver, rtc_time, 0);
-        ESP_LOGI(TAG, "RTC Clock started");
-    } else {
-        rtc_time_t rtc_time = {0};
-        ds1307_get_time(rtc_driver, &rtc_time);
-        struct tm tm = ds1307_tm_from_rtc(rtc_time);
-        utils_set_system_time(tm);
-    }
+    pmodel->internal_rtc_error = initialize_time();
 
     LOG_POWER_ON();
 
     if (model_get_wifi_enabled(pmodel)) {
         network_start_sta();
     }
+
+    context.arg = pmodel;
+    xTaskCreate(console_task, "Console", 512 * 6, &context, 1, NULL);
 }
 
 
@@ -307,11 +319,21 @@ void controller_manage(model_t *pmodel) {
         }
     }
 
-    if (is_expired(tempts, get_millis(), 500UL)) {
-        pmodel->temperature = (int)temperature_get();
-        model_set_humidity(pmodel, temperature_get_humidity());
+    if (is_expired(tempts, get_millis(), 1000UL)) {
+        if (temperature_error()) {
+            pmodel->internal_sensor_error = 1;
+        } else {
+            pmodel->internal_sensor_error = 0;
+            pmodel->temperature           = (int)temperature_get();
+            model_set_humidity(pmodel, temperature_get_humidity());
 
-        check_sensors_levels(pmodel);
+            check_sensors_levels(pmodel);
+        }
+
+        // Periodically retry to initialize time if an error was found with the RTC
+        if (pmodel->internal_rtc_error) {
+            pmodel->internal_rtc_error = initialize_time();
+        }
 
         view_event((view_event_t){.code = VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE});
         tempts = get_millis();
@@ -367,7 +389,8 @@ void controller_manage(model_t *pmodel) {
                     uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
                     if (new_poll_address == poll_address) {
                         // Restart
-                        poll_address = 0;
+                        poll_address         = 0;
+                        pmodel->sensors_read = 1;     // Full read
                     } else {
                         poll_address = new_poll_address;
                     }
@@ -455,7 +478,8 @@ void controller_manage(model_t *pmodel) {
                 uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
                 if (new_poll_address == poll_address) {
                     // Restart
-                    poll_address = 0;
+                    pmodel->sensors_read = 1;     // Full read
+                    poll_address         = 0;
                 } else {
                     poll_address = new_poll_address;
                 }
@@ -627,6 +651,7 @@ static void check_sensors_levels(model_t *pmodel) {
         current_humidity_1_warning = humidity_1 > model_get_humidity_warn(pmodel);
         current_humidity_2_warning = humidity_2 > model_get_humidity_warn(pmodel);
         (void)humidity_3;
+        printf("hums %i %i %i\n", humidity_1, humidity_2, model_get_humidity_warn(pmodel));
 
         stop = temperature_1 > model_get_temperature_stop(pmodel) ||
                temperature_2 > model_get_temperature_stop(pmodel) || humidity_1 > model_get_humidity_stop(pmodel) ||
@@ -657,4 +682,44 @@ static void check_sensors_levels(model_t *pmodel) {
     old_temperature_2_warning = current_temperature_2_warning;
     old_humidity_1_warning    = current_humidity_1_warning;
     old_humidity_2_warning    = current_humidity_2_warning;
+}
+
+
+static void console_task(void *args) {
+#ifndef PC_SIMULATOR
+    const char              *prompt    = "EC-peripheral> ";
+    easyconnect_interface_t *interface = args;
+
+    esp32_commandline_init(interface);
+
+    for (;;) {
+        esp32_edit_cycle(prompt);
+    }
+#else
+    (void)args;
+#endif
+
+    vTaskDelete(NULL);
+}
+
+
+static uint32_t get_serial_number(void *arg) {
+    return model_get_my_sn(arg);
+}
+
+
+static int initialize_time(void) {
+    int result = ds1307_is_clock_halted(rtc_driver);
+    if (result > 0) {     // Initialize time
+        rtc_time_t rtc_time = {.day = 6, .wday = 1, .month = 3, .year = 22};
+        ds1307_set_time(rtc_driver, rtc_time, 0);
+        ESP_LOGI(TAG, "RTC Clock started");
+    } else if (result == 0) {
+        rtc_time_t rtc_time = {0};
+        result              = ds1307_get_time(rtc_driver, &rtc_time);
+        struct tm tm        = ds1307_tm_from_rtc(rtc_time);
+        utils_set_system_time(tm);
+    }
+
+    return result < 0 ? result : 0;
 }

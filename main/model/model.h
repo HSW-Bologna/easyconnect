@@ -108,6 +108,9 @@ typedef struct {
     int humidity;
     int electrostatic_filter_on;
     int uvc_filter_on;
+    uint8_t internal_sensor_error;
+    uint8_t internal_rtc_error;
+    uint8_t sensors_read;
 
     uint8_t show_work_hours_state;
 
@@ -160,6 +163,8 @@ typedef struct {
         uint16_t temperature_stop;
 
         int16_t pressure_offsets[16];
+
+        uint32_t serial_number;
     } configuration;
 
     uint8_t fan_speed;
@@ -253,6 +258,7 @@ GETTERNSETTER(light_state, light_state);
 GETTERNSETTER(fan_speed, fan_speed);
 GETTERNSETTER(active_backlight, configuration.active_backlight);
 GETTERNSETTER(language, configuration.language);
+GETTERNSETTER(my_sn, configuration.serial_number);
 GETTERNSETTER(buzzer_volume, configuration.buzzer_volume);
 GETTERNSETTER(use_fahrenheit, configuration.use_fahrenheit);
 GETTERNSETTER(environment_cleaning_start_period, configuration.environment_cleaning_start_period);

@@ -8,7 +8,7 @@
 
 
 #define DELAY       11
-#define AVERAGE_NUM 5
+#define AVERAGE_NUM 10
 
 
 static void temperature_task(void *args);
@@ -20,6 +20,7 @@ static double            temperatures[AVERAGE_NUM] = {0};
 static double            humidities[AVERAGE_NUM]   = {0};
 static size_t            average_index             = 0;
 static int               full_circle               = 0;
+static uint8_t           error                     = 0;
 
 
 void temperature_init(void) {
@@ -30,6 +31,14 @@ void temperature_init(void) {
     static StackType_t  task_stack[3000];
     xTaskCreateStatic(temperature_task, TAG, sizeof(task_stack) / sizeof(StackType_t), NULL, 1, task_stack,
                       &static_task);
+}
+
+
+uint8_t temperature_error(void) {
+    xSemaphoreTake(sem, portMAX_DELAY);
+    uint8_t res = error;
+    xSemaphoreGive(sem);
+    return res;
 }
 
 
@@ -78,7 +87,6 @@ static void temperature_task(void *args) {
         int16_t temperature = 0;
         int16_t humidity    = 0;
 
-
         if (shtc3_start_temperature_humidity_measurement(shtc3_driver) == 0) {
             vTaskDelay(pdMS_TO_TICKS(SHTC3_NORMAL_MEASUREMENT_PERIOD_MS));
 
@@ -90,15 +98,24 @@ static void temperature_task(void *args) {
                     full_circle = 1;
                 }
                 average_index = (average_index + 1) % AVERAGE_NUM;
+                error         = 0;
                 xSemaphoreGive(sem);
             } else {
-                ESP_LOGD(TAG, "Error in reading temperature measurement");
+                xSemaphoreTake(sem, portMAX_DELAY);
+                error = 1;
+                xSemaphoreGive(sem);
+
+                ESP_LOGW(TAG, "Error in reading temperature measurement");
             }
         } else {
-            ESP_LOGD(TAG, "Error in starting temperature measurement");
+            xSemaphoreTake(sem, portMAX_DELAY);
+            error = 1;
+            xSemaphoreGive(sem);
+
+            ESP_LOGW(TAG, "Error in starting temperature measurement");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(200));
+        vTaskDelay(pdMS_TO_TICKS(15000));
     }
 
     vTaskDelete(NULL);

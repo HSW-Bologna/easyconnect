@@ -18,6 +18,7 @@ static void save_double_byte_array(void *mem, void *arg);
 static void save_pressure_offsets(void *mem, void *arg);
 
 
+static const char *SERIAL_NUM_KEY                       = "MYSERIALNUM";
 static const char *DEVICE_MAP_KEY                       = "DMAP";
 static const char *LANGUAGE_KEY                         = "LANGUAGE";
 static const char *BACKLIGHT_KEY                        = "BACKLIGHT";
@@ -73,6 +74,7 @@ void configuration_load(model_t *pmodel) {
         address++;
     }
 
+    storage_load_uint32(&pmodel->configuration.serial_number, (char *)SERIAL_NUM_KEY);
     storage_load_uint8(&pmodel->configuration.wifi_enabled, (char *)WIFI_KEY);
     storage_load_uint16(&pmodel->configuration.language, (char *)LANGUAGE_KEY);
     storage_load_uint16(&pmodel->configuration.active_backlight, (char *)BACKLIGHT_KEY);
@@ -190,6 +192,12 @@ void configuration_save(model_t *pmodel) {
 
 void configuration_manage(void) {
     watcher_process_changes(watchlist, get_millis());
+}
+
+
+void configuration_save_serial_number(void *args, uint32_t value) {
+    storage_save_uint32(&value, (char*)SERIAL_NUM_KEY);
+    model_set_my_sn(args, value);
 }
 
 

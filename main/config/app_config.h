@@ -5,7 +5,7 @@
  *  Macro riguardanti la configurazione dell'applicazione
  */
 
-#define APP_CONFIG_FIRMWARE_VERSION "3.0.9"
+#define APP_CONFIG_FIRMWARE_VERSION "3.0.12"
 
 #ifndef APP_CONFIG_SD_MOUNTPOINT
 #define APP_CONFIG_SD_MOUNTPOINT "/sdcard"

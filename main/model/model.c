@@ -19,7 +19,9 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.wifi_enabled = 0;
 
     memset(pmodel, 0, sizeof(model_t));
-    pmodel->temperature = 32;
+    pmodel->temperature           = 0;
+    pmodel->internal_sensor_error = 0;
+    pmodel->internal_rtc_error    = 0;
     device_list_init(pmodel->devices);
     pmodel->configuration.language                           = 0;
     pmodel->fan_speed                                        = 0;
@@ -68,8 +70,8 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.temperature_warn               = 70;
     pmodel->configuration.temperature_stop               = 80;
 
-    pmodel->configuration.first_humidity_delta        = 10;
-    pmodel->configuration.second_humidity_delta       = 20;
+    pmodel->configuration.first_humidity_delta        = 25;
+    pmodel->configuration.second_humidity_delta       = 35;
     pmodel->configuration.first_humidity_speed_raise  = 10;
     pmodel->configuration.second_humidity_speed_raise = 20;
     pmodel->configuration.humidity_warn               = 95;
@@ -78,8 +80,11 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.pressure_offsets[1]         = 0;
     pmodel->configuration.pressure_offsets[2]         = 0;
 
+    pmodel->configuration.serial_number = 0;
+
     pmodel->show_work_hours_state = 0;
 
+    pmodel->sensors_read = 0;
     pmodel->ap_list_size = 0;
     pmodel->scanning     = 0;
     pmodel->wifi_state   = WIFI_STATE_DISCONNECTED;
@@ -181,46 +186,16 @@ void model_set_immission_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t 
 uint16_t model_get_fan_percentage_correction(model_t *pmodel) {
     assert(pmodel != NULL);
 
-    uint16_t const modes[] = {DEVICE_MODE_TEMPERATURE_HUMIDITY, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
-
-    uint8_t previous = 0;
-    uint8_t address  = previous;
-    int     group    = -1;
-
-    int64_t  temperature_sums[DEVICE_GROUPS] = {0};
-    int64_t  humidity_sums[DEVICE_GROUPS]    = {0};
-    uint16_t group_counts[DEVICE_GROUPS]     = {0};
-
-    do {
-        previous = address;
-        address  = model_get_next_device_address_by_modes(pmodel, previous, (uint16_t *)modes,
-                                                          sizeof(modes) / sizeof(modes[0]));
-
-        if (previous == address) {
-            break;
-        }
-
-        device_t device = model_get_device(pmodel, address);
-        if (CLASS_GET_GROUP(device.class) > group) {
-            group = CLASS_GET_GROUP(device.class);
-        }
-
-        group_counts[group]++;
-        temperature_sums[group] += device.sensor_data.temperature;
-        humidity_sums[group] += device.sensor_data.humidity;
-    } while (previous != address);
-
     int16_t temperatures[DEVICE_GROUPS] = {0};
     int16_t humidities[DEVICE_GROUPS]   = {0};
 
-    for (size_t i = 0; i < DEVICE_GROUPS; i++) {
-        if (group_counts[i] != 0) {
-            temperatures[i] = (int16_t)(temperature_sums[i] / group_counts[i]);
-            humidities[i]   = (int16_t)(humidity_sums[i] / group_counts[i]);
-        } else {
-            temperatures[i] = 0;
-            humidities[i]   = 0;
-        }
+    uint8_t any = 0;
+
+    any = model_get_temperatures(pmodel, &temperatures[0], &temperatures[1], &temperatures[2]) || any;
+    any = model_get_humidities(pmodel, &humidities[0], &humidities[1], &humidities[2]) || any;
+
+    if (!any) {
+        return 0;
     }
 
     uint16_t correction = 0;
@@ -232,9 +207,9 @@ uint16_t model_get_fan_percentage_correction(model_t *pmodel) {
         correction += model_get_first_temperature_speed_raise(pmodel);
     }
 
-    if (ABS(humidities[DEVICE_GROUP_1] - humidities[DEVICE_GROUP_2]) > model_get_second_humidity_delta(pmodel)) {
+    if (humidities[DEVICE_GROUP_1] > model_get_second_humidity_delta(pmodel)) {
         correction += model_get_second_humidity_speed_raise(pmodel);
-    } else if (ABS(humidities[DEVICE_GROUP_1] - humidities[DEVICE_GROUP_2]) > model_get_first_humidity_delta(pmodel)) {
+    } else if (humidities[DEVICE_GROUP_1] > model_get_first_humidity_delta(pmodel)) {
         correction += model_get_first_humidity_speed_raise(pmodel);
     }
 
@@ -631,16 +606,29 @@ int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *tem
         temperatures[group] += device.sensor_data.temperature;
     } while (previous != address);
 
-    if (group_counts[0] > 0) {
-        *temperature_1 = (int16_t)(temperatures[0] / group_counts[0]);
-    } else {
-        *temperature_1 = 0;
-    }
+    // There are at least two external sensor groups, pick from them
+    if (group_counts[0] > 0 && group_counts[1] > 0) {
+        if (group_counts[0] > 0) {
+            *temperature_1 = (int16_t)(temperatures[0] / group_counts[0]);
+        } else {
+            *temperature_1 = 0;
+        }
 
-    if (group_counts[1] > 0) {
-        *temperature_2 = (int16_t)(temperatures[1] / group_counts[1]);
-    } else {
-        *temperature_2 = 0;
+        if (group_counts[1] > 0) {
+            *temperature_2 = (int16_t)(temperatures[1] / group_counts[1]);
+        } else {
+            *temperature_2 = 0;
+        }
+    } else {     // There is at most one external sensor group, use the internal sensor as first temperature
+        *temperature_1 = model_get_temperature(pmodel);
+
+        if (group_counts[0] > 0) {
+            *temperature_2 = (int16_t)(temperatures[0] / group_counts[0]);
+        } else if (group_counts[1] > 0) {
+            *temperature_2 = (int16_t)(temperatures[1] / group_counts[1]);
+        } else {
+            *temperature_2 = 0;
+        }
     }
 
     if (group_counts[2] > 0) {
@@ -649,7 +637,7 @@ int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *tem
         *temperature_3 = 0;
     }
 
-    return 0;
+    return group_counts[0] > 0 || group_counts[1] > 0 || group_counts[2] > 0;
 }
 
 
@@ -661,7 +649,7 @@ int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity
     uint8_t previous = 0;
     uint8_t address  = previous;
 
-    int64_t  temperatures[3] = {0};
+    int64_t  humidities[3]   = {0};
     uint16_t group_counts[3] = {0};
 
     do {
@@ -677,28 +665,41 @@ int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity
         uint16_t group  = CLASS_GET_GROUP(device.class);
 
         group_counts[group]++;
-        temperatures[group] += device.sensor_data.humidity;
+        humidities[group] += device.sensor_data.humidity;
     } while (previous != address);
 
-    if (group_counts[0] > 0) {
-        *humidity_1 = (int16_t)(temperatures[0] / group_counts[0]);
-    } else {
-        *humidity_1 = 0;
-    }
+    // There are at least two external sensor groups, pick from them
+    if (group_counts[0] > 0 && group_counts[1] > 0) {
+        if (group_counts[0] > 0) {
+            *humidity_1 = (int16_t)(humidities[0] / group_counts[0]);
+        } else {
+            *humidity_1 = 0;
+        }
 
-    if (group_counts[1] > 0) {
-        *humidity_2 = (int16_t)(temperatures[1] / group_counts[1]);
-    } else {
-        *humidity_2 = 0;
+        if (group_counts[1] > 0) {
+            *humidity_2 = (int16_t)(humidities[1] / group_counts[1]);
+        } else {
+            *humidity_2 = 0;
+        }
+    } else {     // There is at most one external sensor group, use the internal sensor as first temperature
+        *humidity_1 = model_get_humidity(pmodel);
+
+        if (group_counts[0] > 0) {
+            *humidity_2 = (int16_t)(humidities[0] / group_counts[0]);
+        } else if (group_counts[1] > 0) {
+            *humidity_2 = (int16_t)(humidities[1] / group_counts[1]);
+        } else {
+            *humidity_2 = 0;
+        }
     }
 
     if (group_counts[2] > 0) {
-        *humidity_3 = (int16_t)(temperatures[2] / group_counts[2]);
+        *humidity_3 = (int16_t)(humidities[2] / group_counts[2]);
     } else {
         *humidity_3 = 0;
     }
 
-    return 0;
+    return group_counts[0] > 0 || group_counts[1] > 0 || group_counts[2] > 0;
 }
 
 
@@ -942,18 +943,19 @@ size_t model_get_temperature_difference_level(model_t *pmodel, int16_t t1, int16
     } else if (ABS(t1 - t2) < model_get_second_temperature_delta(pmodel)) {
         return 1;
     } else {
-        return 0;
+        return 2;
     }
 }
 
 
 size_t model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t h2) {
-    if (ABS(h1 - h2) < model_get_first_humidity_delta(pmodel)) {
+    (void)h2;
+    if (ABS(h1) < model_get_first_humidity_delta(pmodel)) {
         return 0;
-    } else if (ABS(h1 - h2) < model_get_second_humidity_delta(pmodel)) {
+    } else if (ABS(h1) < model_get_second_humidity_delta(pmodel)) {
         return 1;
     } else {
-        return 0;
+        return 2;
     }
 }
 

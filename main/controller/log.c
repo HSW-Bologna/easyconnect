@@ -18,7 +18,6 @@
 #define LOG_SERIALIZED_SIZE     13
 
 
-static uint8_t  find_in_cache(uint32_t *position, uint32_t number);
 static uint32_t read_logs_from(log_t *logs, uint32_t position, uint32_t num, FILE *fp);
 static size_t   serialize_log(uint8_t *buffer, log_t log);
 static size_t   deserialize_log(log_t *log, uint8_t *buffer);

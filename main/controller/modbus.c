@@ -658,7 +658,8 @@ static void modbus_task(void *args) {
                     response.address      = message.address;
                     uint16_t registers[3] = {0};
 
-                    if (read_holding_registers(&master, registers, message.address, HOLDING_REGISTER_PRESSURE, 2)) {
+                    if (read_holding_registers(&master, registers, message.address, HOLDING_REGISTER_PRESSURE,
+                                               sizeof(registers) / sizeof(registers[0]))) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         response.pressure    = registers[0];
