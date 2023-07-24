@@ -32,6 +32,7 @@ struct page_data {
     lv_obj_t *img_icon;
     lv_obj_t *lbl_info;
     lv_obj_t *lbl_serial_address;
+    lv_obj_t *lbl_state;
     lv_obj_t *lbl_alarms[MAX_NUM_MESSAGES];
     size_t    num_messages;
     char     *messages[MAX_NUM_MESSAGES];
@@ -54,12 +55,19 @@ static void update_info(model_t *pmodel, struct page_data *data) {
     lv_label_set_text_fmt(data->lbl_serial_address, "%s: %i\n%s: %i", view_intl_get_string(pmodel, STRINGS_SERIALE),
                           data->device.serial_number, view_intl_get_string(pmodel, STRINGS_INDIRIZZO),
                           data->device.address);
-
     if (data->device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
         lv_label_set_text(data->lbl_alarms[0], view_intl_get_string(pmodel, STRINGS_ERRORE_DI_COMUNICAZIONE));
         lv_obj_set_hidden(data->lbl_alarms[0], 0);
         lv_obj_set_hidden(data->lbl_alarms[1], 1);
+        lv_obj_set_hidden(data->lbl_state, 1);
     } else {
+        if (CLASS_GET_MODE(data->device.class) == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY) {
+            lv_label_set_text_fmt(data->lbl_state, "Status: 0x%X", data->device.sensor_data.state);
+            lv_obj_set_hidden(data->lbl_state, 0);
+        } else {
+            lv_obj_set_hidden(data->lbl_state, 1);
+        }
+
         for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
             if ((data->device.alarms & (1 << i)) > 0) {
                 lv_obj_set_hidden(data->lbl_alarms[i], 0);
@@ -118,6 +126,13 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_set_width(lbl, 220);
     lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_RIGHT, 0, 72);
     data->lbl_serial_address = lbl;
+
+    lbl = lv_label_create(lv_scr_act(), NULL);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_set_width(lbl, 220);
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_RIGHT, 0, 120);
+    data->lbl_state = lbl;
 
     for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
         lbl = lv_label_create(lv_scr_act(), NULL);

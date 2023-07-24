@@ -134,6 +134,14 @@ static int env_clean_event_manager(model_t *pmodel, state_event_code_t event) {
         case STATE_EVENT_FAN_EMERGENCY_STOP:
             return MODEL_FAN_STATE_OFF;
 
+        case STATE_EVENT_FAN_TOGGLE:
+            stopwatch_stop(&environment_cleaning_sw);
+            if (stop_after_clean) {
+                return MODEL_FAN_STATE_FAN_RUNNING;
+            } else {
+                return MODEL_FAN_STATE_OFF;
+            }
+
         default:
             break;
     }
@@ -156,13 +164,9 @@ static int fan_running_entry(model_t *pmodel) {
 static int fan_running_event_manager(model_t *pmodel, state_event_code_t event) {
     switch (event) {
         case STATE_EVENT_FAN_STOP:
-            if (model_get_class_count(pmodel, DEVICE_CLASS_IMMISSION_FAN)) {
-                cleaning_period  = model_get_environment_cleaning_finish_period(pmodel);
-                stop_after_clean = 1;
-                return MODEL_FAN_STATE_CLEANING;
-            } else {
-                return MODEL_FAN_STATE_OFF;
-            }
+            cleaning_period  = model_get_environment_cleaning_finish_period(pmodel);
+            stop_after_clean = 1;
+            return MODEL_FAN_STATE_CLEANING;
 
         case STATE_EVENT_FAN_UVC_ON:
             update_uvc_filters(pmodel, model_get_fan_speed(pmodel));

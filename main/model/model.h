@@ -104,13 +104,23 @@ typedef enum {
 
 
 typedef struct {
-    int temperature;
-    int humidity;
-    int electrostatic_filter_on;
-    int uvc_filter_on;
+    int16_t  temperature;
+    int16_t  humidity;
+    int16_t  pressure;
+    uint16_t valid;
+    uint16_t errors;
+} sensor_group_report_t;
+
+
+typedef struct {
+    int     temperature;
+    int     humidity;
+    int     electrostatic_filter_on;
+    int     uvc_filter_on;
     uint8_t internal_sensor_error;
     uint8_t internal_rtc_error;
     uint8_t sensors_read;
+    uint8_t system_alarm_shown;
 
     uint8_t show_work_hours_state;
 
@@ -241,10 +251,9 @@ int16_t  model_get_pressure_offset(model_t *pmodel, int group);
 void     model_delete_all_devices(model_t *pmodel);
 uint16_t model_get_fan_percentage_correction(model_t *pmodel);
 
-int model_get_raw_pressures(model_t *pmodel, int16_t *pressures);
-int model_get_pressures(model_t *pmodel, int16_t *pressures);
-int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *temperature_2, int16_t *temperature_3);
-int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity_2, int16_t *humidity_3);
+int model_get_raw_pressures(model_t *pmodel, sensor_group_report_t *pressures);
+int model_get_pressures(model_t *pmodel, sensor_group_report_t *pressures);
+int model_get_temperatures_humidities(model_t *pmodel, sensor_group_report_t *group_1, sensor_group_report_t *group_2);
 int model_get_max_group_per_mode(model_t *pmodel, uint16_t mode);
 const char *model_get_ssid(model_t *pmodel);
 uint8_t     model_is_pressure_difference_ok(model_t *pmodel, int16_t p1, int16_t p2);

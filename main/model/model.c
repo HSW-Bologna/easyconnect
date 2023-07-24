@@ -84,6 +84,7 @@ void model_init(model_t *pmodel) {
 
     pmodel->show_work_hours_state = 0;
 
+    pmodel->system_alarm_shown = 0;
     pmodel->sensors_read = 0;
     pmodel->ap_list_size = 0;
     pmodel->scanning     = 0;
@@ -186,30 +187,29 @@ void model_set_immission_percentage(model_t *pmodel, uint8_t fan_speed, uint8_t 
 uint16_t model_get_fan_percentage_correction(model_t *pmodel) {
     assert(pmodel != NULL);
 
-    int16_t temperatures[DEVICE_GROUPS] = {0};
-    int16_t humidities[DEVICE_GROUPS]   = {0};
+    sensor_group_report_t ths[DEVICE_GROUPS] = {0};
 
     uint8_t any = 0;
 
-    any = model_get_temperatures(pmodel, &temperatures[0], &temperatures[1], &temperatures[2]) || any;
-    any = model_get_humidities(pmodel, &humidities[0], &humidities[1], &humidities[2]) || any;
+    any = model_get_temperatures_humidities(pmodel, &ths[0], &ths[1]) || any;
 
-    if (!any) {
+    if (!any || ths[0].valid == 0 || ths[1].valid == 0) {
         return 0;
     }
 
     uint16_t correction = 0;
 
-    if (ABS(temperatures[DEVICE_GROUP_1] - temperatures[DEVICE_GROUP_2]) > model_get_second_temperature_delta(pmodel)) {
+    if (ABS(ths[DEVICE_GROUP_1].temperature - ths[DEVICE_GROUP_2].temperature) >
+        model_get_second_temperature_delta(pmodel)) {
         correction += model_get_second_temperature_speed_raise(pmodel);
-    } else if (ABS(temperatures[DEVICE_GROUP_1] - temperatures[DEVICE_GROUP_2]) >
+    } else if (ABS(ths[DEVICE_GROUP_1].temperature - ths[DEVICE_GROUP_2].temperature) >
                model_get_first_temperature_delta(pmodel)) {
         correction += model_get_first_temperature_speed_raise(pmodel);
     }
 
-    if (humidities[DEVICE_GROUP_1] > model_get_second_humidity_delta(pmodel)) {
+    if (ths[DEVICE_GROUP_1].humidity > model_get_second_humidity_delta(pmodel)) {
         correction += model_get_second_humidity_speed_raise(pmodel);
-    } else if (humidities[DEVICE_GROUP_1] > model_get_first_humidity_delta(pmodel)) {
+    } else if (ths[DEVICE_GROUP_1].humidity > model_get_first_humidity_delta(pmodel)) {
         correction += model_get_first_humidity_speed_raise(pmodel);
     }
 
@@ -483,8 +483,12 @@ void model_set_device_state(model_t *pmodel, uint8_t address, uint16_t state) {
     assert(pmodel != NULL);
     device_t *device = model_get_device_mut(pmodel, address);
 
-    if (device->status == DEVICE_STATUS_OK && !model_is_device_sensor(pmodel, address)) {
-        device->actuator_data.ourput_state = state;
+    if (device->status == DEVICE_STATUS_OK) {
+        if (model_is_device_sensor(pmodel, address)) {
+            device->sensor_data.state = state;
+        } else {
+            device->actuator_data.output_state = state;
+        }
     }
 }
 
@@ -527,16 +531,16 @@ int16_t model_get_pressure_offset(model_t *pmodel, int group) {
 }
 
 
-int model_get_pressures(model_t *pmodel, int16_t *pressures) {
+int model_get_pressures(model_t *pmodel, sensor_group_report_t *pressures) {
     int res = model_get_raw_pressures(pmodel, pressures);
     for (size_t i = 0; i < DEVICE_GROUPS; i++) {
-        pressures[i] += pmodel->configuration.pressure_offsets[i];
+        pressures[i].pressure += pmodel->configuration.pressure_offsets[i];
     }
     return res;
 }
 
 
-int model_get_raw_pressures(model_t *pmodel, int16_t *pressures) {
+int model_get_raw_pressures(model_t *pmodel, sensor_group_report_t *pressures) {
     assert(pmodel != NULL);
 
     uint16_t const modes[] = {DEVICE_MODE_PRESSURE, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
@@ -547,6 +551,7 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressures) {
 
     int64_t  pressure_sums[DEVICE_GROUPS] = {0};
     uint16_t group_counts[DEVICE_GROUPS]  = {0};
+    uint16_t group_errors[DEVICE_GROUPS]  = {0};
 
     do {
         previous = address;
@@ -563,15 +568,23 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressures) {
             highest_group = CLASS_GET_GROUP(device.class);
         }
 
-        group_counts[group]++;
-        pressure_sums[group] += device.sensor_data.pressure;
+        if (device.status == DEVICE_STATUS_OK && (device.sensor_data.state & 0x02) == 0) {
+            group_counts[group]++;
+            pressure_sums[group] += device.sensor_data.pressure;
+        } else {
+            group_errors[group]++;
+        }
     } while (previous != address);
 
     for (size_t i = 0; i < DEVICE_GROUPS; i++) {
+        pressures[i].errors = group_errors[i];
+
         if (group_counts[i] != 0) {
-            pressures[i] = (int16_t)(pressure_sums[i] / group_counts[i]);
+            pressures[i].pressure = (int16_t)(pressure_sums[i] / group_counts[i]);
+            pressures[i].valid    = 1;
         } else {
-            pressures[i] = 0;
+            pressures[i].pressure = 0;
+            pressures[i].valid    = 0;
         }
     }
 
@@ -579,7 +592,7 @@ int model_get_raw_pressures(model_t *pmodel, int16_t *pressures) {
 }
 
 
-int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *temperature_2, int16_t *temperature_3) {
+int model_get_temperatures_humidities(model_t *pmodel, sensor_group_report_t *group_1, sensor_group_report_t *group_2) {
     assert(pmodel != NULL);
 
     uint16_t const modes[] = {DEVICE_MODE_TEMPERATURE_HUMIDITY, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
@@ -588,69 +601,9 @@ int model_get_temperatures(model_t *pmodel, int16_t *temperature_1, int16_t *tem
     uint8_t address  = previous;
 
     int64_t  temperatures[3] = {0};
-    uint16_t group_counts[3] = {0};
-
-    do {
-        previous = address;
-        address  = model_get_next_device_address_by_modes(pmodel, previous, (uint16_t *)modes,
-                                                          sizeof(modes) / sizeof(modes[0]));
-
-        if (previous == address) {
-            break;
-        }
-
-        device_t device = model_get_device(pmodel, address);
-        uint16_t group  = CLASS_GET_GROUP(device.class);
-
-        group_counts[group]++;
-        temperatures[group] += device.sensor_data.temperature;
-    } while (previous != address);
-
-    // There are at least two external sensor groups, pick from them
-    if (group_counts[0] > 0 && group_counts[1] > 0) {
-        if (group_counts[0] > 0) {
-            *temperature_1 = (int16_t)(temperatures[0] / group_counts[0]);
-        } else {
-            *temperature_1 = 0;
-        }
-
-        if (group_counts[1] > 0) {
-            *temperature_2 = (int16_t)(temperatures[1] / group_counts[1]);
-        } else {
-            *temperature_2 = 0;
-        }
-    } else {     // There is at most one external sensor group, use the internal sensor as first temperature
-        *temperature_1 = model_get_temperature(pmodel);
-
-        if (group_counts[0] > 0) {
-            *temperature_2 = (int16_t)(temperatures[0] / group_counts[0]);
-        } else if (group_counts[1] > 0) {
-            *temperature_2 = (int16_t)(temperatures[1] / group_counts[1]);
-        } else {
-            *temperature_2 = 0;
-        }
-    }
-
-    if (group_counts[2] > 0) {
-        *temperature_3 = (int16_t)(temperatures[2] / group_counts[2]);
-    } else {
-        *temperature_3 = 0;
-    }
-
-    return group_counts[0] > 0 || group_counts[1] > 0 || group_counts[2] > 0;
-}
-
-
-int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity_2, int16_t *humidity_3) {
-    assert(pmodel != NULL);
-
-    uint16_t const modes[] = {DEVICE_MODE_TEMPERATURE_HUMIDITY, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY};
-
-    uint8_t previous = 0;
-    uint8_t address  = previous;
-
     int64_t  humidities[3]   = {0};
     uint16_t group_counts[3] = {0};
+    uint16_t group_errors[3] = {0};
 
     do {
         previous = address;
@@ -664,42 +617,69 @@ int model_get_humidities(model_t *pmodel, int16_t *humidity_1, int16_t *humidity
         device_t device = model_get_device(pmodel, address);
         uint16_t group  = CLASS_GET_GROUP(device.class);
 
-        group_counts[group]++;
-        humidities[group] += device.sensor_data.humidity;
+        if (device.status == DEVICE_STATUS_OK && (device.sensor_data.state & 0x01) == 0) {
+            group_counts[group]++;
+            temperatures[group] += device.sensor_data.temperature;
+            humidities[group] += device.sensor_data.humidity;
+        } else {
+            group_errors[group]++;
+        }
     } while (previous != address);
 
     // There are at least two external sensor groups, pick from them
-    if (group_counts[0] > 0 && group_counts[1] > 0) {
+    if (group_counts[0] + group_errors[0] > 0 && group_counts[1] + group_errors[1] > 0) {
+        group_1->errors = group_errors[0];
+        group_2->errors = group_errors[1];
+
         if (group_counts[0] > 0) {
-            *humidity_1 = (int16_t)(humidities[0] / group_counts[0]);
+            group_1->valid       = 1;
+            group_1->temperature = (int16_t)(temperatures[0] / group_counts[0]);
+            group_1->humidity    = (int16_t)(humidities[0] / group_counts[0]);
         } else {
-            *humidity_1 = 0;
+            group_1->valid       = 0;
+            group_1->temperature = 0;
+            group_1->humidity    = 0;
         }
 
         if (group_counts[1] > 0) {
-            *humidity_2 = (int16_t)(humidities[1] / group_counts[1]);
+            group_2->valid       = 1;
+            group_2->temperature = (int16_t)(temperatures[1] / group_counts[1]);
+            group_2->humidity    = (int16_t)(humidities[1] / group_counts[1]);
         } else {
-            *humidity_2 = 0;
+            group_2->valid       = 0;
+            group_2->temperature = 0;
+            group_2->humidity    = 0;
         }
     } else {     // There is at most one external sensor group, use the internal sensor as first temperature
-        *humidity_1 = model_get_humidity(pmodel);
+        group_1->temperature = model_get_temperature(pmodel);
+        group_1->humidity    = model_get_humidity(pmodel);
+
+        if (pmodel->internal_sensor_error) {
+            group_1->valid  = 0;
+            group_1->errors = 1;
+        } else {
+            group_1->valid  = 1;
+            group_1->errors = 0;
+        }
 
         if (group_counts[0] > 0) {
-            *humidity_2 = (int16_t)(humidities[0] / group_counts[0]);
+            group_2->valid       = 1;
+            group_2->temperature = (int16_t)(temperatures[0] / group_counts[0]);
+            group_2->humidity    = (int16_t)(humidities[0] / group_counts[0]);
+            group_2->errors      = group_errors[0];
         } else if (group_counts[1] > 0) {
-            *humidity_2 = (int16_t)(humidities[1] / group_counts[1]);
+            group_2->valid       = 1;
+            group_2->temperature = (int16_t)(temperatures[1] / group_counts[1]);
+            group_2->humidity    = (int16_t)(humidities[1] / group_counts[1]);
+            group_2->errors      = group_errors[1];
         } else {
-            *humidity_2 = 0;
+            group_2->valid       = 0;
+            group_2->temperature = 0;
+            group_2->humidity    = 0;
         }
     }
 
-    if (group_counts[2] > 0) {
-        *humidity_3 = (int16_t)(humidities[2] / group_counts[2]);
-    } else {
-        *humidity_3 = 0;
-    }
-
-    return group_counts[0] > 0 || group_counts[1] > 0 || group_counts[2] > 0;
+    return group_counts[0] > 0 || group_counts[1] > 0;
 }
 
 
@@ -949,10 +929,9 @@ size_t model_get_temperature_difference_level(model_t *pmodel, int16_t t1, int16
 
 
 size_t model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t h2) {
-    (void)h2;
-    if (ABS(h1) < model_get_first_humidity_delta(pmodel)) {
+    if (ABS(h1 - h2) < model_get_first_humidity_delta(pmodel)) {
         return 0;
-    } else if (ABS(h1) < model_get_second_humidity_delta(pmodel)) {
+    } else if (ABS(h1 - h2) < model_get_second_humidity_delta(pmodel)) {
         return 1;
     } else {
         return 2;

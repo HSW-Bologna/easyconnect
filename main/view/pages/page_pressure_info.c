@@ -126,9 +126,10 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             break;
 
                         case BTN_OFFSET_GROUP: {
-                            int16_t pressures[DEVICE_GROUPS] = {0};
+                            sensor_group_report_t pressures[DEVICE_GROUPS] = {0};
                             model_get_raw_pressures(pmodel, pressures);
-                            model_set_pressure_offset(pmodel, event.data.number, -pressures[event.data.number]);
+                            model_set_pressure_offset(pmodel, event.data.number,
+                                                      -pressures[event.data.number].pressure);
 
                             update_pressures(pmodel, pdata);
                             break;
@@ -163,7 +164,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
 
 static void update_pressures(model_t *pmodel, struct page_data *pdata) {
-    int16_t pressures[DEVICE_GROUPS] = {0};
+    sensor_group_report_t pressures[DEVICE_GROUPS] = {0};
 
     const char *missing_group = "Nessun dispositivo nel gruppo %i";
     const char *pressure_text = "Pressione gruppo %i: %i Pa";
@@ -172,13 +173,14 @@ static void update_pressures(model_t *pmodel, struct page_data *pdata) {
     int group = model_get_pressures(pmodel, pressures);
     for (int i = 0; i < DEVICE_GROUPS; i++) {
         if (i <= group) {
-            lv_label_set_text_fmt(pdata->widgets[i].lbl_group, pressure_text, i + 1, pressures[i]);
+            lv_label_set_text_fmt(pdata->widgets[i].lbl_group, pressure_text, i + 1, pressures[i].pressure);
         } else {
             lv_label_set_text_fmt(pdata->widgets[i].lbl_group, missing_group, i + 1);
         }
 
         if (i + 1 <= group) {
-            lv_label_set_text_fmt(pdata->widgets[i].lbl_delta, delta_text, i, i + 1, pressures[i] - pressures[i + 1]);
+            lv_label_set_text_fmt(pdata->widgets[i].lbl_delta, delta_text, i, i + 1,
+                                  pressures[i].pressure - pressures[i + 1].pressure);
         } else {
             lv_label_set_text(pdata->widgets[i].lbl_delta, "");
         }

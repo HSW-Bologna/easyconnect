@@ -55,12 +55,13 @@ typedef struct {
 
     union {
         struct {
-            int16_t pressure;
-            int16_t temperature;
-            int16_t humidity;
+            int16_t  pressure;
+            int16_t  temperature;
+            int16_t  humidity;
+            uint16_t state;
         } sensor_data;
         struct {
-            uint16_t ourput_state;
+            uint16_t output_state;
             uint16_t work_hours;
         } actuator_data;
     };

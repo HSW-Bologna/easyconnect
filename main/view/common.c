@@ -18,6 +18,7 @@ LV_IMG_DECLARE(img_icona_immissione);
 
 LV_IMG_DECLARE(img_icon_gas_sm);
 
+LV_IMG_DECLARE(img_icon_pressure_sm);
 LV_IMG_DECLARE(img_icon_pressure_temperature_sm);
 
 LV_IMG_DECLARE(img_icon_temperature_humidity_sm);
@@ -275,7 +276,7 @@ void view_common_get_class_icon(uint16_t class, lv_obj_t *img) {
             break;
 
             CASE_ALL_GROUPS_FOR(DEVICE_CLASS_PRESSURE_SAFETY)
-            lv_img_set_src(img, &img_icon_pressure_temperature_sm);
+            lv_img_set_src(img, &img_icon_pressure_sm);
             break;
 
             CASE_ALL_GROUPS_FOR(DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY)

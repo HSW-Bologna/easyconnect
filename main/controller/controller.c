@@ -29,7 +29,6 @@
 
 static void     update_work_hours_cycle(model_t *pmodel);
 static void     error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t alarms, uint8_t communication);
-static void     system_shutdown(model_t *pmodel);
 static void     print_heap_status(void);
 static void     check_sensors_levels(model_t *pmodel);
 static void     console_task(void *args);
@@ -133,6 +132,18 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
                     controller_state_event(pmodel, STATE_EVENT_FAN_STOP);
             }
             break;
+
+        case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN_FORCE:
+            switch (model_get_fan_state(pmodel)) {
+                case MODEL_FAN_STATE_CLEANING:
+                    controller_state_event(pmodel, STATE_EVENT_FAN_TOGGLE);
+                    break;
+
+                default:
+                    break;
+            }
+            break;
+
 
         case VIEW_CONTROLLER_MESSAGE_CODE_PRESSURE_CALIBRATION:
             controller_state_event(pmodel, STATE_EVENT_FAN_START_CALIBRATION);
@@ -437,11 +448,22 @@ void controller_manage(model_t *pmodel) {
                     scanning = 1;
                 }
 
+                device_t device = model_get_device(pmodel, response.address);
+
+                uint8_t save_data = 0;
+                if (device.status == DEVICE_STATUS_CONFIGURED || device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
+                    ESP_LOGI(TAG, "Found device %i on the network, saving data...", response.address);
+                    save_data = 1;
+                }
                 if (model_is_address_configured(pmodel, response.address)) {
                     model_set_device_error(pmodel, response.address, 0);
                     model_set_device_sn(pmodel, response.address, response.serial_number);
                     model_set_device_class(pmodel, response.address, response.class);
                     model_set_device_firmware(pmodel, response.address, response.firmware_version);
+                }
+
+                if (save_data) {
+                    configuration_save_device_data(model_get_device(pmodel, response.address));
                 }
 
                 view_event((view_event_t){
@@ -547,10 +569,23 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
              device.class, alarms);
 
     switch (CLASS_GET_MODE(device.class)) {
-        // case DEVICE_MODE_ESF:
+        case DEVICE_MODE_ESF:
+            if (communication || (alarms & EASYCONNECT_SAFETY_ALARM)) {
+                if (model_get_electrostatic_filter_state(pmodel)) {
+                    controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
+                    model_electrostatic_filter_off(pmodel);
+                }
+            }
+            break;
+
         case DEVICE_MODE_UVC:
             if (communication || (alarms & EASYCONNECT_SAFETY_ALARM)) {
-                system_shutdown(pmodel);
+                if (model_get_uvc_filter_state(pmodel)) {
+                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
+                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
+                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
+                    model_uvc_filter_off(pmodel);
+                }
             }
             break;
 
@@ -559,21 +594,6 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
         case DEVICE_MODE_TEMPERATURE_HUMIDITY:
         case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
             break;
-    }
-}
-
-
-static void system_shutdown(model_t *pmodel) {
-    // On system fault the only devices that must be stopped are UVC filters
-    /*if (model_get_electrostatic_filter_state(pmodel)) {
-        controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
-        model_electrostatic_filter_off(pmodel);
-    }*/
-    if (model_get_uvc_filter_state(pmodel)) {
-        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
-        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
-        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
-        model_uvc_filter_off(pmodel);
     }
 }
 
@@ -634,28 +654,22 @@ static void check_sensors_levels(model_t *pmodel) {
 
 
     if (pressure_temperature_humidity_count + temperature_humidity_count > 0) {
-        int16_t temperature_1 = 0;
-        int16_t temperature_2 = 0;
-        int16_t temperature_3 = 0;
-        model_get_temperatures(pmodel, &temperature_1, &temperature_2, &temperature_3);
+        sensor_group_report_t group_1 = {0};
+        sensor_group_report_t group_2 = {0};
+        model_get_temperatures_humidities(pmodel, &group_1, &group_2);
 
-        int16_t humidity_1 = 0;
-        int16_t humidity_2 = 0;
-        int16_t humidity_3 = 0;
-        model_get_humidities(pmodel, &humidity_1, &humidity_2, &humidity_3);
+        if (group_1.valid && group_2.valid) {
+            current_temperature_1_warning = group_1.temperature > model_get_temperature_warn(pmodel);
+            current_temperature_2_warning = group_2.temperature > model_get_temperature_warn(pmodel);
 
-        current_temperature_1_warning = temperature_1 > model_get_temperature_warn(pmodel);
-        current_temperature_2_warning = temperature_2 > model_get_temperature_warn(pmodel);
-        (void)temperature_3;
+            current_humidity_1_warning = group_1.humidity > model_get_humidity_warn(pmodel);
+            current_humidity_2_warning = group_2.humidity > model_get_humidity_warn(pmodel);
 
-        current_humidity_1_warning = humidity_1 > model_get_humidity_warn(pmodel);
-        current_humidity_2_warning = humidity_2 > model_get_humidity_warn(pmodel);
-        (void)humidity_3;
-        printf("hums %i %i %i\n", humidity_1, humidity_2, model_get_humidity_warn(pmodel));
-
-        stop = temperature_1 > model_get_temperature_stop(pmodel) ||
-               temperature_2 > model_get_temperature_stop(pmodel) || humidity_1 > model_get_humidity_stop(pmodel) ||
-               humidity_2 > model_get_humidity_stop(pmodel);
+            stop = group_1.temperature > model_get_temperature_stop(pmodel) ||
+                   group_2.temperature > model_get_temperature_stop(pmodel) ||
+                   group_1.humidity > model_get_humidity_stop(pmodel) ||
+                   group_2.humidity > model_get_humidity_stop(pmodel);
+        }
     } else {
         current_temperature_1_warning = model_get_temperature(pmodel) > model_get_temperature_warn(pmodel);
         current_humidity_1_warning    = model_get_humidity(pmodel) > model_get_humidity_warn(pmodel);
@@ -687,7 +701,7 @@ static void check_sensors_levels(model_t *pmodel) {
 
 static void console_task(void *args) {
 #ifndef PC_SIMULATOR
-    const char              *prompt    = "EC-peripheral> ";
+    const char              *prompt    = "EC-main> ";
     easyconnect_interface_t *interface = args;
 
     esp32_commandline_init(interface);

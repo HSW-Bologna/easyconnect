@@ -16,7 +16,8 @@
 #include "esp_log.h"
 #include "config/app_config.h"
 #include "view/view_types.h"
-
+#include "utils/utils.h"
+#include "gel/timer/timecheck.h"
 
 
 LV_IMG_DECLARE(img_icon_reset_md);
@@ -43,6 +44,7 @@ LV_IMG_DECLARE(img_icona_immissione);
 LV_IMG_DECLARE(img_icon_gas_sm);
 
 LV_IMG_DECLARE(img_icon_pressure_temperature_sm);
+LV_IMG_DECLARE(img_icon_pressure_sm);
 
 LV_IMG_DECLARE(img_icon_temperature_humidity_sm);
 LV_IMG_DECLARE(img_icon_tempearture_sm);
@@ -325,11 +327,13 @@ struct page_data {
         } humidity_temperature;
     };
 
-    int     blink;
-    uint8_t uvc_alarm;
-    uint8_t esf_alarm;
-    uint8_t siph_alarm;
-    uint8_t imm_alarm;
+    int           blink;
+    uint8_t       uvc_alarm;
+    uint8_t       esf_alarm;
+    uint8_t       siph_alarm;
+    uint8_t       imm_alarm;
+    unsigned long fan_btn_ts;
+    uint8_t       fan_long_clicked;
 };
 
 
@@ -339,6 +343,7 @@ static uint16_t     modify_percentage(uint16_t value, int16_t mod);
 static void         update_menus(model_t *pmodel, struct page_data *pdata);
 static void         update_device_list(model_t *pmodel, struct page_data *pdata);
 static status_row_t create_status_row(lv_obj_t *root);
+static void         create_sensor_rows(model_t *model, struct page_data *data);
 
 
 static const char *TAG         = "MainPage";
@@ -601,24 +606,41 @@ static void update_all_buttons(model_t *pmodel, struct page_data *data) {
 
 static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
     if (pdata->row_pressure.obj != NULL) {
-        int16_t pressures[DEVICE_GROUPS] = {0};
+        sensor_group_report_t pressures[DEVICE_GROUPS] = {0};
 
-        lv_label_set_text(pdata->row_pressure.lbl_unit_left, "mB");
+        lv_label_set_text(pdata->row_pressure.lbl_unit_left, "Pa");
 
         if (pmodel->sensors_read) {
             model_get_pressures(pmodel, pressures);
-            lv_label_set_text_fmt(pdata->row_pressure.lbl_data_left, "%+i", pressures[0]);
             lv_img_set_src(pdata->row_pressure.img_status,
-                           model_is_pressure_difference_ok(pmodel, pressures[0], pressures[1]) ? &img_ok_lg
-                                                                                               : &img_error_lg);
-            lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "%+i", pressures[1]);
+                           model_is_pressure_difference_ok(pmodel, pressures[0].pressure, pressures[1].pressure)
+                               ? &img_ok_lg
+                               : &img_error_lg);
+            view_common_set_hidden(pdata->row_pressure.img_status, !pressures[0].valid || !pressures[1].valid);
+
+            if (pressures[0].valid && pressures[0].errors) {
+                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_left, "%+i(!)", pressures[0].pressure);
+            } else if (pressures[0].valid) {
+                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_left, "%+i", pressures[0].pressure);
+            } else {
+                lv_label_set_text(pdata->row_pressure.lbl_data_left, "---");
+            }
+
+            if (pressures[1].valid && pressures[1].errors) {
+                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "%+i(!)", pressures[1].pressure);
+            } else if (pressures[1].valid) {
+                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "%+i", pressures[1].pressure);
+            } else {
+                lv_label_set_text(pdata->row_pressure.lbl_data_right, "---");
+            }
+
         } else {
             lv_label_set_text(pdata->row_pressure.lbl_data_left, "---");
             lv_img_set_src(pdata->row_pressure.img_status, &img_ok_lg);
             lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "---");
         }
 
-        lv_label_set_text(pdata->row_pressure.lbl_unit_right, "mB");
+        lv_label_set_text(pdata->row_pressure.lbl_unit_right, "Pa");
 
         lv_obj_align(pdata->row_pressure.lbl_unit_left, pdata->row_pressure.lbl_data_left, LV_ALIGN_OUT_RIGHT_BOTTOM, 0,
                      0);
@@ -628,18 +650,34 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
     const lv_img_dsc_t *speed_dsc[] = {&img_ok_lg, &img_speed_1, &img_speed_2};
 
+    sensor_group_report_t group_1 = {0};
+    sensor_group_report_t group_2 = {0};
+    if (pdata->row_temperature.obj != NULL || pdata->row_humidity.obj != NULL) {
+        model_get_temperatures_humidities(pmodel, &group_1, &group_2);
+    }
+
     if (pdata->row_temperature.obj != NULL) {
         if (pmodel->sensors_read) {
-            int16_t temperature_1 = 0;
-            int16_t temperature_2 = 0;
-            int16_t temperature_3 = 0;
-            model_get_temperatures(pmodel, &temperature_1, &temperature_2, &temperature_3);
-            lv_label_set_text_fmt(pdata->row_temperature.lbl_data_left, "%i", temperature_1);
-            lv_img_set_src(pdata->row_temperature.img_status,
-                           speed_dsc[model_get_temperature_difference_level(pmodel, temperature_1, temperature_2)]);
-            lv_label_set_text_fmt(pdata->row_temperature.lbl_data_right, "%i", temperature_2);
+            lv_img_set_src(
+                pdata->row_temperature.img_status,
+                speed_dsc[model_get_temperature_difference_level(pmodel, group_1.temperature, group_2.temperature)]);
+            view_common_set_hidden(pdata->row_temperature.img_status, !group_1.valid || !group_2.valid);
 
-            (void)temperature_3;
+            if (group_1.valid && group_1.errors) {
+                lv_label_set_text_fmt(pdata->row_temperature.lbl_data_left, "%i(!)", group_1.temperature);
+            } else if (group_1.valid) {
+                lv_label_set_text_fmt(pdata->row_temperature.lbl_data_left, "%i", group_1.temperature);
+            } else {
+                lv_label_set_text(pdata->row_temperature.lbl_data_left, "---");
+            }
+
+            if (group_2.valid && group_2.errors) {
+                lv_label_set_text_fmt(pdata->row_temperature.lbl_data_right, "%i(!)", group_2.temperature);
+            } else if (group_2.valid) {
+                lv_label_set_text_fmt(pdata->row_temperature.lbl_data_right, "%i", group_2.temperature);
+            } else {
+                lv_label_set_text(pdata->row_temperature.lbl_data_right, "---");
+            }
         } else {
             lv_label_set_text(pdata->row_temperature.lbl_data_left, "---");
             lv_img_set_src(pdata->row_temperature.img_status, &img_ok_lg);
@@ -659,17 +697,25 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
     if (pdata->row_humidity.obj != NULL) {
         if (pmodel->sensors_read) {
-            int16_t humidity_1 = 0;
-            int16_t humidity_2 = 0;
-            int16_t humidity_3 = 0;
-            model_get_humidities(pmodel, &humidity_1, &humidity_2, &humidity_3);
-
-            lv_label_set_text_fmt(pdata->row_humidity.lbl_data_left, "%i", humidity_1);
             lv_img_set_src(pdata->row_humidity.img_status,
-                           speed_dsc[model_get_humidity_difference_level(pmodel, humidity_1, humidity_2)]);
-            lv_label_set_text_fmt(pdata->row_humidity.lbl_data_right, "%i", humidity_2);
+                           speed_dsc[model_get_humidity_difference_level(pmodel, group_1.humidity, group_2.humidity)]);
+            view_common_set_hidden(pdata->row_humidity.img_status, !group_1.valid || !group_2.valid);
 
-            (void)humidity_3;
+            if (group_1.valid && group_1.errors) {
+                lv_label_set_text_fmt(pdata->row_humidity.lbl_data_left, "%i(!)", group_1.humidity);
+            } else if (group_1.valid) {
+                lv_label_set_text_fmt(pdata->row_humidity.lbl_data_left, "%i", group_1.humidity);
+            } else {
+                lv_label_set_text(pdata->row_humidity.lbl_data_left, "---");
+            }
+
+            if (group_2.valid && group_2.errors) {
+                lv_label_set_text_fmt(pdata->row_humidity.lbl_data_right, "%i(!)", group_2.humidity);
+            } else if (group_2.valid) {
+                lv_label_set_text_fmt(pdata->row_humidity.lbl_data_right, "%i", group_2.humidity);
+            } else {
+                lv_label_set_text(pdata->row_humidity.lbl_data_right, "---");
+            }
         } else {
             lv_label_set_text(pdata->row_humidity.lbl_data_left, "---");
             lv_img_set_src(pdata->row_humidity.img_status, &img_ok_lg);
@@ -741,6 +787,8 @@ static void *create_page(model_t *model, void *extra) {
     data->blink_task       = view_register_periodic_task(500UL, LV_TASK_PRIO_OFF, TASK_BLINK_ID);
     data->blink            = 0;
     data->cont_subpage     = NULL;
+    data->fan_btn_ts       = 0;
+    data->fan_long_clicked = 0;
 
     return data;
 }
@@ -750,53 +798,18 @@ static void open_page(model_t *model, void *arg) {
     struct page_data *data = arg;
     lv_task_set_prio(data->blink_task, LV_TASK_PRIO_MID);
 
+    data->row_pressure.obj          = NULL;
+    data->row_local_temperature.obj = NULL;
+    data->row_temperature.obj       = NULL;
+    data->row_humidity.obj          = NULL;
+
     lv_obj_t *img, *lbl;
 
     lv_obj_t *logo = lv_img_create(lv_scr_act(), NULL);
     lv_img_set_src(logo, &img_logo);
     lv_obj_align(logo, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 4);
 
-
-    const uint16_t row_base_x_shift = 20;
-    const uint16_t row_base_y_shift = 72;
-
-    uint16_t temperature_humidity_count = model_get_mode_count(model, DEVICE_MODE_TEMPERATURE_HUMIDITY);
-    uint16_t pressure_temperature_humidity_count =
-        model_get_mode_count(model, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY);
-    uint16_t pressure_count = model_get_mode_count(model, DEVICE_MODE_PRESSURE);
-
-    // If there are pressure sensors
-    if (pressure_count + pressure_temperature_humidity_count > 0) {
-        data->row_pressure = create_status_row(lv_scr_act());
-        lv_obj_align(data->row_pressure.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, row_base_y_shift);
-    } else {
-        data->row_pressure.obj = NULL;
-    }
-
-    if (temperature_humidity_count + pressure_temperature_humidity_count > 0) {
-        data->row_local_temperature.obj = NULL;
-
-        data->row_temperature = create_status_row(lv_scr_act());
-        if (data->row_pressure.obj == NULL) {
-            lv_obj_align(data->row_temperature.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, row_base_y_shift);
-        } else {
-            lv_obj_align(data->row_temperature.obj, data->row_pressure.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
-        }
-
-        data->row_humidity = create_status_row(lv_scr_act());
-        lv_obj_align(data->row_humidity.obj, data->row_temperature.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
-    } else {
-        data->row_temperature.obj = NULL;
-        data->row_humidity.obj    = NULL;
-
-        data->row_local_temperature = create_status_row(lv_scr_act());
-        if (data->row_pressure.obj == NULL) {
-            lv_obj_align(data->row_local_temperature.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, 120);
-        } else {
-            lv_obj_align(data->row_local_temperature.obj, data->row_pressure.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
-        }
-    }
-
+    create_sensor_rows(model, data);
 
     lbl = lv_label_create(lv_scr_act(), NULL);
     lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
@@ -1471,10 +1484,18 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         }
 
                         case BTN_FAN_ID:
-                            if (event.lv_event != LV_EVENT_CLICKED) {
+                            if (data->fan_long_clicked) {
                                 break;
                             }
-                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN;
+
+                            if (event.lv_event == LV_EVENT_CLICKED) {
+                                msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN;
+                            } else if (event.lv_event == LV_EVENT_LONG_PRESSED_REPEAT) {
+                                if (is_expired(data->fan_btn_ts, get_millis(), 1000UL)) {
+                                    msg.cmsg.code          = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN_FORCE;
+                                    data->fan_long_clicked = 1;
+                                }
+                            }
                             break;
 
                         case BTN_FILTER_ID:
@@ -1512,12 +1533,40 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         break;
                     }
 
+                    case LV_EVENT_PRESSED: {
+                        switch (event.data.id) {
+                            case BTN_FAN_ID:
+                                data->fan_btn_ts = get_millis();
+                                break;
+                        }
+                        break;
+                    }
+
+                    case LV_EVENT_PRESSING: {
+                        switch (event.data.id) {
+                            case BTN_FAN_ID:
+                                if (!data->fan_long_clicked && is_expired(data->fan_btn_ts, get_millis(), 1000UL)) {
+                                    msg.cmsg.code          = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FAN_FORCE;
+                                    data->fan_long_clicked = 1;
+                                }
+                                break;
+
+                            default:
+                                break;
+                        }
+                        break;
+                    }
+
                     case LV_EVENT_RELEASED: {
                         switch (event.data.id) {
                             case SLIDER_ID: {
                                 msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED;
                                 break;
                             }
+
+                            case BTN_FAN_ID:
+                                data->fan_long_clicked = 0;
+                                break;
 
                             default:
                                 break;
@@ -1555,7 +1604,7 @@ void close_page(void *args) {
 
 static lv_obj_t *cont_subpage_create(const char *title) {
     lv_obj_t *cont = lv_cont_create(lv_scr_act(), NULL);
-    lv_obj_set_size(cont, LV_HOR_RES - 8, LV_VER_RES - 2);
+    lv_obj_set_size(cont, LV_HOR_RES, LV_VER_RES - 2);
     lv_obj_align(cont, NULL, LV_ALIGN_CENTER, 0, 0);
 
     lv_obj_t *lbl = lv_label_create(cont, NULL);
@@ -1716,19 +1765,18 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
             case DEVICE_MODE_UVC:
             case DEVICE_MODE_ESF:
             case DEVICE_MODE_GAS:
-                lv_label_set_text_fmt(lbl_state, "Output: %s", device.actuator_data.ourput_state ? "ON" : "OFF");
+                lv_label_set_text_fmt(lbl_state, "Output: %s", device.actuator_data.output_state ? "ON" : "OFF");
                 break;
             case DEVICE_MODE_FAN:
                 lv_label_set_text_fmt(lbl_state, "Output: %s - %i%%",
-                                      (device.actuator_data.ourput_state & 0xFF) > 0 ? "ON" : "OFF",
-                                      (device.actuator_data.ourput_state >> 8) & 0xFF);
+                                      (device.actuator_data.output_state & 0xFF) > 0 ? "ON" : "OFF",
+                                      (device.actuator_data.output_state >> 8) & 0xFF);
                 break;
             case DEVICE_MODE_PRESSURE:
                 if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
-                    lv_label_set_text_fmt(lbl_state, "---%s ---Pa", model_get_degrees_symbol(pmodel));
+                    lv_label_set_text(lbl_state, "---Pa");
                 } else {
-                    lv_label_set_text_fmt(lbl_state, "%i%s %iPa", device.sensor_data.temperature,
-                                          model_get_degrees_symbol(pmodel), device.sensor_data.pressure);
+                    lv_label_set_text_fmt(lbl_state, "%iPa", device.sensor_data.pressure);
                 }
                 break;
             case DEVICE_MODE_TEMPERATURE_HUMIDITY:
@@ -1741,9 +1789,9 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
                 break;
             case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
                 if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
-                    lv_label_set_text_fmt(lbl_state, "---%% ---%s ---mB", model_get_degrees_symbol(pmodel));
+                    lv_label_set_text_fmt(lbl_state, "---%% ---%s ---Pa", model_get_degrees_symbol(pmodel));
                 } else {
-                    lv_label_set_text_fmt(lbl_state, "%i%% %i%s %imB", device.sensor_data.humidity,
+                    lv_label_set_text_fmt(lbl_state, "%i%% %i%s %iPa", device.sensor_data.humidity,
                                           device.sensor_data.temperature, model_get_degrees_symbol(pmodel),
                                           device.sensor_data.pressure);
                 }
@@ -1759,12 +1807,12 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
             case DEVICE_MODE_ESF:
             case DEVICE_MODE_GAS:
                 lv_label_set_text_fmt(lbl_alarms, "%s: %s  FB: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
-                                      (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0 ? "OK" : "KO",
-                                      (device.alarms & EASYCONNECT_FEEDBACK_ALARM) > 0 ? "OK" : "KO");
+                                      (device.alarms & EASYCONNECT_SAFETY_ALARM) == 0 ? "OK" : "KO",
+                                      (device.alarms & EASYCONNECT_FEEDBACK_ALARM) == 0 ? "OK" : "KO");
                 break;
             default:
                 lv_label_set_text_fmt(lbl_alarms, "%s: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
-                                      (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0 ? "OK" : "KO");
+                                      (device.alarms & EASYCONNECT_SAFETY_ALARM) == 0 ? "OK" : "KO");
                 break;
         }
 
@@ -1963,7 +2011,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             pdata->cont_subpage = cont_subpage_create(view_intl_get_string(pmodel, STRINGS_DISPOSITIVI_REC));
 
             page = lv_page_create(pdata->cont_subpage, NULL);
-            lv_obj_set_size(page, LV_HOR_RES - 32, 270);
+            lv_obj_set_size(page, LV_HOR_RES - 8, 270);
             lv_obj_align(page, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, 0);
 
             lv_page_set_scrl_layout(page, LV_LAYOUT_COLUMN_LEFT);
@@ -2527,7 +2575,7 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
                 lv_label_set_text_fmt(pdata->active_filtering.lbl_esf_filters[i], "%i",
                                       model_get_esf_filters_for_speed(pmodel, i));
             }
-            lv_label_set_text_fmt(pdata->active_filtering.lbl_pressure_threshold, "%imB",
+            lv_label_set_text_fmt(pdata->active_filtering.lbl_pressure_threshold, "%iPa",
                                   model_get_pressure_threshold_mb(pmodel));
             break;
 
@@ -2583,6 +2631,69 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
 
         default:
             break;
+    }
+}
+
+
+static void create_sensor_rows(model_t *model, struct page_data *data) {
+    const uint16_t row_base_x_shift = 20;
+    const uint16_t row_base_y_shift = 72;
+
+    uint16_t temperature_humidity_count = model_get_mode_count(model, DEVICE_MODE_TEMPERATURE_HUMIDITY);
+    uint16_t pressure_temperature_humidity_count =
+        model_get_mode_count(model, DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY);
+    uint16_t pressure_count = model_get_mode_count(model, DEVICE_MODE_PRESSURE);
+
+    // If there are pressure sensors
+    if (pressure_count + pressure_temperature_humidity_count > 0) {
+        if (data->row_pressure.obj == NULL) {
+            data->row_pressure = create_status_row(lv_scr_act());
+        }
+        lv_obj_align(data->row_pressure.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, row_base_y_shift);
+    } else {
+        if (data->row_pressure.obj != NULL) {
+            lv_obj_del(data->row_pressure.obj);
+        }
+        data->row_pressure.obj = NULL;
+    }
+
+    if (temperature_humidity_count + pressure_temperature_humidity_count > 0) {
+        if (data->row_local_temperature.obj != NULL) {
+            lv_obj_del(data->row_local_temperature.obj);
+        }
+        data->row_local_temperature.obj = NULL;
+
+        if (data->row_temperature.obj == NULL) {
+            data->row_temperature = create_status_row(lv_scr_act());
+        }
+        if (data->row_pressure.obj == NULL) {
+            lv_obj_align(data->row_temperature.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, row_base_y_shift);
+        } else {
+            lv_obj_align(data->row_temperature.obj, data->row_pressure.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+        }
+
+        if (data->row_humidity.obj == NULL) {
+            data->row_humidity = create_status_row(lv_scr_act());
+        }
+        lv_obj_align(data->row_humidity.obj, data->row_temperature.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    } else {
+        if (data->row_temperature.obj != NULL) {
+            lv_obj_del(data->row_temperature.obj);
+        }
+        data->row_temperature.obj = NULL;
+        if (data->row_humidity.obj != NULL) {
+            lv_obj_del(data->row_humidity.obj);
+        }
+        data->row_humidity.obj = NULL;
+
+        if (data->row_local_temperature.obj == NULL) {
+            data->row_local_temperature = create_status_row(lv_scr_act());
+        }
+        if (data->row_pressure.obj == NULL) {
+            lv_obj_align(data->row_local_temperature.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, 120);
+        } else {
+            lv_obj_align(data->row_local_temperature.obj, data->row_pressure.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+        }
     }
 }
 

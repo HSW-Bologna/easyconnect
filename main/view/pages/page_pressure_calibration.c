@@ -97,10 +97,10 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             } else {
                                 uint8_t speed = model_get_fan_speed(pmodel);
 
-                                int16_t pressures[DEVICE_GROUPS] = {0};
+                                sensor_group_report_t pressures[DEVICE_GROUPS] = {0};
                                 model_get_pressures(pmodel, pressures);
 
-                                int16_t result = pressures[1] - pressures[0];
+                                int16_t result = pressures[1].pressure - pressures[0].pressure;
                                 model_set_pressure_difference(pmodel, speed, result < 0 ? -result : result);
 
                                 if (speed < MAX_FAN_SPEED - 1) {
@@ -142,10 +142,11 @@ static void update_page(model_t *pmodel, struct page_data *pdata) {
         lv_label_set_text_fmt(pdata->lbl_speed, "%i", model_get_fan_speed(pmodel) + 1);
     }
 
-    int16_t pressures[DEVICE_GROUPS] = {0};
+    sensor_group_report_t pressures[DEVICE_GROUPS] = {0};
 
     model_get_pressures(pmodel, pressures);
-    lv_label_set_text_fmt(pdata->lbl_pressure, "Gruppo 1: %4i Pa      Gruppo 2: %4i Pa", pressures[0], pressures[1]);
+    lv_label_set_text_fmt(pdata->lbl_pressure, "Gruppo 1: %4i Pa      Gruppo 2: %4i Pa", pressures[0].pressure,
+                          pressures[1].pressure);
 }
 
 

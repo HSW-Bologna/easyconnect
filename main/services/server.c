@@ -347,12 +347,12 @@ void server_notify_state_change(model_t *pmodel) {
         switch (CLASS_GET_MODE(device.class)) {
             case DEVICE_MODE_LIGHT:
             case DEVICE_MODE_GAS:
-                CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_STATE, device.actuator_data.ourput_state));
+                CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_STATE, device.actuator_data.output_state));
                 break;
 
             case DEVICE_MODE_UVC:
             case DEVICE_MODE_ESF:
-                CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_STATE, device.actuator_data.ourput_state));
+                CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_STATE, device.actuator_data.output_state));
                 CHECK_ALLOC(
                     cJSON_AddNumberToObject(json_device, JSON_ALARMS, (device.alarms & EASYCONNECT_SAFETY_ALARM) > 0));
                 CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_FEEDBACK,
@@ -360,9 +360,9 @@ void server_notify_state_change(model_t *pmodel) {
                 break;
 
             case DEVICE_MODE_FAN:
-                CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_STATE, device.actuator_data.ourput_state & 0xFF));
+                CHECK_ALLOC(cJSON_AddNumberToObject(json_device, JSON_STATE, device.actuator_data.output_state & 0xFF));
                 CHECK_ALLOC(
-                    cJSON_AddNumberToObject(json_device, JSON_SPEED, (device.actuator_data.ourput_state >> 8) & 0xFF));
+                    cJSON_AddNumberToObject(json_device, JSON_SPEED, (device.actuator_data.output_state >> 8) & 0xFF));
                 break;
 
             case DEVICE_MODE_PRESSURE:

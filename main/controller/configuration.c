@@ -7,6 +7,7 @@
 #include "peripherals/tft.h"
 #include "utils/utils.h"
 #include "easyconnect_interface.h"
+#include "configuration.h"
 
 
 #define NUM_CONFIGURATION_PARAMETERS 30
@@ -50,6 +51,8 @@ static const char *FIRST_TEMPERATURE_SPEED_RAISE_KEY  = "FSTTEMPSPD";
 static const char *SECOND_TEMPERATURE_SPEED_RAISE_KEY = "SNDTEMPSPD";
 static const char *TEMPERATURE_WARN_KEY               = "TEMPWARN";
 static const char *TEMPERATURE_STOP_KEY               = "TEMPSTOP";
+static const char *DEVICE_CLASS_KEY_FMT               = "CLASS%3i";
+static const char *DEVICE_SN_KEY_FMT                  = "SN%3i";
 
 static const char *PRESSURE_OFFSETS_KEY = "PRESSOFF";
 
@@ -71,6 +74,7 @@ void configuration_load(model_t *pmodel) {
     while (address_map_find(&map, address, &address)) {
         ESP_LOGI(TAG, "Found saved device at %zu", address);
         model_new_device(pmodel, (uint8_t)address);
+        configuration_load_device_data(model_get_device_mut(pmodel, address));
         address++;
     }
 
@@ -195,8 +199,28 @@ void configuration_manage(void) {
 }
 
 
+void configuration_save_device_data(device_t device) {
+    char string[32] = {0};
+    snprintf(string, sizeof(string), DEVICE_CLASS_KEY_FMT, device.address);
+    storage_save_uint16(&device.class, string);
+
+    snprintf(string, sizeof(string), DEVICE_SN_KEY_FMT, device.address);
+    storage_save_uint32(&device.serial_number, string);
+}
+
+
+void configuration_load_device_data(device_t *device) {
+    char string[32] = {0};
+    snprintf(string, sizeof(string), DEVICE_CLASS_KEY_FMT, device->address);
+    storage_load_uint16(&device->class, string);
+
+    snprintf(string, sizeof(string), DEVICE_SN_KEY_FMT, device->address);
+    storage_load_uint32(&device->serial_number, string);
+}
+
+
 void configuration_save_serial_number(void *args, uint32_t value) {
-    storage_save_uint32(&value, (char*)SERIAL_NUM_KEY);
+    storage_save_uint32(&value, (char *)SERIAL_NUM_KEY);
     model_set_my_sn(args, value);
 }
 
