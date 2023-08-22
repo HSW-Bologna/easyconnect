@@ -4,6 +4,7 @@
 #include "src/lv_misc/lv_area.h"
 #include "src/lv_widgets/lv_btn.h"
 #include "src/lv_widgets/lv_label.h"
+#include "controller/configuration.h"
 #include "view/view.h"
 #include "view/common.h"
 #include "view/intl/intl.h"
@@ -62,7 +63,8 @@ static void update_info(model_t *pmodel, struct page_data *data) {
         lv_obj_set_hidden(data->lbl_state, 1);
     } else {
         if (CLASS_GET_MODE(data->device.class) == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY) {
-            lv_label_set_text_fmt(data->lbl_state, "Status: 0x%X", data->device.sensor_data.state);
+            lv_label_set_text_fmt(data->lbl_state, "Status: 0x%X\nPress: %i", data->device.sensor_data.state,
+                                  data->device.sensor_data.pressure);
             lv_obj_set_hidden(data->lbl_state, 0);
         } else {
             lv_obj_set_hidden(data->lbl_state, 1);
@@ -195,10 +197,13 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
                             break;
 
-                        case DELETE_BTN_ID:
+                        case DELETE_BTN_ID: {
                             model_delete_device(pmodel, data->device.address);
+                            device_t device = {.address = data->device.address, .status = DEVICE_STATUS_NOT_CONFIGURED};
+                            configuration_save_device_data(device);
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
                             break;
+                        }
 
                         case REFRESH_BTN_ID: {
                             msg.cmsg.code    = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO;

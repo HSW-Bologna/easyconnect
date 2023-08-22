@@ -4,6 +4,7 @@
 #include <string.h>
 #include "easyconnect_interface.h"
 #include "model.h"
+#include <esp_log.h>
 
 
 #define ABS(x) ((x) > 0 ? (x) : -(x))
@@ -11,6 +12,9 @@
 
 
 static uint8_t alarm_for_device(model_t *pmodel, size_t i);
+
+
+static const char *TAG = "Model";
 
 
 void model_init(model_t *pmodel) {
@@ -84,7 +88,7 @@ void model_init(model_t *pmodel) {
 
     pmodel->show_work_hours_state = 0;
 
-    pmodel->system_alarm_shown = 0;
+    pmodel->system_alarm = SYSTEM_ALARM_NONE;
     pmodel->sensors_read = 0;
     pmodel->ap_list_size = 0;
     pmodel->scanning     = 0;
@@ -540,6 +544,49 @@ int model_get_pressures(model_t *pmodel, sensor_group_report_t *pressures) {
 }
 
 
+int16_t model_get_device_pressure(model_t *pmodel, device_t device) {
+    return device.sensor_data.pressure + pmodel->configuration.pressure_offsets[CLASS_GET_GROUP(device.class)];
+}
+
+
+int model_calibrate_pressures(model_t *pmodel) {
+    sensor_group_report_t pressures[DEVICE_GROUPS] = {0};
+    int                   res                      = model_get_raw_pressures(pmodel, pressures);
+
+    size_t  count          = 0;
+    int64_t pressure_total = 0;
+
+    for (size_t i = 0; i < DEVICE_GROUPS; i++) {
+        if (pressures[i].valid) {
+            ESP_LOGI(TAG, "Found pressure for group %zu: %i", i, pressures[i].pressure);
+            pressure_total += pressures[i].pressure;
+            count++;
+        }
+    }
+
+    if (count == 0) {
+        for (size_t i = 0; i < DEVICE_GROUPS; i++) {
+            pmodel->configuration.pressure_offsets[i] = 0;
+        }
+    } else {
+        int64_t pressure_average = pressure_total / count;
+
+        ESP_LOGI(TAG, "Average: %lli", pressure_average);
+        // Make sure every device reads the average pressure
+        for (size_t i = 0; i < DEVICE_GROUPS; i++) {
+            if (pressures[i].valid) {
+                pmodel->configuration.pressure_offsets[i] = pressure_average - pressures[i].pressure;
+                ESP_LOGI(TAG, "Offset for group %zu: %i", i, pmodel->configuration.pressure_offsets[i]);
+            } else {
+                pmodel->configuration.pressure_offsets[i] = 0;
+            }
+        }
+    }
+
+    return res;
+}
+
+
 int model_get_raw_pressures(model_t *pmodel, sensor_group_report_t *pressures) {
     assert(pmodel != NULL);
 
@@ -871,6 +918,16 @@ uint8_t model_is_filter_alarm_on(model_t *pmodel, uint8_t alarms) {
 uint8_t model_is_there_a_fan_alarm(model_t *pmodel) {
     return model_is_there_any_alarm_for_class(pmodel, DEVICE_CLASS_SIPHONING_FAN) ||
            model_is_there_any_alarm_for_class(pmodel, DEVICE_CLASS_IMMISSION_FAN);
+}
+
+
+uint8_t model_is_system_locked(model_t *pmodel) {
+    return pmodel->system_alarm == SYSTEM_ALARM_TRIGGERED;
+}
+
+
+uint8_t model_is_any_fatal_alarm(model_t *pmodel) {
+    return pmodel->system_alarm != SYSTEM_ALARM_OVERRULED && device_list_is_system_alarm(pmodel->devices);
 }
 
 

@@ -92,6 +92,7 @@ uint8_t       device_list_is_there_an_alarm(device_t *devices);
 uint8_t       device_list_is_there_any_alarm_for_class(device_t *devices, uint16_t class);
 uint8_t       device_list_is_class_alarms_on(device_t *devices, uint16_t class, uint8_t alarms);
 uint8_t       device_list_is_class_communication_error(device_t *devices, uint16_t class);
+uint8_t       device_list_is_system_alarm(device_t *devices);
 
 
 #endif

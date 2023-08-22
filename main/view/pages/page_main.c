@@ -27,6 +27,8 @@ LV_IMG_DECLARE(img_icon_reset_stop_md);
 LV_IMG_DECLARE(img_error_sm);
 LV_IMG_DECLARE(img_error_md);
 LV_IMG_DECLARE(img_error_lg);
+LV_IMG_DECLARE(img_error_black_md);
+LV_IMG_DECLARE(img_danger);
 
 LV_IMG_DECLARE(img_ok_lg);
 
@@ -152,6 +154,8 @@ enum {
     BTN_PRESSURE_ID,
     BTN_HUMIDITY_ID,
     BTN_TEMPERATURE_ID,
+    BTN_OVERRULE_SYSTEM_ALARM_ID,
+    BTN_HIDE_SYSTEM_ALARM_ID,
 
     // Ventilation popup
     BTN_SIPHONING_PERCENTAGE_0_MOD,
@@ -222,6 +226,13 @@ enum {
 
 
 typedef enum {
+    SYSTEM_ALARM_MESSAGE_HIDDEN = 0,
+    SYSTEM_ALARM_MESSAGE_1,
+    SYSTEM_ALARM_MESSAGE_2,
+} system_alarm_message_t;
+
+
+typedef enum {
     PAGE_ROUTE_MAIN_PAGE = 0,
     PAGE_ROUTE_SYSTEM_SETUP,
     PAGE_ROUTE_REC_SYSTEM,
@@ -261,7 +272,10 @@ typedef struct {
 
 
 struct page_data {
+    lv_obj_t *blanket;
+
     lv_obj_t *lbl_version;
+    lv_obj_t *lbl_system_alert;
 
     lv_obj_t *btn_light;
     lv_obj_t *btn_fan;
@@ -334,6 +348,8 @@ struct page_data {
     uint8_t       imm_alarm;
     unsigned long fan_btn_ts;
     uint8_t       fan_long_clicked;
+
+    system_alarm_message_t system_alarm_message;
 };
 
 
@@ -459,8 +475,8 @@ static void update_fan_buttons(model_t *pmodel, struct page_data *data) {
 
     if (sfm_count > 0 && ifm_count > 0) {
         lv_obj_set_hidden(data->img_error_motors_1, 1);
-        lv_obj_set_hidden(data->img_error_motors_2[0], !data->siph_alarm);
-        lv_obj_set_hidden(data->img_error_motors_2[1], !data->imm_alarm);
+        lv_obj_set_hidden(data->img_error_motors_2[0], !data->imm_alarm);
+        lv_obj_set_hidden(data->img_error_motors_2[1], !data->siph_alarm);
 
         lv_obj_set_hidden(data->btn_fan, 0);
 
@@ -586,6 +602,34 @@ static void update_light_buttons(model_t *pmodel, struct page_data *pdata) {
         }
     } else {
         lv_obj_set_hidden(pdata->btn_light, 1);
+    }
+}
+
+
+static void update_system_alert(model_t *pmodel, struct page_data *data) {
+    switch (pmodel->system_alarm) {
+        case SYSTEM_ALARM_NONE:
+        case SYSTEM_ALARM_OVERRULED:
+            view_common_set_hidden(data->blanket, 1);
+            break;
+
+        default:
+            switch (data->system_alarm_message) {
+                case SYSTEM_ALARM_MESSAGE_HIDDEN:
+                    view_common_set_hidden(data->blanket, 1);
+                    break;
+
+                case SYSTEM_ALARM_MESSAGE_1:
+                    lv_label_set_text(data->lbl_system_alert, view_intl_get_string(pmodel, STRINGS_SYSTEM_ALERT_1));
+                    view_common_set_hidden(data->blanket, 0);
+                    break;
+
+                case SYSTEM_ALARM_MESSAGE_2:
+                    lv_label_set_text(data->lbl_system_alert, view_intl_get_string(pmodel, STRINGS_SYSTEM_ALERT_2));
+                    view_common_set_hidden(data->blanket, 0);
+                    break;
+            }
+            break;
     }
 }
 
@@ -790,6 +834,8 @@ static void *create_page(model_t *model, void *extra) {
     data->fan_btn_ts       = 0;
     data->fan_long_clicked = 0;
 
+    data->system_alarm_message = SYSTEM_ALARM_MESSAGE_1;
+
     return data;
 }
 
@@ -938,6 +984,57 @@ static void open_page(model_t *model, void *arg) {
     data->slider = sl;
     view_register_default_callback(data->slider, SLIDER_ID);
 
+
+    lv_obj_t *blanket = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_set_size(blanket, LV_HOR_RES, LV_VER_RES);
+    lv_obj_align(blanket, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_style(blanket, LV_CONT_PART_MAIN, &style_transparent_cont);
+
+    cont = lv_cont_create(blanket, NULL);
+    lv_obj_set_size(cont, 312, 228);
+    lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_MID, 16, 4);
+
+    img = lv_img_create(cont, NULL);
+    lv_img_set_src(img, &img_danger);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_TOP_MID, 0, 4);
+
+    lbl = lv_label_create(cont, NULL);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_obj_set_width(lbl, 300);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_small());
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, -12);
+    data->lbl_system_alert = lbl;
+
+    lv_obj_t *btn = lv_btn_create(cont, NULL);
+    lv_obj_set_size(btn, 200, 48);
+    view_register_default_callback(btn, BTN_OVERRULE_SYSTEM_ALARM_ID);
+    lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
+    lv_btn_set_layout(btn, LV_LAYOUT_OFF);
+
+    img = lv_img_create(btn, NULL);
+    lv_img_set_src(img, &img_error_black_md);
+    lv_obj_align(img, btn, LV_ALIGN_IN_LEFT_MID, 4, 0);
+
+    img = lv_img_create(btn, NULL);
+    lv_img_set_src(img, &img_error_black_md);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_RIGHT_MID, -4, 0);
+
+    lbl = lv_label_create(btn, NULL);
+    lv_label_set_text(lbl, "BYPASS");
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 16, -12);
+
+    btn = view_common_back_button(cont, BTN_HIDE_SYSTEM_ALARM_ID);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -16, -16);
+
+
+    data->blanket = blanket;
+
+
     lv_obj_t *drawer = lv_cont_create(lv_scr_act(), NULL);
     lv_obj_set_size(drawer, 400, DRAWER_HEIGHT);
     lv_obj_align(drawer, NULL, LV_ALIGN_OUT_TOP_MID, 0, 0);
@@ -989,6 +1086,7 @@ static void open_page(model_t *model, void *arg) {
     update_device_sensors(model, data);
 
     update_all_buttons(model, data);
+    update_system_alert(model, data);
 
     change_page_route(model, data, data->page_route);
 }
@@ -1001,6 +1099,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
     switch (event.code) {
         case VIEW_EVENT_CODE_STATE_UPDATE:
             update_all_buttons(model, data);
+            update_system_alert(model, data);
             lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
             break;
 
@@ -1023,6 +1122,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
             update_all_buttons(model, data);
             update_device_sensors(model, data);
             update_device_list(model, data);
+            update_system_alert(model, data);
             break;
 
         case VIEW_EVENT_CODE_DEVICE_NEW:
@@ -1045,6 +1145,28 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                 case LV_EVENT_LONG_PRESSED_REPEAT:
                 case LV_EVENT_CLICKED: {
                     switch (event.data.id) {
+                        case BTN_OVERRULE_SYSTEM_ALARM_ID:
+                            switch (data->system_alarm_message) {
+                                case SYSTEM_ALARM_MESSAGE_1:
+                                    data->system_alarm_message = SYSTEM_ALARM_MESSAGE_2;
+                                    break;
+
+                                case SYSTEM_ALARM_MESSAGE_2:
+                                    data->system_alarm_message = SYSTEM_ALARM_MESSAGE_HIDDEN;
+                                    model->system_alarm        = SYSTEM_ALARM_OVERRULED;
+                                    break;
+
+                                default:
+                                    break;
+                            }
+                            update_system_alert(model, data);
+                            break;
+
+                        case BTN_HIDE_SYSTEM_ALARM_ID:
+                            data->system_alarm_message = SYSTEM_ALARM_MESSAGE_HIDDEN;
+                            update_system_alert(model, data);
+                            break;
+
                         case BTN_SIPHONING_PERCENTAGE_0_MOD:
                         case BTN_SIPHONING_PERCENTAGE_1_MOD:
                         case BTN_SIPHONING_PERCENTAGE_2_MOD:
@@ -1326,7 +1448,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         }
 
                         case BTN_REC_SYSTEM_ID:
-                            change_page_route(model, data, PAGE_ROUTE_REC_SYSTEM);
+                            change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
                             break;
 
                         case BTN_VENTILATION_ID:
@@ -1484,6 +1606,14 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         }
 
                         case BTN_FAN_ID:
+                            if (model_is_system_locked(model)) {
+                                if (data->system_alarm_message == SYSTEM_ALARM_MESSAGE_HIDDEN) {
+                                    data->system_alarm_message = SYSTEM_ALARM_MESSAGE_1;
+                                    update_system_alert(model, data);
+                                    break;
+                                }
+                            }
+
                             if (data->fan_long_clicked) {
                                 break;
                             }
@@ -1501,8 +1631,14 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case BTN_FILTER_ID:
                             if (event.lv_event != LV_EVENT_CLICKED) {
                                 break;
+                            } else if (model_is_system_locked(model)) {
+                                if (data->system_alarm_message == SYSTEM_ALARM_MESSAGE_HIDDEN) {
+                                    data->system_alarm_message = SYSTEM_ALARM_MESSAGE_1;
+                                    update_system_alert(model, data);
+                                }
+                            } else {
+                                msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER;
                             }
-                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER;
                             break;
 
                         default:
@@ -1754,10 +1890,14 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
         lv_obj_t *lbl_serial_number = pdata->rec_devices.device_info_widgets[i].lbl_serial_number;
         device_t  device            = model_get_device(pmodel, pdata->rec_devices.device_info_widgets[i].address);
 
-        lv_label_set_text_fmt(lbl_serial_number, "SN: %8i", device.serial_number);
+        lv_label_set_text_fmt(lbl_serial_number, "SN: %7i", device.serial_number);
 
         // Icon
         view_common_get_class_icon(device.class, img);
+        lv_obj_set_style_local_image_recolor(img, LV_IMG_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GRAY);
+        lv_obj_set_style_local_image_recolor_opa(img, LV_IMG_PART_MAIN, LV_STATE_DEFAULT,
+                                                 device.status == DEVICE_STATUS_COMMUNICATION_ERROR ? LV_OPA_90
+                                                                                                    : LV_OPA_TRANSP);
 
         // State
         switch (CLASS_GET_MODE(device.class)) {
@@ -1776,7 +1916,7 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
                 if (device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
                     lv_label_set_text(lbl_state, "---Pa");
                 } else {
-                    lv_label_set_text_fmt(lbl_state, "%iPa", device.sensor_data.pressure);
+                    lv_label_set_text_fmt(lbl_state, "%iPa", model_get_device_pressure(pmodel, device));
                 }
                 break;
             case DEVICE_MODE_TEMPERATURE_HUMIDITY:
@@ -1793,7 +1933,7 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
                 } else {
                     lv_label_set_text_fmt(lbl_state, "%i%% %i%s %iPa", device.sensor_data.humidity,
                                           device.sensor_data.temperature, model_get_degrees_symbol(pmodel),
-                                          device.sensor_data.pressure);
+                                          model_get_device_pressure(pmodel, device));
                 }
                 break;
             default:
@@ -1802,17 +1942,18 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
         }
 
         // Alarms
+        uint8_t alarm_ok = ((device.alarms & EASYCONNECT_SAFETY_ALARM) == 0) && device.status == DEVICE_STATUS_OK;
         switch (CLASS_GET_MODE(device.class)) {
             case DEVICE_MODE_UVC:
             case DEVICE_MODE_ESF:
             case DEVICE_MODE_GAS:
                 lv_label_set_text_fmt(lbl_alarms, "%s: %s  FB: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
-                                      (device.alarms & EASYCONNECT_SAFETY_ALARM) == 0 ? "OK" : "KO",
+                                      alarm_ok ? "OK" : "KO",
                                       (device.alarms & EASYCONNECT_FEEDBACK_ALARM) == 0 ? "OK" : "KO");
                 break;
             default:
                 lv_label_set_text_fmt(lbl_alarms, "%s: %s", view_intl_get_string(pmodel, STRINGS_ALLARME),
-                                      (device.alarms & EASYCONNECT_SAFETY_ALARM) == 0 ? "OK" : "KO");
+                                      alarm_ok ? "OK" : "KO");
                 break;
         }
 

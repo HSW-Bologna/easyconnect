@@ -303,6 +303,34 @@ uint8_t device_list_is_class_alarms_on(device_t *devices, uint16_t class, uint8_
 }
 
 
+uint8_t device_list_is_system_alarm(device_t *devices) {
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
+        if (devices[i].status != DEVICE_STATUS_NOT_CONFIGURED) {
+            switch (devices[i].class) {
+                case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+                case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+                case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+                case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+                case DEVICE_CLASS_IMMISSION_FAN:
+                case DEVICE_CLASS_SIPHONING_FAN:
+                    if ((devices[i].alarms & EASYCONNECT_SAFETY_ALARM) > 0 ||
+                        devices[i].status == DEVICE_STATUS_COMMUNICATION_ERROR) {
+                        return 1;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+    }
+
+    return 0;
+}
+
+
+
+
 uint8_t device_list_is_there_any_alarm_for_class(device_t *devices, uint16_t class) {
     return device_list_is_class_alarms_on(devices, class, 0xFF);
 }

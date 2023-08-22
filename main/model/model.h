@@ -112,15 +112,22 @@ typedef struct {
 } sensor_group_report_t;
 
 
+typedef enum {
+    SYSTEM_ALARM_NONE = 0,
+    SYSTEM_ALARM_TRIGGERED,
+    SYSTEM_ALARM_OVERRULED,
+} system_alarm_t;
+
+
 typedef struct {
-    int     temperature;
-    int     humidity;
-    int     electrostatic_filter_on;
-    int     uvc_filter_on;
-    uint8_t internal_sensor_error;
-    uint8_t internal_rtc_error;
-    uint8_t sensors_read;
-    uint8_t system_alarm_shown;
+    int            temperature;
+    int            humidity;
+    int            electrostatic_filter_on;
+    int            uvc_filter_on;
+    uint8_t        internal_sensor_error;
+    uint8_t        internal_rtc_error;
+    uint8_t        sensors_read;
+    system_alarm_t system_alarm;
 
     uint8_t show_work_hours_state;
 
@@ -260,6 +267,10 @@ uint8_t     model_is_pressure_difference_ok(model_t *pmodel, int16_t p1, int16_t
 size_t      model_get_temperature_difference_level(model_t *pmodel, int16_t t1, int16_t t2);
 size_t      model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t h2);
 size_t      model_get_local_temperature_humidity_error_level(model_t *pmodel);
+int         model_calibrate_pressures(model_t *pmodel);
+int16_t     model_get_device_pressure(model_t *pmodel, device_t device);
+uint8_t     model_is_system_locked(model_t *pmodel);
+uint8_t     model_is_any_fatal_alarm(model_t *pmodel);
 
 
 GETTERNSETTER(humidity, humidity);

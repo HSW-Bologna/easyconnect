@@ -34,6 +34,7 @@ static void     check_sensors_levels(model_t *pmodel);
 static void     console_task(void *args);
 static uint32_t get_serial_number(void *arg);
 static int      initialize_time(void);
+static void     system_shutdown(model_t *pmodel);
 
 
 static const char   *TAG               = "Controller";
@@ -154,9 +155,15 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER: {
-            if (model_is_filter_alarm_on(pmodel, EASYCONNECT_SAFETY_ALARM)) {
+            if (model_is_system_locked(pmodel)) {
                 ESP_LOGI(TAG, "Attempt failed due to alarm");
                 buzzer_beep(2, 100, 50, model_get_buzzer_volume(pmodel));
+                break;
+            } else if (model_is_any_fatal_alarm(pmodel)) {
+                ESP_LOGI(TAG, "Attempt failed due to alarm");
+                buzzer_beep(2, 100, 50, model_get_buzzer_volume(pmodel));
+                pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
+                view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
                 break;
             }
 
@@ -275,14 +282,27 @@ void controller_send_message(view_controller_message_t msg) {
 
 
 void controller_manage(model_t *pmodel) {
-    static unsigned long refreshts     = 0;
-    static unsigned long work_hours_ts = 0;
-    static unsigned long tempts        = 0;
-    static unsigned long poll_ts       = 0;
-    static unsigned long heapts        = 0;
-    static unsigned long time_ts       = 0;
-    static unsigned long server_ts     = 0;
-    static uint8_t       poll_address  = 0;
+    static unsigned long refreshts        = 0;
+    static unsigned long work_hours_ts    = 0;
+    static unsigned long tempts           = 0;
+    static unsigned long poll_ts          = 0;
+    static unsigned long heapts           = 0;
+    static unsigned long time_ts          = 0;
+    static unsigned long server_ts        = 0;
+    static unsigned long sensors_ts       = 0;
+    static uint8_t       poll_address     = 0;
+    static uint8_t       old_sensors_read = 0;
+    static uint8_t       poll_full_cycle  = 0;
+
+    if (poll_full_cycle && is_expired(sensors_ts, get_millis(), 2000)) {
+        pmodel->sensors_read = 1;
+    }
+
+    if (pmodel->sensors_read && !old_sensors_read) {
+        ESP_LOGI(TAG, "Pressure calibration!");
+        model_calibrate_pressures(pmodel);
+    }
+    old_sensors_read = pmodel->sensors_read;
 
     configuration_manage();
 
@@ -400,8 +420,9 @@ void controller_manage(model_t *pmodel) {
                     uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
                     if (new_poll_address == poll_address) {
                         // Restart
-                        poll_address         = 0;
-                        pmodel->sensors_read = 1;     // Full read
+                        poll_address    = 0;
+                        poll_full_cycle = 1;     // Full read
+                        sensors_ts      = get_millis();
                     } else {
                         poll_address = new_poll_address;
                     }
@@ -500,8 +521,9 @@ void controller_manage(model_t *pmodel) {
                 uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
                 if (new_poll_address == poll_address) {
                     // Restart
-                    pmodel->sensors_read = 1;     // Full read
-                    poll_address         = 0;
+                    poll_full_cycle = 1;     // Full read
+                    poll_address    = 0;
+                    sensors_ts      = get_millis();
                 } else {
                     poll_address = new_poll_address;
                 }
@@ -569,31 +591,43 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
              device.class, alarms);
 
     switch (CLASS_GET_MODE(device.class)) {
+        case DEVICE_MODE_FAN:
         case DEVICE_MODE_ESF:
-            if (communication || (alarms & EASYCONNECT_SAFETY_ALARM)) {
-                if (model_get_electrostatic_filter_state(pmodel)) {
-                    controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
-                    model_electrostatic_filter_off(pmodel);
-                }
-            }
-            break;
-
         case DEVICE_MODE_UVC:
             if (communication || (alarms & EASYCONNECT_SAFETY_ALARM)) {
-                if (model_get_uvc_filter_state(pmodel)) {
-                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
-                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
-                    controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
-                    model_uvc_filter_off(pmodel);
-                }
+                system_shutdown(pmodel);
             }
             break;
 
-        case DEVICE_MODE_FAN:
         case DEVICE_MODE_PRESSURE:
         case DEVICE_MODE_TEMPERATURE_HUMIDITY:
         case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
             break;
+    }
+}
+
+
+static void system_shutdown(model_t *pmodel) {
+    if (pmodel->system_alarm == SYSTEM_ALARM_NONE) {
+        ESP_LOGW(TAG, "System shutdown!");
+        if (model_get_fan_state(pmodel)) {
+            controller_state_event(pmodel, STATE_EVENT_FAN_EMERGENCY_STOP);
+            pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
+        }
+        if (model_get_electrostatic_filter_state(pmodel)) {
+            controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
+            model_electrostatic_filter_off(pmodel);
+            pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
+        }
+        if (model_get_uvc_filter_state(pmodel)) {
+            controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
+            controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
+            controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
+            model_uvc_filter_off(pmodel);
+            pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
+        }
+
+        view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     }
 }
 
@@ -708,6 +742,7 @@ static void console_task(void *args) {
 
     for (;;) {
         esp32_edit_cycle(prompt);
+        esp_log_level_set("*", ESP_LOG_NONE);
     }
 #else
     (void)args;

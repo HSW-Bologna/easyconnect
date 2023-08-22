@@ -96,8 +96,11 @@ typedef enum {
     STRINGS_CORRENTI,
     STRINGS_LOG,
     STRINGS_ACCENSIONE,
+    STRINGS_OK,
+    STRINGS_SYSTEM_ALERT_1,
+    STRINGS_SYSTEM_ALERT_2,
 } strings_t;
 
-extern const char *strings[94][2];
+extern const char *strings[97][2];
 
 #endif
