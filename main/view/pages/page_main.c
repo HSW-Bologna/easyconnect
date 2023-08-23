@@ -20,6 +20,13 @@
 #include "gel/timer/timecheck.h"
 
 
+LV_IMG_DECLARE(img_btn_reset_yellow);
+LV_IMG_DECLARE(img_btn_reset_gray);
+LV_IMG_DECLARE(img_btn_update_green);
+LV_IMG_DECLARE(img_btn_update_red);
+LV_IMG_DECLARE(img_btn_minus);
+LV_IMG_DECLARE(img_btn_plus);
+
 LV_IMG_DECLARE(img_icon_reset_md);
 LV_IMG_DECLARE(img_icon_reset_warning_md);
 LV_IMG_DECLARE(img_icon_reset_stop_md);
@@ -195,6 +202,11 @@ enum {
     // Rec system group
     BTN_DEVICE_ID,
     BTN_SCAN_ID,
+    BTN_RESET_ID,
+
+    // Rec automatic config
+    BTN_AUTO_CONFIG_MINUS,
+    BTN_AUTO_CONFIG_PLUS,
 
     // Pressure group
     BTN_PRESSURE_DIFFERENCE_0_MOD,
@@ -235,8 +247,9 @@ typedef enum {
 typedef enum {
     PAGE_ROUTE_MAIN_PAGE = 0,
     PAGE_ROUTE_SYSTEM_SETUP,
-    PAGE_ROUTE_REC_SYSTEM,
+    PAGE_ROUTE_REC_SYSTEM,     // TODO: remove
     PAGE_ROUTE_REC_DEVICE,
+    PAGE_ROUTE_REC_AUTO_CONFIG,
     PAGE_ROUTE_VENTILATION,
     PAGE_ROUTE_FILTERING,
     PAGE_ROUTE_MAINTENANCE,
@@ -250,6 +263,15 @@ typedef enum {
 } page_route_t;
 
 
+typedef enum {
+    AUTO_CONFIGURATION_STEP_SETUP,
+    AUTO_CONFIGURATION_STEP_SENDING,
+    AUTO_CONFIGURATION_STEP_WAITING,
+    AUTO_CONFIGURATION_STEP_DONE,
+    AUTO_CONFIGURATION_STEP_ERROR,
+} auto_configuration_step_t;
+
+
 typedef struct {
     uint8_t   address;
     lv_obj_t *lbl_state;
@@ -257,6 +279,7 @@ typedef struct {
     lv_obj_t *lbl_address;
     lv_obj_t *lbl_serial_number;
     lv_obj_t *img_icon;
+    lv_obj_t *btn;
 } device_info_widget_t;
 
 
@@ -310,7 +333,17 @@ struct page_data {
         struct {
             device_info_widget_t device_info_widgets[MODBUS_MAX_DEVICES];
             size_t               count;
+            lv_obj_t            *img_btn_update;
+            lv_obj_t            *img_btn_reset;
+            lv_obj_t            *spinner;
         } rec_devices;
+        struct {
+            lv_obj_t *lbl_ok_devices;
+            lv_obj_t *lbl_expected_devices;
+            lv_obj_t *blanket;
+            lv_obj_t *img_btn_reset;
+            lv_obj_t *spinner;
+        } auto_configuration;
         struct {
             lv_obj_t *lbl_siphoning_percentages[MAX_FAN_SPEED];
             lv_obj_t *lbl_immission_percentages[MAX_FAN_SPEED];
@@ -341,23 +374,28 @@ struct page_data {
         } humidity_temperature;
     };
 
-    int           blink;
-    uint8_t       uvc_alarm;
-    uint8_t       esf_alarm;
-    uint8_t       siph_alarm;
-    uint8_t       imm_alarm;
-    unsigned long fan_btn_ts;
-    uint8_t       fan_long_clicked;
+    int                       blink;
+    uint8_t                   uvc_alarm;
+    uint8_t                   esf_alarm;
+    uint8_t                   siph_alarm;
+    uint8_t                   imm_alarm;
+    unsigned long             fan_btn_ts;
+    uint8_t                   fan_long_clicked;
+    uint8_t                   is_refreshing;
+    uint16_t                  devices_to_configure;
+    auto_configuration_step_t auto_configuration_step;
+    uint16_t                  found_devices;
 
     system_alarm_message_t system_alarm_message;
 };
 
 
 static void         change_page_route(model_t *pmodel, struct page_data *pdata, page_route_t route);
-static uint16_t     modify_parameter(uint16_t value, int16_t mod, uint16_t min, uint16_t max);
+static int16_t      modify_parameter(int16_t value, int16_t mod, int16_t min, int16_t max);
 static uint16_t     modify_percentage(uint16_t value, int16_t mod);
 static void         update_menus(model_t *pmodel, struct page_data *pdata);
 static void         update_device_list(model_t *pmodel, struct page_data *pdata);
+static void         update_auto_configuration(model_t *pmodel, struct page_data *pdata);
 static status_row_t create_status_row(lv_obj_t *root);
 static void         create_sensor_rows(model_t *model, struct page_data *data);
 
@@ -609,6 +647,9 @@ static void update_light_buttons(model_t *pmodel, struct page_data *pdata) {
 static void update_system_alert(model_t *pmodel, struct page_data *data) {
     switch (pmodel->system_alarm) {
         case SYSTEM_ALARM_NONE:
+            view_common_set_hidden(data->blanket, 1);
+            break;
+
         case SYSTEM_ALARM_OVERRULED:
             view_common_set_hidden(data->blanket, 1);
             break;
@@ -656,10 +697,20 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
         if (pmodel->sensors_read) {
             model_get_pressures(pmodel, pressures);
-            lv_img_set_src(pdata->row_pressure.img_status,
-                           model_is_pressure_difference_ok(pmodel, pressures[0].pressure, pressures[1].pressure)
-                               ? &img_ok_lg
-                               : &img_error_lg);
+            delta_status_t delta_status =
+                model_get_pressure_delta_status(pmodel, pressures[0].pressure, pressures[1].pressure);
+
+            switch (delta_status) {
+                case DELTA_STATUS_OK:
+                    lv_img_set_src(pdata->row_pressure.img_status, &img_ok_lg);
+                    break;
+                case DELTA_STATUS_WARN:
+                    lv_img_set_src(pdata->row_pressure.img_status, &img_error_lg);
+                    break;
+                case DELTA_STATUS_STOP:
+                    lv_img_set_src(pdata->row_pressure.img_status, &img_stop);
+                    break;
+            }
             view_common_set_hidden(pdata->row_pressure.img_status, !pressures[0].valid || !pressures[1].valid);
 
             if (pressures[0].valid && pressures[0].errors) {
@@ -700,11 +751,21 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
         model_get_temperatures_humidities(pmodel, &group_1, &group_2);
     }
 
+    const lv_img_dsc_t *error_dsc[] = {&img_ok_lg, &img_error_lg, &img_stop};
     if (pdata->row_temperature.obj != NULL) {
         if (pmodel->sensors_read) {
-            lv_img_set_src(
-                pdata->row_temperature.img_status,
-                speed_dsc[model_get_temperature_difference_level(pmodel, group_1.temperature, group_2.temperature)]);
+            size_t error_level_1 = model_get_temperature_error_level(pmodel, group_1.temperature);
+            size_t error_level_2 = model_get_temperature_error_level(pmodel, group_2.temperature);
+            size_t error_level   = error_level_1 > error_level_2 ? error_level_1 : error_level_2;
+
+            if (error_level > 0) {
+                lv_img_set_src(pdata->row_temperature.img_status, error_dsc[error_level]);
+            } else {
+                lv_img_set_src(pdata->row_temperature.img_status,
+                               speed_dsc[model_get_temperature_difference_level(pmodel, group_1.temperature,
+                                                                                group_2.temperature)]);
+            }
+
             view_common_set_hidden(pdata->row_temperature.img_status, !group_1.valid || !group_2.valid);
 
             if (group_1.valid && group_1.errors) {
@@ -741,8 +802,18 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
     if (pdata->row_humidity.obj != NULL) {
         if (pmodel->sensors_read) {
-            lv_img_set_src(pdata->row_humidity.img_status,
-                           speed_dsc[model_get_humidity_difference_level(pmodel, group_1.humidity, group_2.humidity)]);
+            size_t error_level_1 = model_get_humidity_error_level(pmodel, group_1.humidity);
+            size_t error_level_2 = model_get_humidity_error_level(pmodel, group_2.humidity);
+            size_t error_level   = error_level_1 > error_level_2 ? error_level_1 : error_level_2;
+
+            if (error_level > 0) {
+                lv_img_set_src(pdata->row_humidity.img_status, error_dsc[error_level]);
+            } else {
+                lv_img_set_src(
+                    pdata->row_humidity.img_status,
+                    speed_dsc[model_get_humidity_difference_level(pmodel, group_1.humidity, group_2.humidity)]);
+            }
+
             view_common_set_hidden(pdata->row_humidity.img_status, !group_1.valid || !group_2.valid);
 
             if (group_1.valid && group_1.errors) {
@@ -827,12 +898,14 @@ static void update_info(model_t *pmodel, struct page_data *data) {
 
 
 static void *create_page(model_t *model, void *extra) {
-    struct page_data *data = malloc(sizeof(struct page_data));
-    data->blink_task       = view_register_periodic_task(500UL, LV_TASK_PRIO_OFF, TASK_BLINK_ID);
-    data->blink            = 0;
-    data->cont_subpage     = NULL;
-    data->fan_btn_ts       = 0;
-    data->fan_long_clicked = 0;
+    struct page_data *data        = malloc(sizeof(struct page_data));
+    data->blink_task              = view_register_periodic_task(500UL, LV_TASK_PRIO_OFF, TASK_BLINK_ID);
+    data->blink                   = 0;
+    data->cont_subpage            = NULL;
+    data->fan_btn_ts              = 0;
+    data->fan_long_clicked        = 0;
+    data->is_refreshing           = 0;
+    data->auto_configuration_step = AUTO_CONFIGURATION_STEP_DONE;
 
     data->system_alarm_message = SYSTEM_ALARM_MESSAGE_1;
 
@@ -1127,7 +1200,25 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 
         case VIEW_EVENT_CODE_DEVICE_NEW:
             update_all_buttons(model, data);
-            change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
+            if (data->page_route == PAGE_ROUTE_REC_DEVICE) {
+                change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
+            }
+            break;
+
+        case VIEW_EVENT_CODE_DEVICE_REFRESH_DONE:
+            data->is_refreshing = 0;
+            update_device_list(model, data);
+            break;
+
+        case VIEW_EVENT_CODE_DEVICE_CONFIGURED:
+            if (event.error) {
+                data->auto_configuration_step = AUTO_CONFIGURATION_STEP_ERROR;
+                data->found_devices           = 0;
+            } else {
+                data->auto_configuration_step = AUTO_CONFIGURATION_STEP_DONE;
+                data->found_devices           = event.data.number;
+            }
+            update_auto_configuration(model, data);
             break;
 
         case VIEW_EVENT_CODE_TIMER:
@@ -1253,26 +1344,40 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case BTN_PRESSURE_DIFFERENCE_2_MOD:
                         case BTN_PRESSURE_DIFFERENCE_3_MOD:
                         case BTN_PRESSURE_DIFFERENCE_4_MOD: {
-                            uint8_t i = event.data.id - BTN_PRESSURE_DIFFERENCE_0_MOD;
+                            size_t i = event.data.id - BTN_PRESSURE_DIFFERENCE_0_MOD;
+
+                            int16_t min = 0;
+                            int16_t max = 1000;
+
+                            if (i > 0) {
+                                min = model_get_pressure_difference(model, i - 1);
+                            }
+                            if (i < MAX_FAN_SPEED - 1) {
+                                max = model_get_pressure_difference(model, i + 1);
+                            }
+
                             model_set_pressure_difference(
                                 model, i,
-                                modify_parameter(model_get_pressure_difference(model, i), event.data.number, 0, 100));
+                                modify_parameter(model_get_pressure_difference(model, i), event.data.number, min, max));
                             update_menus(model, data);
                             break;
                         }
 
-                        case BTN_PRESSURE_WARN_MOD:
+                        case BTN_PRESSURE_WARN_MOD: {
                             model_set_pressure_difference_deviation_warn(
                                 model, modify_parameter(model_get_pressure_difference_deviation_warn(model),
-                                                        event.data.number * 5, 0, 100));
+                                                        event.data.number * 5, 0,
+                                                        model_get_pressure_difference_deviation_stop(model)));
                             update_menus(model, data);
                             update_device_sensors(model, data);
                             break;
+                        }
 
                         case BTN_PRESSURE_STOP_MOD:
                             model_set_pressure_difference_deviation_stop(
                                 model, modify_parameter(model_get_pressure_difference_deviation_stop(model),
-                                                        event.data.number * 5, 0, 100));
+                                                        event.data.number * 5,
+                                                        model_get_pressure_difference_deviation_warn(model), 100));
                             update_menus(model, data);
                             update_device_sensors(model, data);
                             break;
@@ -1434,8 +1539,12 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                                     break;
 
                                 case PAGE_ROUTE_REC_DEVICE:
-                                    change_page_route(model, data, PAGE_ROUTE_REC_SYSTEM);
+                                    change_page_route(model, data, PAGE_ROUTE_SYSTEM_SETUP);
                                     msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_STOP_CURRENT_OPERATION;
+                                    break;
+
+                                case PAGE_ROUTE_REC_AUTO_CONFIG:
+                                    change_page_route(model, data, PAGE_ROUTE_REC_DEVICE);
                                     break;
 
                                 case PAGE_ROUTE_PRESSURE:
@@ -1498,7 +1607,40 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_SCAN_ID:
-                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_SCAN;
+                            data->is_refreshing = 1;
+                            msg.cmsg.code       = VIEW_CONTROLLER_MESSAGE_CODE_REFRESH_DEVICES;
+                            update_device_list(model, data);
+                            break;
+
+                        case BTN_RESET_ID:
+                            if (data->page_route == PAGE_ROUTE_REC_AUTO_CONFIG) {
+                                switch (data->auto_configuration_step) {
+                                    case AUTO_CONFIGURATION_STEP_DONE:
+                                    case AUTO_CONFIGURATION_STEP_SETUP:
+                                    case AUTO_CONFIGURATION_STEP_ERROR:
+                                        msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_AUTOMATIC_COMMISSIONING;
+                                        msg.cmsg.expected_devices     = data->devices_to_configure;
+                                        data->auto_configuration_step = AUTO_CONFIGURATION_STEP_WAITING;
+                                        update_auto_configuration(model, data);
+                                        break;
+                                    default:
+                                        break;
+                                }
+                            } else if (!data->is_refreshing) {
+                                change_page_route(model, data, PAGE_ROUTE_REC_AUTO_CONFIG);
+                            }
+                            break;
+
+                        case BTN_AUTO_CONFIG_MINUS:
+                            if (data->devices_to_configure > model_get_ok_devices_count(model)) {
+                                data->devices_to_configure--;
+                                update_auto_configuration(model, data);
+                            }
+                            break;
+
+                        case BTN_AUTO_CONFIG_PLUS:
+                            data->devices_to_configure++;
+                            update_auto_configuration(model, data);
                             break;
 
                         case BTN_AUTOCONF_ID:
@@ -1606,7 +1748,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         }
 
                         case BTN_FAN_ID:
-                            if (model_is_system_locked(model)) {
+                            if (model_is_any_fatal_alarm(model)) {
                                 if (data->system_alarm_message == SYSTEM_ALARM_MESSAGE_HIDDEN) {
                                     data->system_alarm_message = SYSTEM_ALARM_MESSAGE_1;
                                     update_system_alert(model, data);
@@ -1631,7 +1773,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case BTN_FILTER_ID:
                             if (event.lv_event != LV_EVENT_CLICKED) {
                                 break;
-                            } else if (model_is_system_locked(model)) {
+                            } else if (model_is_any_fatal_alarm(model)) {
                                 if (data->system_alarm_message == SYSTEM_ALARM_MESSAGE_HIDDEN) {
                                     data->system_alarm_message = SYSTEM_ALARM_MESSAGE_1;
                                     update_system_alert(model, data);
@@ -1877,12 +2019,104 @@ static lv_obj_t *par_control_cont(lv_obj_t *root, lv_obj_t **lbl_return, int id)
 }
 
 
+static lv_obj_t *par_control_cont_delta(lv_obj_t *root, lv_obj_t **lbl_return, int id) {
+    lv_obj_t *cont = lv_cont_create(root, NULL);
+    lv_obj_set_style_local_border_width(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 2);
+    lv_obj_set_style_local_radius(cont, LV_CONT_PART_MAIN, LV_STATE_DEFAULT, 8);
+    lv_obj_set_size(cont, 76, 76);
+
+    lv_obj_t *lbl = lv_label_create(cont, NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_small());
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 4, 2);
+    lv_obj_set_auto_realign(lbl, 1);
+
+    lv_obj_t *img = lv_img_create(cont, NULL);
+    lv_img_set_src(img, &img_delta);
+    lv_obj_set_auto_realign(img, 1);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_TOP_LEFT, 3, 4);
+
+    if (lbl_return != NULL) {
+        *lbl_return = lbl;
+    }
+
+    lv_obj_t *btn = lv_btn_create(cont, NULL);
+    lv_obj_set_style_local_border_width(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, 0);
+    lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, STYLE_FAINT_YELLOW);
+    lv_obj_set_style_local_radius(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
+    lv_obj_set_size(btn, lv_obj_get_width(cont) - 8, lv_obj_get_height(cont) / 3 - 1);
+
+    lbl = lv_label_create(btn, NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_small());
+    lv_label_set_text(lbl, LV_SYMBOL_PLUS);
+
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -lv_obj_get_height(btn) - 4);
+    view_register_default_callback_number(btn, id, +1);
+
+    btn = lv_btn_create(cont, NULL);
+    lv_obj_set_style_local_border_width(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, 0);
+    lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, STYLE_FAINT_CYAN);
+    lv_obj_set_style_local_radius(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
+    lv_obj_set_size(btn, lv_obj_get_width(cont) - 8, lv_obj_get_height(cont) / 3 - 1);
+
+    lbl = lv_label_create(btn, NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_small());
+    lv_label_set_text(lbl, LV_SYMBOL_MINUS);
+
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -3);
+    view_register_default_callback_number(btn, id, -1);
+
+    return cont;
+}
+
+
+static void update_auto_configuration(model_t *pmodel, struct page_data *pdata) {
+    if (pdata->cont_subpage == NULL || pdata->page_route != PAGE_ROUTE_REC_AUTO_CONFIG) {
+        return;
+    }
+
+    switch (pdata->auto_configuration_step) {
+        case AUTO_CONFIGURATION_STEP_DONE:
+        case AUTO_CONFIGURATION_STEP_SETUP:
+        case AUTO_CONFIGURATION_STEP_ERROR:
+            view_common_set_hidden(pdata->auto_configuration.blanket, 1);
+            view_common_set_hidden(pdata->auto_configuration.spinner, 1);
+            lv_img_set_src(pdata->auto_configuration.img_btn_reset, &img_btn_reset_yellow);
+            break;
+        case AUTO_CONFIGURATION_STEP_WAITING:
+            view_common_set_hidden(pdata->auto_configuration.blanket, 0);
+            view_common_set_hidden(pdata->auto_configuration.spinner, 0);
+            lv_img_set_src(pdata->auto_configuration.img_btn_reset, &img_btn_reset_gray);
+            break;
+        case AUTO_CONFIGURATION_STEP_SENDING:
+            view_common_set_hidden(pdata->auto_configuration.blanket, 0);
+            view_common_set_hidden(pdata->auto_configuration.spinner, 0);
+            lv_img_set_src(pdata->auto_configuration.img_btn_reset, &img_btn_reset_gray);
+            break;
+    }
+
+    lv_label_set_text_fmt(pdata->auto_configuration.lbl_expected_devices, "%i", pdata->devices_to_configure);
+
+    char string[32] = {0};
+    snprintf(string, sizeof(string), "#0000F0 %zu#", pdata->found_devices);
+    lv_label_set_text_fmt(pdata->auto_configuration.lbl_ok_devices,
+                          view_intl_get_string(pmodel, STRINGS_AL_MOMENTO_N_DISPOSITIVI_STANNO_COMUNICANDO), string);
+}
+
+
 static void update_device_list(model_t *pmodel, struct page_data *pdata) {
     if (pdata->cont_subpage == NULL || pdata->page_route != PAGE_ROUTE_REC_DEVICE) {
         return;
     }
 
+    lv_img_set_src(pdata->rec_devices.img_btn_reset,
+                   !pdata->is_refreshing ? &img_btn_reset_yellow : &img_btn_reset_gray);
+    lv_img_set_src(pdata->rec_devices.img_btn_update,
+                   !pdata->is_refreshing ? &img_btn_update_green : &img_btn_update_red);
+    view_common_set_hidden(pdata->rec_devices.spinner, !pdata->is_refreshing);
+
     for (size_t i = 0; i < pdata->rec_devices.count; i++) {
+        lv_obj_t *btn               = pdata->rec_devices.device_info_widgets[i].btn;
         lv_obj_t *img               = pdata->rec_devices.device_info_widgets[i].img_icon;
         lv_obj_t *lbl_state         = pdata->rec_devices.device_info_widgets[i].lbl_state;
         lv_obj_t *lbl_alarms        = pdata->rec_devices.device_info_widgets[i].lbl_alarms;
@@ -1890,14 +2124,19 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
         lv_obj_t *lbl_serial_number = pdata->rec_devices.device_info_widgets[i].lbl_serial_number;
         device_t  device            = model_get_device(pmodel, pdata->rec_devices.device_info_widgets[i].address);
 
-        lv_label_set_text_fmt(lbl_serial_number, "SN: %7i", device.serial_number);
+        lv_label_set_text_fmt(lbl_serial_number, "SN: %6i", device.serial_number);
 
         // Icon
         view_common_get_class_icon(device.class, img);
         lv_obj_set_style_local_image_recolor(img, LV_IMG_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GRAY);
-        lv_obj_set_style_local_image_recolor_opa(img, LV_IMG_PART_MAIN, LV_STATE_DEFAULT,
-                                                 device.status == DEVICE_STATUS_COMMUNICATION_ERROR ? LV_OPA_90
-                                                                                                    : LV_OPA_TRANSP);
+        lv_obj_set_style_local_image_recolor_opa(
+            img, LV_IMG_PART_MAIN, LV_STATE_DEFAULT,
+            (device.status == DEVICE_STATUS_COMMUNICATION_ERROR || pdata->is_refreshing) ? LV_OPA_90 : LV_OPA_TRANSP);
+        if (pdata->is_refreshing) {
+            lv_btn_set_state(btn, LV_BTN_STATE_DISABLED);
+        } else if (lv_btn_get_state(btn) == LV_BTN_STATE_DISABLED) {
+            lv_btn_set_state(btn, LV_BTN_STATE_RELEASED);
+        }
 
         // State
         switch (CLASS_GET_MODE(device.class)) {
@@ -2017,6 +2256,7 @@ static device_info_widget_t device_info_widget_create(lv_obj_t *parent, device_t
         .lbl_serial_number = lbl_serial_number,
         .lbl_state         = lbl_state,
         .img_icon          = img,
+        .btn               = btn,
     };
 }
 
@@ -2172,16 +2412,105 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             }
             pdata->rec_devices.count = count;
 
-            update_device_list(pmodel, pdata);
-
             lv_obj_t *btn = lv_btn_create(pdata->cont_subpage, NULL);
-            lv_obj_set_size(btn, 64, 64);
-            lv_obj_t *lbl = lv_label_create(btn, NULL);
-            lv_label_set_text(lbl, LV_SYMBOL_REFRESH);
+            lv_obj_set_size(btn, 56, 56);
+            lv_obj_t *img = lv_img_create(btn, NULL);
+            lv_img_set_src(img, &img_btn_update_green);
             lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -8);
             view_register_default_callback(btn, BTN_SCAN_ID);
+            pdata->rec_devices.img_btn_update = img;
+
+            btn = lv_btn_create(pdata->cont_subpage, NULL);
+            lv_obj_set_size(btn, 56, 56);
+            img = lv_img_create(btn, NULL);
+            lv_img_set_src(img, &img_btn_reset_yellow);
+            lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -8 - 56 - 4);
+            view_register_default_callback(btn, BTN_RESET_ID);
+            pdata->rec_devices.img_btn_reset = img;
+
+            lv_obj_t *spinner = lv_spinner_create(pdata->cont_subpage, NULL);
+            lv_obj_set_style_local_border_width(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT, 4);
+            lv_obj_set_style_local_border_color(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT,
+                                                LV_THEME_DEFAULT_COLOR_PRIMARY);
+            lv_obj_set_style_local_radius(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
+            lv_obj_set_style_local_bg_color(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+            lv_obj_set_style_local_bg_opa(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT, LV_OPA_COVER);
+
+            lv_obj_set_size(spinner, 160, 160);
+            lv_obj_align(spinner, NULL, LV_ALIGN_CENTER, 0, 24);
+            pdata->rec_devices.spinner = spinner;
+
+            update_device_list(pmodel, pdata);
+
             break;
         }
+
+        case PAGE_ROUTE_REC_AUTO_CONFIG: {
+            pdata->cont_subpage         = cont_subpage_create(view_intl_get_string(pmodel, STRINGS_RESET_AUTO_IP));
+            pdata->found_devices        = model_get_ok_devices_count(pmodel);
+            pdata->devices_to_configure = pdata->found_devices;
+
+            lv_obj_t *lbl = lv_label_create(pdata->cont_subpage, NULL);
+            lv_label_set_recolor(lbl, 1);
+            lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+            lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+            lv_obj_set_width(lbl, 320);
+            lv_obj_set_auto_realign(lbl, 1);
+            lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+            pdata->auto_configuration.lbl_ok_devices = lbl;
+
+            lv_obj_t *btn = lv_btn_create(pdata->cont_subpage, NULL);
+            lv_obj_set_size(btn, 56, 56);
+            lv_obj_t *img = lv_img_create(btn, NULL);
+            lv_img_set_src(img, &img_btn_reset_yellow);
+            lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 80, -16);
+            view_register_default_callback(btn, BTN_RESET_ID);
+            pdata->auto_configuration.img_btn_reset = img;
+
+            lv_obj_t *cont = bordered_cont(pdata->cont_subpage);
+            lv_obj_set_size(cont, 56, 56);
+            lbl = lv_label_create(cont, NULL);
+            lv_obj_set_auto_realign(lbl, 1);
+            lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+            pdata->auto_configuration.lbl_expected_devices = lbl;
+            lv_obj_align(cont, NULL, LV_ALIGN_IN_BOTTOM_MID, -80, -16);
+
+            img = lv_img_create(pdata->cont_subpage, NULL);
+            lv_img_set_src(img, &img_btn_minus);
+            lv_obj_align(img, cont, LV_ALIGN_OUT_LEFT_MID, -8, 0);
+            lv_obj_set_click(img, 1);
+            view_register_default_callback(img, BTN_AUTO_CONFIG_MINUS);
+
+            img = lv_img_create(pdata->cont_subpage, NULL);
+            lv_img_set_src(img, &img_btn_plus);
+            lv_obj_align(img, cont, LV_ALIGN_OUT_RIGHT_MID, 8, 0);
+            lv_obj_set_click(img, 1);
+            view_register_default_callback(img, BTN_AUTO_CONFIG_PLUS);
+
+            lv_obj_t *blanket = lv_cont_create(pdata->cont_subpage, NULL);
+            lv_obj_set_size(blanket, lv_obj_get_width(pdata->cont_subpage),
+                            lv_obj_get_height(pdata->cont_subpage) - 48);
+            lv_obj_align(blanket, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, 0);
+            lv_obj_add_style(blanket, LV_CONT_PART_MAIN, &style_transparent_cont);
+            lv_obj_set_style_local_bg_opa(blanket, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_OPA_60);
+            pdata->auto_configuration.blanket = blanket;
+
+            lv_obj_t *spinner = lv_spinner_create(pdata->cont_subpage, NULL);
+            lv_obj_set_style_local_border_width(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT, 4);
+            lv_obj_set_style_local_border_color(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT,
+                                                LV_THEME_DEFAULT_COLOR_PRIMARY);
+            lv_obj_set_style_local_radius(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT, LV_RADIUS_CIRCLE);
+            lv_obj_set_style_local_bg_color(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+            lv_obj_set_style_local_bg_opa(spinner, LV_SPINNER_PART_BG, LV_STATE_DEFAULT, LV_OPA_COVER);
+
+            lv_obj_set_size(spinner, 160, 160);
+            lv_obj_align(spinner, NULL, LV_ALIGN_CENTER, 0, 24);
+            pdata->auto_configuration.spinner = spinner;
+
+            update_auto_configuration(pmodel, pdata);
+            break;
+        }
+
 
         case PAGE_ROUTE_MAINTENANCE: {
             lv_obj_t *page;
@@ -2440,7 +2769,8 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             };
 
             for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
-                cont = par_control_cont(pdata->cont_subpage, &pdata->pressure.lbl_pressure_differences[i], ids[i]);
+                cont =
+                    par_control_cont_delta(pdata->cont_subpage, &pdata->pressure.lbl_pressure_differences[i], ids[i]);
                 lv_obj_align(cont, NULL, LV_ALIGN_IN_LEFT_MID, 45 + (lv_obj_get_width(cont) + 2) * (i), -34);
             }
 
@@ -2448,7 +2778,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 for (size_t j = 0; j < i + 1; j++) {
                     img = lv_img_create(pdata->cont_subpage, NULL);
                     lv_img_set_src(img, &img_bar);
-                    lv_obj_align(img, NULL, LV_ALIGN_IN_LEFT_MID, 56 + 72 * (i), -74 - 7 * j);
+                    lv_obj_align(img, NULL, LV_ALIGN_IN_LEFT_MID, 56 + 78 * (i), -76 - 7 * j);
                 }
             }
 
@@ -2733,12 +3063,12 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
 
         case PAGE_ROUTE_PRESSURE:
             for (size_t i = 0; i < MAX_FAN_SPEED; i++) {
-                lv_label_set_text_fmt(pdata->pressure.lbl_pressure_differences[i], "%i",
+                lv_label_set_text_fmt(pdata->pressure.lbl_pressure_differences[i], "%i Pa",
                                       model_get_pressure_difference(pmodel, i));
             }
-            lv_label_set_text_fmt(pdata->pressure.lbl_pressure_warn, "%i%%",
+            lv_label_set_text_fmt(pdata->pressure.lbl_pressure_warn, "+/- %i%%",
                                   model_get_pressure_difference_deviation_warn(pmodel));
-            lv_label_set_text_fmt(pdata->pressure.lbl_pressure_stop, "%i%%",
+            lv_label_set_text_fmt(pdata->pressure.lbl_pressure_stop, "+/- %i%%",
                                   model_get_pressure_difference_deviation_stop(pmodel));
             break;
 
@@ -2839,7 +3169,7 @@ static void create_sensor_rows(model_t *model, struct page_data *data) {
 }
 
 
-static uint16_t modify_parameter(uint16_t value, int16_t mod, uint16_t min, uint16_t max) {
+static int16_t modify_parameter(int16_t value, int16_t mod, int16_t min, int16_t max) {
     if (mod > 0) {
         if (value + mod > max) {
             return max;

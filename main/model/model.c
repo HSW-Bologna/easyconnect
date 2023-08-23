@@ -36,11 +36,11 @@ void model_init(model_t *pmodel) {
     pmodel->configuration.environment_cleaning_start_period  = 15;
     pmodel->configuration.environment_cleaning_finish_period = 15;
 
-    pmodel->configuration.pressure_differences_for_speed[0] = 0;
-    pmodel->configuration.pressure_differences_for_speed[1] = 1;
-    pmodel->configuration.pressure_differences_for_speed[2] = 2;
-    pmodel->configuration.pressure_differences_for_speed[3] = 3;
-    pmodel->configuration.pressure_differences_for_speed[4] = 4;
+    pmodel->configuration.pressure_differences_for_speed[0] = 100;
+    pmodel->configuration.pressure_differences_for_speed[1] = 200;
+    pmodel->configuration.pressure_differences_for_speed[2] = 300;
+    pmodel->configuration.pressure_differences_for_speed[3] = 500;
+    pmodel->configuration.pressure_differences_for_speed[4] = 1000;
 
     pmodel->configuration.pressure_difference_deviation_warn = 30;
     pmodel->configuration.pressure_difference_deviation_stop = 50;
@@ -96,6 +96,20 @@ void model_init(model_t *pmodel) {
 
     pmodel->logs_num  = 0;
     pmodel->logs_from = 0;
+}
+
+
+size_t model_get_ok_devices_count(model_t *pmodel) {
+    assert(pmodel != NULL);
+    size_t count = 0;
+
+    for (size_t i = 0; i < MODBUS_MAX_DEVICES; i++) {
+        if (pmodel->devices[i].status == DEVICE_STATUS_OK) {
+            count++;
+        }
+    }
+
+    return count;
 }
 
 
@@ -558,7 +572,6 @@ int model_calibrate_pressures(model_t *pmodel) {
 
     for (size_t i = 0; i < DEVICE_GROUPS; i++) {
         if (pressures[i].valid) {
-            ESP_LOGI(TAG, "Found pressure for group %zu: %i", i, pressures[i].pressure);
             pressure_total += pressures[i].pressure;
             count++;
         }
@@ -921,11 +934,6 @@ uint8_t model_is_there_a_fan_alarm(model_t *pmodel) {
 }
 
 
-uint8_t model_is_system_locked(model_t *pmodel) {
-    return pmodel->system_alarm == SYSTEM_ALARM_TRIGGERED;
-}
-
-
 uint8_t model_is_any_fatal_alarm(model_t *pmodel) {
     return pmodel->system_alarm != SYSTEM_ALARM_OVERRULED && device_list_is_system_alarm(pmodel->devices);
 }
@@ -968,9 +976,26 @@ void model_light_switch(model_t *model) {
 }
 
 
-uint8_t model_is_pressure_difference_ok(model_t *pmodel, int16_t p1, int16_t p2) {
-    int16_t maximum_allowed_difference = (ABS(p1) * model_get_pressure_difference_deviation_warn(pmodel)) / 100;
-    return ABS(p1 - p2) < maximum_allowed_difference;
+delta_status_t model_get_pressure_delta_status(model_t *pmodel, int16_t p1, int16_t p2) {
+    if (model_get_fan_state(pmodel)) {
+        size_t  speed                           = model_get_fan_speed(pmodel);
+        int16_t maximum_allowed_difference_warn = (pmodel->configuration.pressure_differences_for_speed[speed] *
+                                                   model_get_pressure_difference_deviation_warn(pmodel)) /
+                                                  100;
+        int16_t maximum_allowed_difference_stop = (pmodel->configuration.pressure_differences_for_speed[speed] *
+                                                   model_get_pressure_difference_deviation_stop(pmodel)) /
+                                                  100;
+
+        if (ABS(p1 - p2) > maximum_allowed_difference_warn) {
+            return DELTA_STATUS_WARN;
+        } else if (ABS(p2 - p2) > maximum_allowed_difference_stop) {
+            return DELTA_STATUS_STOP;
+        } else {
+            return DELTA_STATUS_OK;
+        }
+    } else {
+        return DELTA_STATUS_OK;
+    }
 }
 
 
@@ -1002,6 +1027,28 @@ size_t model_get_local_temperature_humidity_error_level(model_t *pmodel) {
         return 2;
     } else if (model_get_humidity(pmodel) > model_get_humidity_warn(pmodel) ||
                model_get_temperature(pmodel) > model_get_temperature_warn(pmodel)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+
+size_t model_get_humidity_error_level(model_t *pmodel, int16_t humidity) {
+    if (humidity > model_get_humidity_stop(pmodel)) {
+        return 2;
+    } else if (humidity > model_get_humidity_warn(pmodel)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+
+size_t model_get_temperature_error_level(model_t *pmodel, int16_t temperature) {
+    if (temperature > model_get_temperature_stop(pmodel)) {
+        return 2;
+    } else if (temperature > model_get_temperature_warn(pmodel)) {
         return 1;
     } else {
         return 0;

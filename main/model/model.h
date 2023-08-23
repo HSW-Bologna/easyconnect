@@ -119,6 +119,13 @@ typedef enum {
 } system_alarm_t;
 
 
+typedef enum {
+    DELTA_STATUS_OK = 0,
+    DELTA_STATUS_WARN,
+    DELTA_STATUS_STOP,
+} delta_status_t;
+
+
 typedef struct {
     int            temperature;
     int            humidity;
@@ -262,15 +269,17 @@ int model_get_raw_pressures(model_t *pmodel, sensor_group_report_t *pressures);
 int model_get_pressures(model_t *pmodel, sensor_group_report_t *pressures);
 int model_get_temperatures_humidities(model_t *pmodel, sensor_group_report_t *group_1, sensor_group_report_t *group_2);
 int model_get_max_group_per_mode(model_t *pmodel, uint16_t mode);
-const char *model_get_ssid(model_t *pmodel);
-uint8_t     model_is_pressure_difference_ok(model_t *pmodel, int16_t p1, int16_t p2);
-size_t      model_get_temperature_difference_level(model_t *pmodel, int16_t t1, int16_t t2);
-size_t      model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t h2);
-size_t      model_get_local_temperature_humidity_error_level(model_t *pmodel);
-int         model_calibrate_pressures(model_t *pmodel);
-int16_t     model_get_device_pressure(model_t *pmodel, device_t device);
-uint8_t     model_is_system_locked(model_t *pmodel);
-uint8_t     model_is_any_fatal_alarm(model_t *pmodel);
+const char    *model_get_ssid(model_t *pmodel);
+delta_status_t model_get_pressure_delta_status(model_t *pmodel, int16_t p1, int16_t p2);
+size_t         model_get_temperature_difference_level(model_t *pmodel, int16_t t1, int16_t t2);
+size_t         model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t h2);
+size_t         model_get_local_temperature_humidity_error_level(model_t *pmodel);
+int            model_calibrate_pressures(model_t *pmodel);
+int16_t        model_get_device_pressure(model_t *pmodel, device_t device);
+uint8_t        model_is_any_fatal_alarm(model_t *pmodel);
+size_t         model_get_ok_devices_count(model_t *pmodel);
+size_t         model_get_humidity_error_level(model_t *pmodel, int16_t humidity);
+size_t         model_get_temperature_error_level(model_t *pmodel, int16_t temperature);
 
 
 GETTERNSETTER(humidity, humidity);

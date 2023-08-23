@@ -81,9 +81,7 @@ static int off_entry(model_t *pmodel) {
 static int off_event_manager(model_t *pmodel, state_event_code_t event) {
     switch (event) {
         case STATE_EVENT_FAN_START:
-            if (model_is_system_locked(pmodel)) {
-                return -1;
-            } else if (model_is_any_fatal_alarm(pmodel)) {
+            if (model_is_any_fatal_alarm(pmodel)) {
                 pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
                 return -1;
@@ -95,9 +93,7 @@ static int off_event_manager(model_t *pmodel, state_event_code_t event) {
             return MODEL_FAN_STATE_CLEANING;
 
         case STATE_EVENT_FAN_UVC_ON:
-            if (model_is_system_locked(pmodel)) {
-                return -1;
-            } else if (model_is_any_fatal_alarm(pmodel)) {
+            if (model_is_any_fatal_alarm(pmodel)) {
                 pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
                 return -1;
@@ -109,9 +105,7 @@ static int off_event_manager(model_t *pmodel, state_event_code_t event) {
             return MODEL_FAN_STATE_CLEANING;
 
         case STATE_EVENT_FAN_START_CALIBRATION:
-            if (model_is_system_locked(pmodel)) {
-                return -1;
-            } else if (model_is_any_fatal_alarm(pmodel)) {
+            if (model_is_any_fatal_alarm(pmodel)) {
                 pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
                 return -1;

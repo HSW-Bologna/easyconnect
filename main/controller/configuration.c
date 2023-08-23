@@ -99,8 +99,10 @@ void configuration_load(model_t *pmodel) {
                       (char *)IMMISSION_PERCENTAGES_KEY);
     storage_load_blob(&pmodel->configuration.pressure_differences_for_speed, MAX_FAN_SPEED * 2,
                       (char *)PRESSURE_DIFFERENCES_KEY);
-    storage_load_uint8(&pmodel->configuration.pressure_difference_deviation_warn, (char *)PRESSURE_DIFFERENCE_WARN_KEY);
-    storage_load_uint8(&pmodel->configuration.pressure_difference_deviation_stop, (char *)PRESSURE_DIFFERENCE_STOP_KEY);
+    storage_load_uint8((uint8_t *)&pmodel->configuration.pressure_difference_deviation_warn,
+                       (char *)PRESSURE_DIFFERENCE_WARN_KEY);
+    storage_load_uint8((uint8_t *)&pmodel->configuration.pressure_difference_deviation_stop,
+                       (char *)PRESSURE_DIFFERENCE_STOP_KEY);
 
     storage_load_uint8(&pmodel->configuration.first_humidity_delta, (char *)FIRST_HUMIDITY_DELTA_KEY);
     storage_load_uint8(&pmodel->configuration.second_humidity_delta, (char *)SECOND_HUMIDITY_DELTA_KEY);

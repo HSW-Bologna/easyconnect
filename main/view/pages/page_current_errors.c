@@ -28,7 +28,7 @@ static void *create_page(model_t *model, void *extra) {
 static void open_page(model_t *pmodel, void *arg) {
     struct page_data *pdata = arg;
 
-    lv_obj_t *title = view_common_title(BUTTON_BACK_ID, view_intl_get_string(pmodel, STRINGS_ERRORI), NULL);
+    view_common_title(BUTTON_BACK_ID, view_intl_get_string(pmodel, STRINGS_ERRORI), NULL);
 
     lv_obj_t *cont = create_error_list();
     pdata->cont    = cont;

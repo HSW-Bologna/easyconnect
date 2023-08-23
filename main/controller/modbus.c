@@ -365,6 +365,7 @@ static void modbus_task(void *args) {
                     if (read_holding_registers(&master, registers, message.address,
                                                EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION,
                                                sizeof(registers) / sizeof(registers[0]))) {
+                        error_resp.success_code = MODBUS_RESPONSE_CODE_INFO;
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         response.firmware_version = registers[0];

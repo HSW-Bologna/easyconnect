@@ -37,12 +37,14 @@ static int      initialize_time(void);
 static void     system_shutdown(model_t *pmodel);
 
 
-static const char   *TAG               = "Controller";
-static uint8_t       refresh_devices   = 1;
-static uint8_t       update_time       = 1;
-static uint8_t       first_update_loop = 1;
-static uint8_t       scanning          = 0;
-static QueueHandle_t queue             = NULL;
+static const char   *TAG                  = "Controller";
+static uint8_t       refresh_devices      = 1;
+static uint8_t       update_time          = 1;
+static uint8_t       first_update_loop    = 1;
+static uint8_t       scanning             = 0;
+static uint8_t       refreshing           = 0;
+static uint8_t       last_refresh_address = 0;
+static QueueHandle_t queue                = NULL;
 
 
 static void delay_ms(unsigned long ms) {
@@ -155,11 +157,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER: {
-            if (model_is_system_locked(pmodel)) {
-                ESP_LOGI(TAG, "Attempt failed due to alarm");
-                buzzer_beep(2, 100, 50, model_get_buzzer_volume(pmodel));
-                break;
-            } else if (model_is_any_fatal_alarm(pmodel)) {
+            if (model_is_any_fatal_alarm(pmodel)) {
                 ESP_LOGI(TAG, "Attempt failed due to alarm");
                 buzzer_beep(2, 100, 50, model_get_buzzer_volume(pmodel));
                 pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
@@ -203,11 +201,16 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
 
         case VIEW_CONTROLLER_MESSAGE_CODE_REFRESH_DEVICES:
             refresh_devices = 1;
+            refreshing      = 1;
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_AUTOMATIC_COMMISSIONING:
             model_delete_all_devices(pmodel);
             modbus_automatic_commissioning(msg->expected_devices);
+            for (size_t i = 1; i < MODBUS_MAX_DEVICES; i++) {
+                // Clear all devices
+                configuration_save_device_data(model_get_device(pmodel, i));
+            }
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO: {
@@ -380,8 +383,9 @@ void controller_manage(model_t *pmodel) {
         uint8_t address          = model_get_next_device_address(pmodel, starting_address);
         while (address != starting_address) {
             modbus_read_device_info(address);
-            starting_address = address;
-            address          = model_get_next_device_address(pmodel, starting_address);
+            last_refresh_address = address;
+            starting_address     = address;
+            address              = model_get_next_device_address(pmodel, starting_address);
         }
         refresh_devices = 0;
         refreshts       = get_millis();
@@ -407,6 +411,12 @@ void controller_manage(model_t *pmodel) {
                 break;
 
             case MODBUS_RESPONSE_CODE_ERROR:
+                if (response.success_code == MODBUS_RESPONSE_CODE_INFO && response.address == last_refresh_address &&
+                    refreshing) {
+                    view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_REFRESH_DONE});
+                    refreshing = 0;
+                }
+
                 if (model_set_device_error(pmodel, response.address, 1)) {
                     ESP_LOGW(TAG, "Errore di comunicazione con %i", response.address);
                     LOG_DEVICE_COMMUNICATION_ERROR(response.address);
@@ -467,6 +477,11 @@ void controller_manage(model_t *pmodel) {
                         view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_NEW});
                     }
                     scanning = 1;
+                }
+
+                if (!response.scanning && response.address == last_refresh_address && refreshing) {
+                    view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_REFRESH_DONE});
+                    refreshing = 0;
                 }
 
                 device_t device = model_get_device(pmodel, response.address);
@@ -608,25 +623,34 @@ static void error_condition_on_device(model_t *pmodel, uint8_t address, uint8_t 
 
 
 static void system_shutdown(model_t *pmodel) {
-    if (pmodel->system_alarm == SYSTEM_ALARM_NONE) {
-        ESP_LOGW(TAG, "System shutdown!");
-        if (model_get_fan_state(pmodel)) {
-            controller_state_event(pmodel, STATE_EVENT_FAN_EMERGENCY_STOP);
-            pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
-        }
-        if (model_get_electrostatic_filter_state(pmodel)) {
-            controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
-            model_electrostatic_filter_off(pmodel);
-            pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
-        }
-        if (model_get_uvc_filter_state(pmodel)) {
-            controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
-            controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
-            controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
-            model_uvc_filter_off(pmodel);
-            pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
-        }
+    if (pmodel->system_alarm == SYSTEM_ALARM_OVERRULED) {
+        return;
+    }
 
+    uint8_t something_was_on = 0;
+
+    if (model_get_fan_state(pmodel)) {
+        controller_state_event(pmodel, STATE_EVENT_FAN_EMERGENCY_STOP);
+        pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
+        something_was_on     = 1;
+    }
+    if (model_get_electrostatic_filter_state(pmodel)) {
+        controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER, 0);
+        model_electrostatic_filter_off(pmodel);
+        pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
+        something_was_on     = 1;
+    }
+    if (model_get_uvc_filter_state(pmodel)) {
+        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1), 0);
+        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2), 0);
+        controller_update_class_output(pmodel, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3), 0);
+        model_uvc_filter_off(pmodel);
+        pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
+        something_was_on     = 1;
+    }
+
+    if (something_was_on) {
+        ESP_LOGI(TAG, "System shutdown!");
         view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
     }
 }

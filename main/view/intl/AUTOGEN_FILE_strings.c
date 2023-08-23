@@ -1,4 +1,4 @@
-const char *strings[97][2] = {
+const char *strings[99][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -96,5 +96,7 @@ const char *strings[97][2] = {
     {"Ok", "Ok", },
     {"E' stato rilevato un errore di sicurezza, per cui, l'impianto ha interrotto tutte le funzionalita che possono causare danni a cose e persone. CONTATTARE L'ASSISTENZA TECNICA", "A safety error has been detected, therefore, the system has interrupted all the functions that can cause damage to people and things. CONTACT TECHNICAL SUPPORT", },
     {"Si sta cercando di bypassare i sistemi di sicurezza dell'impianto. Si tratto di un operazione consentita solo ed esclusivamente a personale qualificato. Si declinano tutte le responsabilita per l'uso improprio ed incauto dell'impianto.", "An attempt is being made to bypass the plant's security systems. This is an operation permitted only and exclusively to qualified personnel. We decline all responsibility for the improper and careless use of the system.", },
+    {"Reset & IP Automatico", "Reset & Auto-assign IP", },
+    {"Al momento %s dispositivi stanno comunicando correttamente con il sistema. Quanti dispositivi sono collegati alla rete REC?", "Currently %s devices are communicating correctly with the system. How many devices are connected in the REC network?", },
 };
 

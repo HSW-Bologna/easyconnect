@@ -199,8 +199,8 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
                         case DELETE_BTN_ID: {
                             model_delete_device(pmodel, data->device.address);
-                            device_t device = {.address = data->device.address, .status = DEVICE_STATUS_NOT_CONFIGURED};
-                            configuration_save_device_data(device);
+                            configuration_save_device_data(model_get_device(pmodel, data->device.address));
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SAVE;
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
                             break;
                         }

@@ -49,6 +49,7 @@ typedef struct {
             size_t num_messages;
             char  *messages[MAX_NUM_MESSAGES];
         };
+        modbus_response_code_t success_code;
     };
 } modbus_response_t;
 
