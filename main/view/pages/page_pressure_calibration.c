@@ -69,6 +69,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 
     switch (event.code) {
         case VIEW_EVENT_CODE_OPEN:
+            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_PRESSURE_CALIBRATION;
             break;
 
         case VIEW_EVENT_CODE_STATE_UPDATE:
@@ -87,7 +88,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                 case LV_EVENT_CLICKED: {
                     switch (event.data.id) {
                         case BACK_BTN_ID:
-                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_FAN_OFF;
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_ALL_OFF;
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
                             break;
 
@@ -110,7 +111,7 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                                     update_page(pmodel, pdata);
                                     msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SET_FAN_SPEED;
                                 } else {
-                                    msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_FAN_OFF;
+                                    msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_ALL_OFF;
                                     msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
                                 }
                             }

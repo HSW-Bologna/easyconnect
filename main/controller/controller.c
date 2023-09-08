@@ -111,6 +111,13 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             if (!scanning) {
                 modbus_scan();
                 refresh_devices = 1;
+
+                controller_state_event(pmodel, STATE_EVENT_FAN_STOP);
+                model_uvc_filter_off(pmodel);
+                controller_state_event(pmodel, STATE_EVENT_FAN_UVC_OFF);
+                model_electrostatic_filter_off(pmodel);
+                controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER,
+                                               model_get_electrostatic_filter_state(pmodel));
             } else {
                 ESP_LOGI(TAG, "Already scanning!");
             }
@@ -152,8 +159,13 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             controller_state_event(pmodel, STATE_EVENT_FAN_START_CALIBRATION);
             break;
 
-        case VIEW_CONTROLLER_MESSAGE_CODE_FAN_OFF:
+        case VIEW_CONTROLLER_MESSAGE_CODE_ALL_OFF:
             controller_state_event(pmodel, STATE_EVENT_FAN_STOP);
+            model_uvc_filter_off(pmodel);
+            controller_state_event(pmodel, STATE_EVENT_FAN_UVC_OFF);
+            model_electrostatic_filter_off(pmodel);
+            controller_update_class_output(pmodel, DEVICE_CLASS_ELECTROSTATIC_FILTER,
+                                           model_get_electrostatic_filter_state(pmodel));
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER: {
@@ -553,7 +565,7 @@ void controller_manage(model_t *pmodel) {
     }
 
 
-    if (is_expired(heapts, get_millis(), 5000UL)) {
+    if (is_expired(heapts, get_millis(), 2000UL)) {
         // print_heap_status();
         controller_state_event(pmodel, STATE_EVENT_SENSORS_CHECK);
         heapts = get_millis();
@@ -565,12 +577,12 @@ void controller_manage(model_t *pmodel) {
 
 void controller_update_class_output(model_t *pmodel, uint16_t class, int value) {
     ESP_LOGI(TAG, "Setting output for class (generic) %X: %i", class, value);
-    modbus_set_class_output(class, value);
+    modbus_set_class_output(class, value, pmodel->system_alarm == SYSTEM_ALARM_OVERRULED);
 
     uint8_t starting_address = 0;
     uint8_t address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
     while (address != starting_address) {
-        modbus_set_device_output(address, value > 0);
+        modbus_set_device_output(address, value > 0, pmodel->system_alarm == SYSTEM_ALARM_OVERRULED);
         starting_address = address;
         address          = model_get_next_device_address_by_class(pmodel, starting_address, class);
     }
@@ -651,7 +663,7 @@ static void system_shutdown(model_t *pmodel) {
 
     if (something_was_on) {
         ESP_LOGI(TAG, "System shutdown!");
-        view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
+        view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_SHUTDOWN});
     }
 }
 

@@ -57,8 +57,9 @@ struct __attribute__((packed)) task_message {
     uint8_t             address;
     union {
         struct {
-            int value;
             uint16_t class;
+            uint8_t value;
+            uint8_t bypass;
         };
         uint16_t expected_devices;
         uint16_t num_messages;
@@ -85,7 +86,7 @@ static void modbus_task(void *args);
 static int  write_holding_register(ModbusMaster *master, uint8_t address, uint16_t index, uint16_t data);
 static int  write_holding_registers(ModbusMaster *master, uint8_t address, uint16_t starting_address, uint16_t *data,
                                     size_t num);
-static int  write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int value);
+static int  write_coils(ModbusMaster *master, uint8_t address, uint16_t index, size_t num_values, uint8_t *values);
 static int  read_holding_registers(ModbusMaster *master, uint16_t *registers, uint8_t address, uint16_t start,
                                    uint16_t count);
 static void send_custom_function(ModbusMaster *master, uint8_t address, uint8_t function, uint8_t *data, size_t len);
@@ -186,8 +187,13 @@ void modbus_update_time(void) {
 }
 
 
-void modbus_set_class_output(uint16_t class, int value) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_SET_CLASS_OUTPUT, .class = class, .value = value};
+void modbus_set_class_output(uint16_t class, uint8_t value, uint8_t bypass) {
+    struct task_message message = {
+        .code   = TASK_MESSAGE_CODE_SET_CLASS_OUTPUT,
+        .class  = class,
+        .value  = value,
+        .bypass = bypass,
+    };
     xQueueSend(messageq, &message, 0);
 }
 
@@ -205,8 +211,13 @@ void modbus_scan(void) {
 }
 
 
-void modbus_set_device_output(uint8_t address, int value) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT, .address = address, .value = value};
+void modbus_set_device_output(uint8_t address, uint8_t value, uint8_t bypass) {
+    struct task_message message = {
+        .code    = TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
+        .address = address,
+        .value   = value,
+        .bypass  = bypass,
+    };
     xQueueSend(messageq, &message, 0);
 }
 
@@ -447,7 +458,8 @@ static void modbus_task(void *args) {
                 case TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT: {
                     response.code    = MODBUS_RESPONSE_CODE_DEVICE_OK;
                     response.address = message.address;
-                    if (write_coil(&master, message.address, 0, message.value)) {
+                    uint8_t coils    = (message.value << 0) | (message.bypass << 1);
+                    if (write_coils(&master, message.address, 0, 2, &coils)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         xQueueSend(responseq, &response, portMAX_DELAY);
@@ -639,7 +651,12 @@ static void modbus_task(void *args) {
                 }
 
                 case TASK_MESSAGE_CODE_SET_CLASS_OUTPUT: {
-                    uint8_t data[] = {(message.class >> 8) & 0xFF, message.class & 0xFF, message.value};
+                    uint8_t data[] = {
+                        (message.class >> 8) & 0xFF,
+                        message.class & 0xFF,
+                        message.value,
+                        message.bypass,
+                    };
                     send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_SET_CLASS_OUTPUT,
                                          data, sizeof(data));
                     break;
@@ -806,13 +823,13 @@ static int write_holding_register(ModbusMaster *master, uint8_t address, uint16_
 }
 
 
-static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int value) {
+static int write_coils(ModbusMaster *master, uint8_t address, uint16_t index, size_t num_values, uint8_t *values) {
     uint8_t buffer[MODBUS_RESPONSE_05_LEN] = {0};
     int     res                            = 0;
     size_t  counter                        = 0;
 
     do {
-        ModbusErrorInfo err = modbusBuildRequest05RTU(master, address, index, value);
+        ModbusErrorInfo err = modbusBuildRequest15RTU(master, address, index, num_values, values);
         assert(modbusIsOk(err));
         rs485_flush();
         rs485_write(modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));

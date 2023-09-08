@@ -12,6 +12,7 @@
 
 
 static uint8_t alarm_for_device(model_t *pmodel, size_t i);
+static int16_t get_expected_pressure_delta(model_t *pmodel);
 
 
 static const char *TAG = "Model";
@@ -217,18 +218,27 @@ uint16_t model_get_fan_percentage_correction(model_t *pmodel) {
 
     uint16_t correction = 0;
 
-    if (ABS(ths[DEVICE_GROUP_1].temperature - ths[DEVICE_GROUP_2].temperature) >
-        model_get_second_temperature_delta(pmodel)) {
-        correction += model_get_second_temperature_speed_raise(pmodel);
-    } else if (ABS(ths[DEVICE_GROUP_1].temperature - ths[DEVICE_GROUP_2].temperature) >
-               model_get_first_temperature_delta(pmodel)) {
-        correction += model_get_first_temperature_speed_raise(pmodel);
+    switch (model_get_temperature_difference_level(pmodel, ths[DEVICE_GROUP_1].temperature,
+                                                   ths[DEVICE_GROUP_2].temperature)) {
+        case 1:
+            correction += model_get_first_temperature_speed_raise(pmodel);
+            break;
+        case 2:
+            correction += model_get_second_temperature_speed_raise(pmodel);
+            break;
+        default:
+            break;
     }
 
-    if (ths[DEVICE_GROUP_1].humidity > model_get_second_humidity_delta(pmodel)) {
-        correction += model_get_second_humidity_speed_raise(pmodel);
-    } else if (ths[DEVICE_GROUP_1].humidity > model_get_first_humidity_delta(pmodel)) {
-        correction += model_get_first_humidity_speed_raise(pmodel);
+    switch (model_get_humidity_difference_level(pmodel, ths[DEVICE_GROUP_1].humidity, ths[DEVICE_GROUP_2].humidity)) {
+        case 1:
+            correction += model_get_first_humidity_speed_raise(pmodel);
+            break;
+        case 2:
+            correction += model_get_second_humidity_speed_raise(pmodel);
+            break;
+        default:
+            break;
     }
 
     return correction;
@@ -978,18 +988,24 @@ void model_light_switch(model_t *model) {
 
 delta_status_t model_get_pressure_delta_status(model_t *pmodel, int16_t p1, int16_t p2) {
     if (model_get_fan_state(pmodel)) {
-        size_t  speed                           = model_get_fan_speed(pmodel);
-        int16_t maximum_allowed_difference_warn = (pmodel->configuration.pressure_differences_for_speed[speed] *
-                                                   model_get_pressure_difference_deviation_warn(pmodel)) /
-                                                  100;
-        int16_t maximum_allowed_difference_stop = (pmodel->configuration.pressure_differences_for_speed[speed] *
-                                                   model_get_pressure_difference_deviation_stop(pmodel)) /
-                                                  100;
+        int32_t pressure_difference_for_speed = get_expected_pressure_delta(pmodel);
+        int32_t maximum_allowed_difference_warn =
+            (pressure_difference_for_speed * model_get_pressure_difference_deviation_warn(pmodel)) / 100;
+        int32_t maximum_allowed_difference_stop =
+            (pressure_difference_for_speed * model_get_pressure_difference_deviation_stop(pmodel)) / 100;
+        // ESP_LOGI(TAG, "expected %i", pressure_difference_for_speed);
+        //  ESP_LOGI(TAG, "%i %i %4i %4i %i %i %i", model_get_pressure_difference_deviation_warn(pmodel),
+        //           model_get_pressure_difference_deviation_stop(pmodel), p1, p2, pressure_difference_for_speed,
+        //           maximum_allowed_difference_warn, maximum_allowed_difference_stop);
 
-        if (ABS(p1 - p2) > maximum_allowed_difference_warn) {
-            return DELTA_STATUS_WARN;
-        } else if (ABS(p2 - p2) > maximum_allowed_difference_stop) {
+        int32_t actual_delta = ABS(p1 - p2);
+
+        if (actual_delta < pressure_difference_for_speed - maximum_allowed_difference_stop ||
+            actual_delta > pressure_difference_for_speed + maximum_allowed_difference_stop) {
             return DELTA_STATUS_STOP;
+        } else if (actual_delta < pressure_difference_for_speed - maximum_allowed_difference_warn ||
+                   actual_delta > pressure_difference_for_speed + maximum_allowed_difference_warn) {
+            return DELTA_STATUS_WARN;
         } else {
             return DELTA_STATUS_OK;
         }
@@ -1059,4 +1075,49 @@ size_t model_get_temperature_error_level(model_t *pmodel, int16_t temperature) {
 static uint8_t alarm_for_device(model_t *pmodel, size_t i) {
     return ((pmodel->devices[i].status != DEVICE_STATUS_NOT_CONFIGURED && (pmodel->devices[i].alarms & 0xFF) > 0) ||
             pmodel->devices[i].status == DEVICE_STATUS_COMMUNICATION_ERROR);
+}
+
+
+static int16_t get_expected_pressure_delta(model_t *pmodel) {
+    size_t speed =
+        model_get_fan_state(pmodel) == MODEL_FAN_STATE_CLEANING ? MAX_FAN_SPEED - 1 : model_get_fan_speed(pmodel);
+    int16_t correction = model_get_fan_percentage_correction(pmodel);
+
+    uint16_t percentage = model_get_siphoning_percentage(pmodel, speed);
+    percentage          = percentage + correction > 100 ? 100 : percentage + correction;
+
+    uint8_t x_coordinates[MAX_FAN_SPEED + 1] = {
+        model_get_siphoning_percentage(pmodel, 0), model_get_siphoning_percentage(pmodel, 1),
+        model_get_siphoning_percentage(pmodel, 2), model_get_siphoning_percentage(pmodel, 3),
+        model_get_siphoning_percentage(pmodel, 4), model_get_siphoning_percentage(pmodel, 4),
+    };
+
+    uint8_t y_coordinates[MAX_FAN_SPEED + 1] = {
+        pmodel->configuration.pressure_differences_for_speed[0],
+        pmodel->configuration.pressure_differences_for_speed[1],
+        pmodel->configuration.pressure_differences_for_speed[2],
+        pmodel->configuration.pressure_differences_for_speed[3],
+        pmodel->configuration.pressure_differences_for_speed[4],
+        pmodel->configuration.pressure_differences_for_speed[4],
+    };
+
+    size_t starting_index = 0;
+    for (starting_index = 0; starting_index < MAX_FAN_SPEED; starting_index++) {
+        if (x_coordinates[starting_index + 1] >= percentage) {
+            break;
+        }
+    }
+
+    int16_t x1 = x_coordinates[starting_index];
+    int16_t y1 = y_coordinates[starting_index];
+    int16_t x2 = x_coordinates[starting_index + 1];
+    int16_t y2 = y_coordinates[starting_index + 1];
+
+    if (percentage == x1) {
+        return y1;
+    } else if (percentage == x2) {
+        return y2;
+    } else {
+        return ((y2 - y1) * (percentage - x1)) / (x2 - x1) + y1;
+    }
 }

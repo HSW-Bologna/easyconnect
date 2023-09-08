@@ -49,7 +49,7 @@ static void update_info(model_t *pmodel, struct page_data *data) {
     view_common_get_class_string(pmodel, data->device.class, device_type, sizeof(device_type));
 
     lv_label_set_text_fmt(data->lbl_info, "%s\n%s %i\n%s %i.%i.%i", device_type,
-                          view_intl_get_string(pmodel, STRINGS_GRUPPO), CLASS_GET_GROUP(data->device.class),
+                          view_intl_get_string(pmodel, STRINGS_GRUPPO), CLASS_GET_GROUP(data->device.class) + 1,
                           view_intl_get_string(pmodel, STRINGS_VERSIONE), (data->device.firmware_version >> 10) & 0x3F,
                           (data->device.firmware_version >> 6) & 0xF, (data->device.firmware_version >> 0) & 0x3F);
 

@@ -198,6 +198,10 @@ static int fan_running_event_manager(model_t *pmodel, state_event_code_t event) 
         case STATE_EVENT_FAN_EMERGENCY_STOP:
             return MODEL_FAN_STATE_OFF;
 
+        case STATE_EVENT_SENSORS_CHECK:
+            controller_update_fan_percentage(pmodel, model_get_fan_speed(pmodel));
+            break;
+
         case STATE_EVENT_FAN_CHANGE_SPEED:
             ESP_LOGI(TAG, "Speed change");
             controller_update_fan_percentage(pmodel, model_get_fan_speed(pmodel));

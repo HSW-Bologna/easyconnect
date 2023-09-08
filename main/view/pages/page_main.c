@@ -381,7 +381,7 @@ struct page_data {
     uint8_t                   imm_alarm;
     unsigned long             fan_btn_ts;
     uint8_t                   fan_long_clicked;
-    uint8_t                   is_refreshing;
+    uint8_t                   is_scanning;
     uint16_t                  devices_to_configure;
     auto_configuration_step_t auto_configuration_step;
     uint16_t                  found_devices;
@@ -697,6 +697,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
         if (pmodel->sensors_read) {
             model_get_pressures(pmodel, pressures);
+
             delta_status_t delta_status =
                 model_get_pressure_delta_status(pmodel, pressures[0].pressure, pressures[1].pressure);
 
@@ -714,17 +715,17 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
             view_common_set_hidden(pdata->row_pressure.img_status, !pressures[0].valid || !pressures[1].valid);
 
             if (pressures[0].valid && pressures[0].errors) {
-                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_left, "%+i(!)", pressures[0].pressure);
+                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_left, "%i(!)", pressures[0].pressure);
             } else if (pressures[0].valid) {
-                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_left, "%+i", pressures[0].pressure);
+                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_left, "%i", pressures[0].pressure);
             } else {
                 lv_label_set_text(pdata->row_pressure.lbl_data_left, "---");
             }
 
             if (pressures[1].valid && pressures[1].errors) {
-                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "%+i(!)", pressures[1].pressure);
+                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "%i(!)", pressures[1].pressure);
             } else if (pressures[1].valid) {
-                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "%+i", pressures[1].pressure);
+                lv_label_set_text_fmt(pdata->row_pressure.lbl_data_right, "%i", pressures[1].pressure);
             } else {
                 lv_label_set_text(pdata->row_pressure.lbl_data_right, "---");
             }
@@ -904,7 +905,7 @@ static void *create_page(model_t *model, void *extra) {
     data->cont_subpage            = NULL;
     data->fan_btn_ts              = 0;
     data->fan_long_clicked        = 0;
-    data->is_refreshing           = 0;
+    data->is_scanning             = 0;
     data->auto_configuration_step = AUTO_CONFIGURATION_STEP_DONE;
 
     data->system_alarm_message = SYSTEM_ALARM_MESSAGE_1;
@@ -1170,6 +1171,12 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
     view_message_t    msg  = {0};
 
     switch (event.code) {
+        case VIEW_EVENT_CODE_STATE_SHUTDOWN:
+            data->system_alarm_message = SYSTEM_ALARM_MESSAGE_1;
+            update_all_buttons(model, data);
+            update_system_alert(model, data);
+            break;
+
         case VIEW_EVENT_CODE_STATE_UPDATE:
             update_all_buttons(model, data);
             update_system_alert(model, data);
@@ -1205,8 +1212,8 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
             }
             break;
 
-        case VIEW_EVENT_CODE_DEVICE_REFRESH_DONE:
-            data->is_refreshing = 0;
+        case VIEW_EVENT_CODE_DEVICE_SEARCH_DONE:
+            data->is_scanning = 0;
             update_device_list(model, data);
             break;
 
@@ -1347,7 +1354,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             size_t i = event.data.id - BTN_PRESSURE_DIFFERENCE_0_MOD;
 
                             int16_t min = 0;
-                            int16_t max = 1000;
+                            int16_t max = 9999;
 
                             if (i > 0) {
                                 min = model_get_pressure_difference(model, i - 1);
@@ -1523,6 +1530,9 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                                 case PAGE_ROUTE_MAIN_PAGE:
                                 case PAGE_ROUTE_SYSTEM_SETUP:
                                     change_page_route(model, data, PAGE_ROUTE_MAIN_PAGE);
+                                    create_sensor_rows(model, data);
+                                    update_info(model, data);
+                                    update_device_sensors(model, data);
                                     break;
 
                                 case PAGE_ROUTE_REC_SYSTEM:
@@ -1607,12 +1617,13 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_SCAN_ID:
-                            data->is_refreshing = 1;
-                            msg.cmsg.code       = VIEW_CONTROLLER_MESSAGE_CODE_REFRESH_DEVICES;
+                            data->is_scanning = 1;
+                            msg.cmsg.code     = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_SCAN;
                             update_device_list(model, data);
                             break;
 
                         case BTN_RESET_ID:
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_ALL_OFF;
                             if (data->page_route == PAGE_ROUTE_REC_AUTO_CONFIG) {
                                 switch (data->auto_configuration_step) {
                                     case AUTO_CONFIGURATION_STEP_DONE:
@@ -1626,7 +1637,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                                     default:
                                         break;
                                 }
-                            } else if (!data->is_refreshing) {
+                            } else if (!data->is_scanning) {
                                 change_page_route(model, data, PAGE_ROUTE_REC_AUTO_CONFIG);
                             }
                             break;
@@ -1664,7 +1675,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
 
                         case BTN_START_CALIBRATION:
                             model_set_fan_speed(model, 0);
-                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_FAN_OFF;
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_ALL_OFF;
                             msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
                             msg.vmsg.page = &page_pressure_calibration;
                             break;
@@ -1908,7 +1919,7 @@ static lv_obj_t *bordered_cont(lv_obj_t *root) {
 static status_row_t create_status_row(lv_obj_t *root) {
     const uint16_t row_height        = 48;
     const uint16_t cell_width        = 48;
-    const uint16_t cell_double_width = 120;
+    const uint16_t cell_double_width = 130;
     const uint16_t cell_spacing      = 4;
 
     lv_obj_t *cont = lv_cont_create(root, NULL);
@@ -1935,7 +1946,7 @@ static status_row_t create_status_row(lv_obj_t *root) {
 
     lv_obj_t *lbl_data_left = lv_label_create(cont_left, NULL);
     lv_obj_set_style_local_text_font(lbl_data_left, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
-    lv_obj_align(lbl_data_left, NULL, LV_ALIGN_IN_LEFT_MID, 4, 0);
+    lv_obj_align(lbl_data_left, NULL, LV_ALIGN_IN_LEFT_MID, 2, 0);
     lv_obj_set_auto_realign(lbl_data_left, 1);
 
     lv_obj_t *lbl_unit_left = lv_label_create(cont_left, NULL);
@@ -1954,7 +1965,7 @@ static status_row_t create_status_row(lv_obj_t *root) {
     lv_obj_t *lbl_data_right = lv_label_create(cont_right, NULL);
     lv_obj_set_style_local_text_font(lbl_data_right, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT,
                                      lv_theme_get_font_subtitle());
-    lv_obj_align(lbl_data_right, NULL, LV_ALIGN_IN_LEFT_MID, 4, 0);
+    lv_obj_align(lbl_data_right, NULL, LV_ALIGN_IN_LEFT_MID, 2, 0);
     lv_obj_set_auto_realign(lbl_data_right, 1);
 
     lv_obj_t *lbl_unit_right = lv_label_create(cont_right, NULL);
@@ -2109,11 +2120,10 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
         return;
     }
 
-    lv_img_set_src(pdata->rec_devices.img_btn_reset,
-                   !pdata->is_refreshing ? &img_btn_reset_yellow : &img_btn_reset_gray);
+    lv_img_set_src(pdata->rec_devices.img_btn_reset, !pdata->is_scanning ? &img_btn_reset_yellow : &img_btn_reset_gray);
     lv_img_set_src(pdata->rec_devices.img_btn_update,
-                   !pdata->is_refreshing ? &img_btn_update_green : &img_btn_update_red);
-    view_common_set_hidden(pdata->rec_devices.spinner, !pdata->is_refreshing);
+                   !pdata->is_scanning ? &img_btn_update_green : &img_btn_update_red);
+    view_common_set_hidden(pdata->rec_devices.spinner, !pdata->is_scanning);
 
     for (size_t i = 0; i < pdata->rec_devices.count; i++) {
         lv_obj_t *btn               = pdata->rec_devices.device_info_widgets[i].btn;
@@ -2131,8 +2141,8 @@ static void update_device_list(model_t *pmodel, struct page_data *pdata) {
         lv_obj_set_style_local_image_recolor(img, LV_IMG_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GRAY);
         lv_obj_set_style_local_image_recolor_opa(
             img, LV_IMG_PART_MAIN, LV_STATE_DEFAULT,
-            (device.status == DEVICE_STATUS_COMMUNICATION_ERROR || pdata->is_refreshing) ? LV_OPA_90 : LV_OPA_TRANSP);
-        if (pdata->is_refreshing) {
+            (device.status == DEVICE_STATUS_COMMUNICATION_ERROR || pdata->is_scanning) ? LV_OPA_90 : LV_OPA_TRANSP);
+        if (pdata->is_scanning) {
             lv_btn_set_state(btn, LV_BTN_STATE_DISABLED);
         } else if (lv_btn_get_state(btn) == LV_BTN_STATE_DISABLED) {
             lv_btn_set_state(btn, LV_BTN_STATE_RELEASED);
@@ -2416,7 +2426,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_obj_set_size(btn, 56, 56);
             lv_obj_t *img = lv_img_create(btn, NULL);
             lv_img_set_src(img, &img_btn_update_green);
-            lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -8);
+            lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -20, -8);
             view_register_default_callback(btn, BTN_SCAN_ID);
             pdata->rec_devices.img_btn_update = img;
 
@@ -2424,7 +2434,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
             lv_obj_set_size(btn, 56, 56);
             img = lv_img_create(btn, NULL);
             lv_img_set_src(img, &img_btn_reset_yellow);
-            lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -8, -8 - 56 - 4);
+            lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -20, -8 - 56 - 4);
             view_register_default_callback(btn, BTN_RESET_ID);
             pdata->rec_devices.img_btn_reset = img;
 
@@ -2917,7 +2927,7 @@ static void change_page_route(model_t *pmodel, struct page_data *pdata, page_rou
                 BTN_HUMTEMP_FIRST_DELTA_MOD,
                 BTN_HUMTEMP_SECOND_DELTA_MOD,
                 BTN_HUMTEMP_FIRST_CORRECTION_MOD,
-                BTN_HUMTEMP_FIRST_CORRECTION_MOD,
+                BTN_HUMTEMP_SECOND_CORRECTION_MOD,
             };
             size_t label_index = 0;
 
@@ -3107,7 +3117,7 @@ static void update_menus(model_t *pmodel, struct page_data *pdata) {
 
 
 static void create_sensor_rows(model_t *model, struct page_data *data) {
-    const uint16_t row_base_x_shift = 20;
+    const uint16_t row_base_x_shift = 18;
     const uint16_t row_base_y_shift = 72;
 
     uint16_t temperature_humidity_count = model_get_mode_count(model, DEVICE_MODE_TEMPERATURE_HUMIDITY);
@@ -3119,6 +3129,7 @@ static void create_sensor_rows(model_t *model, struct page_data *data) {
     if (pressure_count + pressure_temperature_humidity_count > 0) {
         if (data->row_pressure.obj == NULL) {
             data->row_pressure = create_status_row(lv_scr_act());
+            lv_obj_move_background(data->row_pressure.obj);
         }
         lv_obj_align(data->row_pressure.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, row_base_y_shift);
     } else {
@@ -3136,6 +3147,7 @@ static void create_sensor_rows(model_t *model, struct page_data *data) {
 
         if (data->row_temperature.obj == NULL) {
             data->row_temperature = create_status_row(lv_scr_act());
+            lv_obj_move_background(data->row_temperature.obj);
         }
         if (data->row_pressure.obj == NULL) {
             lv_obj_align(data->row_temperature.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, row_base_y_shift);
@@ -3145,6 +3157,7 @@ static void create_sensor_rows(model_t *model, struct page_data *data) {
 
         if (data->row_humidity.obj == NULL) {
             data->row_humidity = create_status_row(lv_scr_act());
+            lv_obj_move_background(data->row_humidity.obj);
         }
         lv_obj_align(data->row_humidity.obj, data->row_temperature.obj, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
     } else {
@@ -3159,6 +3172,7 @@ static void create_sensor_rows(model_t *model, struct page_data *data) {
 
         if (data->row_local_temperature.obj == NULL) {
             data->row_local_temperature = create_status_row(lv_scr_act());
+            lv_obj_move_background(data->row_local_temperature.obj);
         }
         if (data->row_pressure.obj == NULL) {
             lv_obj_align(data->row_local_temperature.obj, NULL, LV_ALIGN_IN_TOP_MID, row_base_x_shift, 120);
