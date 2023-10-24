@@ -143,10 +143,36 @@ static void update_page(model_t *pmodel, struct page_data *pdata) {
                 break;
             }
 
+            case WIFI_STATE_AUTH_ERROR: {
+                if (strlen(model_get_ssid(pmodel)) == 0) {
+                    lv_label_set_text(pdata->lbl_connection, view_intl_get_string(pmodel, STRINGS_NON_CONNESSO));
+                } else {
+                    lv_label_set_text_fmt(pdata->lbl_connection, "%s (%s) %s",
+                                          view_intl_get_string(pmodel, STRINGS_AUTENTICAZIONE_FALLITA),
+                                          model_get_ssid(pmodel), dots_string(pdata->dots));
+                }
+                break;
+            }
+
+            case WIFI_STATE_SSID_NOT_FOUND_ERROR: {
+                if (strlen(model_get_ssid(pmodel)) == 0) {
+                    lv_label_set_text(pdata->lbl_connection, view_intl_get_string(pmodel, STRINGS_NON_CONNESSO));
+                } else {
+                    lv_label_set_text_fmt(pdata->lbl_connection, "%s (%s) %s",
+                                          view_intl_get_string(pmodel, STRINGS_RETE_NON_TROVATA),
+                                          model_get_ssid(pmodel), dots_string(pdata->dots));
+                }
+                break;
+            }
+
             case WIFI_STATE_CONNECTING: {
-                lv_label_set_text_fmt(pdata->lbl_connection, "%s (%s) %s",
-                                      view_intl_get_string(pmodel, STRINGS_CONNESSIONE_IN_CORSO),
-                                      model_get_ssid(pmodel), dots_string(pdata->dots));
+                if (strlen(model_get_ssid(pmodel)) == 0) {
+                    lv_label_set_text(pdata->lbl_connection, view_intl_get_string(pmodel, STRINGS_NON_CONNESSO));
+                } else {
+                    lv_label_set_text_fmt(pdata->lbl_connection, "%s (%s) %s",
+                                          view_intl_get_string(pmodel, STRINGS_CONNESSIONE_IN_CORSO),
+                                          model_get_ssid(pmodel), dots_string(pdata->dots));
+                }
                 break;
             }
 

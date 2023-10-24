@@ -101,8 +101,10 @@ typedef enum {
     STRINGS_SYSTEM_ALERT_2,
     STRINGS_RESET_AUTO_IP,
     STRINGS_AL_MOMENTO_N_DISPOSITIVI_STANNO_COMUNICANDO,
+    STRINGS_AUTENTICAZIONE_FALLITA,
+    STRINGS_RETE_NON_TROVATA,
 } strings_t;
 
-extern const char *strings[99][2];
+extern const char *strings[101][2];
 
 #endif

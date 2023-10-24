@@ -20,6 +20,13 @@
 #include "gel/timer/timecheck.h"
 
 
+LV_IMG_DECLARE(img_wifi_none);
+LV_IMG_DECLARE(img_wifi_0);
+LV_IMG_DECLARE(img_wifi_1);
+LV_IMG_DECLARE(img_wifi_2);
+LV_IMG_DECLARE(img_wifi_3);
+LV_IMG_DECLARE(img_wifi_4);
+
 LV_IMG_DECLARE(img_btn_reset_yellow);
 LV_IMG_DECLARE(img_btn_reset_gray);
 LV_IMG_DECLARE(img_btn_update_green);
@@ -318,6 +325,8 @@ struct page_data {
     lv_obj_t *img_error_filters_2[2];
     lv_obj_t *img_error_motors_1;
     lv_obj_t *img_error_motors_2[2];
+
+    lv_obj_t *img_wifi;
 
     status_row_t row_local_temperature;
     status_row_t row_pressure;
@@ -853,6 +862,29 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 static void update_info(model_t *pmodel, struct page_data *data) {
     const lv_img_dsc_t *error_dsc[] = {&img_ok_lg, &img_error_lg, &img_stop};
 
+    if (model_get_wifi_configured(pmodel)) {
+        view_common_set_hidden(data->img_wifi, 0);
+        if (model_get_wifi_enabled(pmodel)) {
+            if (model_get_wifi_state(pmodel) == WIFI_STATE_DISCONNECTED) {
+                lv_img_set_src(data->img_wifi, &img_wifi_none);
+            } else if (model_get_current_network_rssi(pmodel) > -30) {
+                lv_img_set_src(data->img_wifi, &img_wifi_4);
+            } else if (model_get_current_network_rssi(pmodel) > -60) {
+                lv_img_set_src(data->img_wifi, &img_wifi_3);
+            } else if (model_get_current_network_rssi(pmodel) > -70) {
+                lv_img_set_src(data->img_wifi, &img_wifi_2);
+            } else if (model_get_current_network_rssi(pmodel) > -80) {
+                lv_img_set_src(data->img_wifi, &img_wifi_1);
+            } else {
+                lv_img_set_src(data->img_wifi, &img_wifi_0);
+            }
+        } else {
+            lv_img_set_src(data->img_wifi, &img_wifi_none);
+        }
+    } else {
+        view_common_set_hidden(data->img_wifi, 1);
+    }
+
     if (data->row_local_temperature.obj != NULL) {
         if (pmodel->internal_sensor_error) {
             lv_label_set_text(data->row_local_temperature.lbl_data_left, "---");
@@ -928,6 +960,11 @@ static void open_page(model_t *model, void *arg) {
     lv_obj_t *logo = lv_img_create(lv_scr_act(), NULL);
     lv_img_set_src(logo, &img_logo);
     lv_obj_align(logo, NULL, LV_ALIGN_IN_TOP_MID, CENTER_X_DELTA, 4);
+
+    img = lv_img_create(lv_scr_act(), NULL);
+    lv_img_set_src(img, &img_wifi_0);
+    lv_obj_align(img, logo, LV_ALIGN_OUT_LEFT_MID, -16, 0);
+    data->img_wifi = img;
 
     create_sensor_rows(model, data);
 

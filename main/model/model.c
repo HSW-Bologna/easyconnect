@@ -21,7 +21,10 @@ static const char *TAG = "Model";
 void model_init(model_t *pmodel) {
     assert(pmodel != NULL);
 
-    pmodel->configuration.wifi_enabled = 0;
+    pmodel->current_network_rssi = -1000;
+
+    pmodel->configuration.wifi_enabled    = 0;
+    pmodel->configuration.wifi_configured = 0;
 
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature           = 0;
@@ -549,13 +552,6 @@ void model_set_pressure_offset(model_t *pmodel, int group, int16_t offset) {
     assert(pmodel != NULL);
 
     pmodel->configuration.pressure_offsets[group] = offset;
-}
-
-
-int16_t model_get_pressure_offset(model_t *pmodel, int group) {
-    assert(pmodel != NULL);
-
-    return pmodel->configuration.pressure_offsets[group];
 }
 
 

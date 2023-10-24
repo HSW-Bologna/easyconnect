@@ -10,7 +10,7 @@
 #include "configuration.h"
 
 
-#define NUM_CONFIGURATION_PARAMETERS 30
+#define NUM_CONFIGURATION_PARAMETERS 31
 
 
 static void save_backlight(void *mem, void *arg);
@@ -56,7 +56,8 @@ static const char *DEVICE_SN_KEY_FMT                  = "SN%3i";
 
 static const char *PRESSURE_OFFSETS_KEY = "PRESSOFF";
 
-static const char *WIFI_KEY = "WIFI";
+static const char *WIFI_ENABLED_KEY    = "WIFI";
+static const char *WIFI_CONFIGURED_KEY = "WIFICONF";
 
 static const char *TAG = "Devices";
 
@@ -79,7 +80,8 @@ void configuration_load(model_t *pmodel) {
     }
 
     storage_load_uint32(&pmodel->configuration.serial_number, (char *)SERIAL_NUM_KEY);
-    storage_load_uint8(&pmodel->configuration.wifi_enabled, (char *)WIFI_KEY);
+    storage_load_uint8(&pmodel->configuration.wifi_enabled, (char *)WIFI_ENABLED_KEY);
+    storage_load_uint8(&pmodel->configuration.wifi_configured, (char *)WIFI_CONFIGURED_KEY);
     storage_load_uint16(&pmodel->configuration.language, (char *)LANGUAGE_KEY);
     storage_load_uint16(&pmodel->configuration.active_backlight, (char *)BACKLIGHT_KEY);
     storage_load_uint16(&pmodel->configuration.buzzer_volume, (char *)BUZZER_KEY);
@@ -124,7 +126,8 @@ void configuration_load(model_t *pmodel) {
                       (char *)PRESSURE_OFFSETS_KEY);
 
     size_t i       = 0;
-    watchlist[i++] = WATCHER(&pmodel->configuration.wifi_enabled, storage_save_uint8, (void *)WIFI_KEY);
+    watchlist[i++] = WATCHER(&pmodel->configuration.wifi_enabled, storage_save_uint8, (void *)WIFI_ENABLED_KEY);
+    watchlist[i++] = WATCHER(&pmodel->configuration.wifi_configured, storage_save_uint8, (void *)WIFI_CONFIGURED_KEY);
     watchlist[i++] = WATCHER(&pmodel->configuration.language, storage_save_uint16, (void *)LANGUAGE_KEY);
     watchlist[i++] =
         WATCHER_DELAYED(&pmodel->configuration.active_backlight, save_backlight, (void *)BACKLIGHT_KEY, 1000UL);

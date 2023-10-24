@@ -5,11 +5,13 @@
  *  Macro riguardanti la configurazione dell'applicazione
  */
 
-#define APP_CONFIG_FIRMWARE_VERSION "3.0.25"
+#define APP_CONFIG_FIRMWARE_VERSION "3.0.27"
 
 #ifndef APP_CONFIG_SD_MOUNTPOINT
 #define APP_CONFIG_SD_MOUNTPOINT "/sdcard"
 #endif
+
+#define APP_CONFIG_MDNS_HOSTNAME "easyconnect"
 
 #define BASE_TASK_SIZE 1024
 

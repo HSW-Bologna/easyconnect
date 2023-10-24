@@ -3,6 +3,7 @@
 #include "view/common.h"
 #include "model/model.h"
 #include "view/intl/intl.h"
+#include <esp_log.h>
 
 
 enum {
@@ -15,7 +16,12 @@ enum {
     WIFI_BTN_ID,
 };
 
-struct page_data {};
+struct page_data {
+    lv_obj_t *btn_wifi;
+};
+
+
+static const char *TAG = "PageSettings";
 
 
 static void *create_page(model_t *model, void *extra) {
@@ -54,7 +60,12 @@ static void open_page(model_t *pmodel, void *arg) {
 
     btn = view_common_menu_button(lv_scr_act(), view_intl_get_string(pmodel, STRINGS_WIFI), 230, WIFI_BTN_ID);
     lv_obj_align(btn, btn_previous, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
-    btn_previous = btn;
+    ESP_LOGI(TAG, "Wifi Configured %i", model_get_wifi_configured(pmodel));
+    lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DISABLED, LV_COLOR_GRAY);
+    if (!model_get_wifi_configured(pmodel)) {
+        lv_btn_set_state(btn, LV_STATE_DISABLED);
+    }
+    data->btn_wifi = btn;
 }
 
 
@@ -64,6 +75,16 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
     view_message_t msg = {0};
 
     switch (event.code) {
+        case VIEW_EVENT_CODE_OPEN:
+        case VIEW_EVENT_CODE_ANCILLARY_DATA_UPDATE:
+            if (model_get_wifi_configured(pmodel) && lv_btn_get_state(data->btn_wifi) == LV_BTN_STATE_DISABLED) {
+                lv_btn_set_state(data->btn_wifi, LV_BTN_STATE_RELEASED);
+            } else if (!model_get_wifi_configured(pmodel) &&
+                       lv_btn_get_state(data->btn_wifi) == LV_BTN_STATE_RELEASED) {
+                lv_btn_set_state(data->btn_wifi, LV_BTN_STATE_DISABLED);
+            }
+            break;
+
         case VIEW_EVENT_CODE_LVGL: {
             switch (event.lv_event) {
                 case LV_EVENT_CLICKED: {
@@ -110,8 +131,10 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                         }
 
                         case WIFI_BTN_ID: {
-                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE;
-                            msg.vmsg.page  = &page_wifi;
+                            if (model_get_wifi_configured(pmodel)) {
+                                msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                                msg.vmsg.page = &page_wifi;
+                            }
                             break;
                         }
                     }

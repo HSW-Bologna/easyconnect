@@ -17,6 +17,12 @@
 
 #define MAX_MENU_ITEMS MAX_AP_SCAN_LIST_SIZE
 
+LV_IMG_DECLARE(img_wifi_0);
+LV_IMG_DECLARE(img_wifi_1);
+LV_IMG_DECLARE(img_wifi_2);
+LV_IMG_DECLARE(img_wifi_3);
+LV_IMG_DECLARE(img_wifi_4);
+
 
 enum {
     BACK_BTN_ID,
@@ -145,16 +151,32 @@ static void update_wifi_list(model_t *pmodel, struct page_data *pdata) {
 
         for (size_t j = 0; j < model_get_available_networks_count(pmodel); j++) {
             lv_obj_t *btn = lv_btn_create(pdata->list, NULL);
-            lv_obj_set_size(btn, 320, 60);
+            lv_obj_set_size(btn, 380, 60);
             lv_page_glue_obj(btn, 1);
+            lv_btn_set_layout(btn, LV_LAYOUT_OFF);
 
             lv_obj_t *lbl = lv_label_create(btn, NULL);
             lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
             lv_label_set_long_mode(lbl, LV_LABEL_LONG_SROLL);
             lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
-            lv_obj_set_width(lbl, 310);
+            lv_obj_set_width(lbl, 320);
             lv_label_set_text(lbl, pmodel->ap_list[j]);
+            lv_obj_align(lbl, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
             view_register_default_callback_number(btn, CONNECT_BTN_ID, j);
+
+            lv_obj_t *img = lv_img_create(btn, NULL);
+            if (pmodel->ap_rssi[j] > -30) {
+                lv_img_set_src(img, &img_wifi_4);
+            } else if (pmodel->ap_rssi[j] > -60) {
+                lv_img_set_src(img, &img_wifi_3);
+            } else if (pmodel->ap_rssi[j] > -70) {
+                lv_img_set_src(img, &img_wifi_2);
+            } else if (pmodel->ap_rssi[j] > -80) {
+                lv_img_set_src(img, &img_wifi_1);
+            } else {
+                lv_img_set_src(img, &img_wifi_0);
+            }
+            lv_obj_align(img, NULL, LV_ALIGN_IN_RIGHT_MID, -8, 0);
         }
     }
 }

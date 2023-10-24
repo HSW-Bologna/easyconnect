@@ -12,6 +12,7 @@
 #include "app_config.h"
 #include "server.h"
 #include "model/model.h"
+#include "mdns.h"
 
 
 #define ATTEMPTS 5
@@ -20,14 +21,14 @@
 static void      event_handler(void *arg, esp_event_base_t event_base, int event_id, void *event_data);
 static void      network_connected(uint32_t ip);
 static void      network_disconnected(void);
-static void      network_connecting(void);
+static void      network_connecting(wifi_err_reason_t error_reason);
 static void      reconnect_wifi_cb(TimerHandle_t handle);
 static esp_err_t scan_networks(uint8_t channel);
 
 
-static const int WIFI_CONNECTED_EVENT       = BIT0;
-static const int WIFI_STOPPED_EVENT         = BIT1;
-static const int AP_SCAN_DONE               = BIT4;
+static const int WIFI_CONNECTED_EVENT = BIT0;
+static const int WIFI_STOPPED_EVENT   = BIT1;
+static const int AP_SCAN_DONE         = BIT4;
 
 static const char *TAG = "Network";
 
@@ -55,6 +56,21 @@ void network_init(void) {
     /* Create default event loop needed by the
      * main app and the provisioning service */
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // initialize mDNS
+    ESP_ERROR_CHECK(mdns_init());
+    // set mDNS hostname (required if you want to advertise services)
+    ESP_ERROR_CHECK(mdns_hostname_set(APP_CONFIG_MDNS_HOSTNAME));
+    ESP_LOGI(TAG, "mdns hostname set to: [%s]", APP_CONFIG_MDNS_HOSTNAME);
+    // set default mDNS instance name
+    ESP_ERROR_CHECK(mdns_instance_name_set(APP_CONFIG_MDNS_HOSTNAME));
+    // structure with TXT records
+    mdns_txt_item_t serviceTxtData[1] = {
+        {"board", "esp32"},
+    };
+
+    // initialize service
+    ESP_ERROR_CHECK(mdns_service_add("ESP32-WebServer", "_http", "_tcp", 80, serviceTxtData, 1));
 
     /* Initialize Wi-Fi with default config */
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -109,6 +125,7 @@ int network_get_scan_result(model_t *pmodel) {
         xSemaphoreTake(sem, portMAX_DELAY);
         for (size_t i = 0; i < ap_list_count; i++) {
             strcpy(pmodel->ap_list[i], (char *)ap_list[i].ssid);
+            pmodel->ap_rssi[i] = ap_list[i].rssi;
         }
         model_set_available_networks_count(pmodel, ap_list_count);
         xSemaphoreGive(sem);
@@ -138,6 +155,16 @@ int network_is_connected(uint32_t *ip, char *ssid) {
         strcpy(ssid, (char *)config.sta.ssid);
     }
     return res;
+}
+
+
+void network_get_current_rssi(model_t *pmodel) {
+    wifi_ap_record_t ap;
+    if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        model_set_current_network_rssi(pmodel, ap.rssi);
+    } else {
+        model_set_current_network_rssi(pmodel, -1000);
+    }
 }
 
 
@@ -211,7 +238,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int event_id, 
 
                 if (should_rescan) {
                     // Retry indefinitely
-                    network_connecting();
+                    network_connecting(WIFI_REASON_UNSPECIFIED);
                     esp_wifi_connect();
                 }
                 ESP_LOGI(TAG, "Wifi scan done, %i networks found", number);
@@ -260,7 +287,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int event_id, 
                 } else {
                     // Retry indefinitely
                     ESP_LOGI(TAG, "Retrying...");
-                    network_connecting();
+                    network_connecting(disconnected->reason);
                     esp_wifi_connect();
                 }
                 break;
@@ -306,10 +333,25 @@ static void network_disconnected(void) {
 }
 
 
-static void network_connecting(void) {
+static void network_connecting(wifi_err_reason_t error_reason) {
     xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_EVENT);
     xSemaphoreTake(sem, portMAX_DELAY);
-    wifi_state = WIFI_STATE_CONNECTING;
+    switch (error_reason) {
+        case WIFI_REASON_AUTH_EXPIRE:
+        case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+        case WIFI_REASON_BEACON_TIMEOUT:
+        case WIFI_REASON_AUTH_FAIL:
+        case WIFI_REASON_ASSOC_FAIL:
+        case WIFI_REASON_HANDSHAKE_TIMEOUT:
+            wifi_state = WIFI_STATE_AUTH_ERROR;
+            break;
+        case WIFI_REASON_NO_AP_FOUND:
+            wifi_state = WIFI_STATE_SSID_NOT_FOUND_ERROR;
+            break;
+        default:
+            wifi_state = WIFI_STATE_CONNECTING;
+            break;
+    }
     xSemaphoreGive(sem);
 }
 

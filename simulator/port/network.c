@@ -44,3 +44,5 @@ uint8_t server_is_there_a_new_connection(void) {
 void server_notify_state_change(model_t *pmodel) {
     (void)pmodel;
 }
+
+void network_get_current_rssi(model_t *pmodel) {}

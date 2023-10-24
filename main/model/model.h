@@ -81,6 +81,8 @@ typedef struct {
 typedef enum {
     WIFI_STATE_DISCONNECTED = 0,
     WIFI_STATE_CONNECTING,
+    WIFI_STATE_AUTH_ERROR,
+    WIFI_STATE_SSID_NOT_FOUND_ERROR,
     WIFI_STATE_CONNECTED,
 } wifi_state_t;
 
@@ -143,8 +145,10 @@ typedef struct {
 
     size_t       ap_list_size;
     char         ap_list[MAX_AP_SCAN_LIST_SIZE][33];
+    int16_t      ap_rssi[MAX_AP_SCAN_LIST_SIZE];
     uint8_t      scanning;
     wifi_state_t wifi_state;
+    int16_t      current_network_rssi;
     uint32_t     ip_addr;
     char         ssid[33];
 
@@ -153,6 +157,7 @@ typedef struct {
     size_t logs_num;
 
     struct {
+        uint8_t  wifi_configured;
         uint8_t  wifi_enabled;
         uint16_t language;
         uint16_t active_backlight;
@@ -261,7 +266,6 @@ void     model_set_pressure_difference(model_t *pmodel, uint8_t fan_speed, uint1
 uint8_t  model_get_filter_device_stop(model_t *pmodel, uint8_t address);
 uint8_t  model_is_device_sensor(model_t *pmodel, uint8_t address);
 void     model_set_pressure_offset(model_t *pmodel, int group, int16_t offset);
-int16_t  model_get_pressure_offset(model_t *pmodel, int group);
 void     model_delete_all_devices(model_t *pmodel);
 uint16_t model_get_fan_percentage_correction(model_t *pmodel);
 
@@ -319,8 +323,10 @@ GETTERNSETTER(scanning, scanning);
 GETTERNSETTER(available_networks_count, ap_list_size);
 GETTERNSETTER(ip_addr, ip_addr);
 GETTERNSETTER(wifi_enabled, configuration.wifi_enabled);
+GETTERNSETTER(wifi_configured, configuration.wifi_configured);
 
 GETTERNSETTER(logs_num, logs_num);
+GETTERNSETTER(current_network_rssi, current_network_rssi);
 
 TOGGLER(wifi_enabled, configuration.wifi_enabled);
 

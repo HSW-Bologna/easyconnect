@@ -17,6 +17,7 @@ int          network_is_connected(uint32_t *ip, char *ssid);
 uint8_t      network_wait_for_wifi(TickType_t delay);
 void         network_connect_to(char *ssid, char *psk);
 wifi_state_t network_get_wifi_state(void);
+void         network_get_current_rssi(model_t *pmodel);
 
 
 #endif

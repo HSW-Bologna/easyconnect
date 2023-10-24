@@ -63,8 +63,8 @@ static void update_info(model_t *pmodel, struct page_data *data) {
         lv_obj_set_hidden(data->lbl_state, 1);
     } else {
         if (CLASS_GET_MODE(data->device.class) == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY) {
-            lv_label_set_text_fmt(data->lbl_state, "Status: 0x%X\nPress: %i", data->device.sensor_data.state,
-                                  data->device.sensor_data.pressure);
+            lv_label_set_text_fmt(data->lbl_state, "Status: 0x%X\nPress: %i Pa", data->device.sensor_data.state,
+                                  model_get_device_pressure(pmodel, data->device));
             lv_obj_set_hidden(data->lbl_state, 0);
         } else {
             lv_obj_set_hidden(data->lbl_state, 1);

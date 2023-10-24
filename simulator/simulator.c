@@ -47,6 +47,7 @@ void app_main(void *arg) {
     strcpy(model.ap_list[3], "rete 4");
     strcpy(model.ap_list[4], "rete 5");
     strcpy(model.ap_list[5], "rete 6");
+    model.configuration.wifi_configured = 1;
 
     view_init(monitor_flush, mouse_read);
     controller_init(&model);

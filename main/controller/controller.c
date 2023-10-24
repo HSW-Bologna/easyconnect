@@ -22,6 +22,7 @@
 #include "services/network.h"
 #include "services/server.h"
 #include "view/view_types.h"
+#include "services/device_commands.h"
 #ifndef PC_SIMULATOR
 #include "esp32_commandline.h"
 #endif
@@ -77,7 +78,7 @@ void controller_init(model_t *pmodel) {
 
     LOG_POWER_ON();
 
-    if (model_get_wifi_enabled(pmodel)) {
+    if (model_get_wifi_enabled(pmodel) && model_get_wifi_configured(pmodel)) {
         network_start_sta();
     }
 
@@ -249,7 +250,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_UPDATE_WIFI:
-            if (model_get_wifi_enabled(pmodel)) {
+            if (model_get_wifi_enabled(pmodel) && model_get_wifi_configured(pmodel)) {
                 network_start_sta();
                 if (model_get_wifi_state(pmodel) == WIFI_STATE_CONNECTED) {
                     server_start();
@@ -311,6 +312,8 @@ void controller_manage(model_t *pmodel) {
 
     if (poll_full_cycle && is_expired(sensors_ts, get_millis(), 2000)) {
         pmodel->sensors_read = 1;
+        network_get_current_rssi(pmodel);
+        sensors_ts = get_millis();
     }
 
     if (pmodel->sensors_read && !old_sensors_read) {
@@ -444,7 +447,6 @@ void controller_manage(model_t *pmodel) {
                         // Restart
                         poll_address    = 0;
                         poll_full_cycle = 1;     // Full read
-                        sensors_ts      = get_millis();
                     } else {
                         poll_address = new_poll_address;
                     }
@@ -550,7 +552,6 @@ void controller_manage(model_t *pmodel) {
                     // Restart
                     poll_full_cycle = 1;     // Full read
                     poll_address    = 0;
-                    sensors_ts      = get_millis();
                 } else {
                     poll_address = new_poll_address;
                 }
@@ -775,6 +776,7 @@ static void console_task(void *args) {
     easyconnect_interface_t *interface = args;
 
     esp32_commandline_init(interface);
+    device_commands_register(interface->arg);
 
     for (;;) {
         esp32_edit_cycle(prompt);
