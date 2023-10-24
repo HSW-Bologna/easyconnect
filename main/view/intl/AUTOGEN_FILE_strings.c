@@ -1,4 +1,4 @@
-const char *strings[101][2] = {
+const char *strings[108][2] = {
     {"LUN", "MON ", },
     {"MAR", "TUE", },
     {"MER", "WED", },
@@ -61,6 +61,9 @@ const char *strings[101][2] = {
     {"Filtri attivi", "Active filtering", },
     {"Setup manutenzione", "Setup maintenance", },
     {"Pressione", "Pressure", },
+    {"Pressione letta", "Reading pressure", },
+    {"Offset pressione", "Offset pressure", },
+    {"Pressione calibrata", "Calibrated pressure ", },
     {"Umidita", "Humidity", },
     {"Temperatura", "Temperature", },
     {"Inizia cal.", "Start cal.", },
@@ -100,5 +103,9 @@ const char *strings[101][2] = {
     {"Al momento %s dispositivi stanno comunicando correttamente con il sistema. Quanti dispositivi sono collegati alla rete REC?", "Currently %s devices are communicating correctly with the system. How many devices are connected in the REC network?", },
     {"Autenticazione fallita", "Authentication failed", },
     {"Rete non trovata", "Network not found", },
+    {"Tipo", "Type", },
+    {"Rev. FW", "FW rev.", },
+    {"Sensore di press. assoluta", "Absolute pressure sensor", },
+    {"Rimuovi dispositivo", "Remove device", },
 };
 

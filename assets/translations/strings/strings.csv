@@ -61,6 +61,9 @@ MANUTENZIONE, Manutenzione, Maintenance
 FILTRI_ATTIVI, Filtri attivi, Active filtering
 SETUP_MANUTENZIONE, Setup manutenzione, Setup maintenance
 PRESSIONE, Pressione, Pressure
+PRESSIONE_LETTA, Pressione letta, Reading pressure
+OFFSET_PRESSIONE, Offset pressione, Offset pressure
+PRESSIONE_CALIBRATA, Pressione calibrata, Calibrated pressure 
 UMIDITA, Umidita, Humidity
 TEMPERATURA, Temperatura, Temperature
 INIZIA_CAL, Inizia cal., Start cal.
@@ -102,3 +105,7 @@ RESET_AUTO_IP, Reset & IP Automatico, Reset & Auto-assign IP
 AL_MOMENTO_N_DISPOSITIVI_STANNO_COMUNICANDO, Al momento %s dispositivi stanno comunicando correttamente con il sistema. Quanti dispositivi sono collegati alla rete REC?, Currently %s devices are communicating correctly with the system. How many devices are connected in the REC network?
 AUTENTICAZIONE_FALLITA, Autenticazione fallita, Authentication failed
 RETE_NON_TROVATA, Rete non trovata, Network not found
+TIPO, Tipo, Type
+REV_FW, Rev. FW, FW rev.
+SENSORE_DI_PRESSIONE_ASSOLUTA, Sensore di press. assoluta, Absolute pressure sensor
+RIMUOVI_DISPOSITIVO, Rimuovi dispositivo, Remove device

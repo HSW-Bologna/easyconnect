@@ -25,6 +25,7 @@ void model_init(model_t *pmodel) {
 
     pmodel->configuration.wifi_enabled    = 0;
     pmodel->configuration.wifi_configured = 0;
+    pmodel->pressure_average              = 0;
 
     memset(pmodel, 0, sizeof(model_t));
     pmodel->temperature           = 0;
@@ -588,13 +589,13 @@ int model_calibrate_pressures(model_t *pmodel) {
             pmodel->configuration.pressure_offsets[i] = 0;
         }
     } else {
-        int64_t pressure_average = pressure_total / count;
+        pmodel->pressure_average = (int16_t)(pressure_total / count);
 
-        ESP_LOGI(TAG, "Average: %lli", pressure_average);
+        ESP_LOGI(TAG, "Average: %i", pmodel->pressure_average);
         // Make sure every device reads the average pressure
         for (size_t i = 0; i < DEVICE_GROUPS; i++) {
             if (pressures[i].valid) {
-                pmodel->configuration.pressure_offsets[i] = pressure_average - pressures[i].pressure;
+                pmodel->configuration.pressure_offsets[i] = pmodel->pressure_average - pressures[i].pressure;
                 ESP_LOGI(TAG, "Offset for group %zu: %i", i, pmodel->configuration.pressure_offsets[i]);
             } else {
                 pmodel->configuration.pressure_offsets[i] = 0;

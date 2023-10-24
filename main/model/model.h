@@ -137,6 +137,7 @@ typedef struct {
     uint8_t        internal_rtc_error;
     uint8_t        sensors_read;
     system_alarm_t system_alarm;
+    int16_t        pressure_average;
 
     uint8_t show_work_hours_state;
 
