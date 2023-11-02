@@ -310,10 +310,15 @@ void controller_manage(model_t *pmodel) {
     static uint8_t       old_sensors_read = 0;
     static uint8_t       poll_full_cycle  = 0;
 
-    if (poll_full_cycle && is_expired(sensors_ts, get_millis(), 2000)) {
-        pmodel->sensors_read = 1;
-        network_get_current_rssi(pmodel);
-        sensors_ts = get_millis();
+    if (poll_full_cycle) {
+        if (sensors_ts == 0) {
+            sensors_ts = get_millis();
+            ESP_LOGI(TAG, "Poll full cycle");
+        } else if (is_expired(sensors_ts, get_millis(), 4000)) {
+            pmodel->sensors_read = 1;
+            network_get_current_rssi(pmodel);
+            sensors_ts = get_millis();
+        }
     }
 
     if (pmodel->sensors_read && !old_sensors_read) {

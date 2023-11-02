@@ -128,6 +128,13 @@ typedef enum {
 } delta_status_t;
 
 
+typedef enum {
+    EXTRA_DELTA_STATUS_NONE = 0,
+    EXTRA_DELTA_INCREASE,
+    EXTRA_DELTA_DECREASE,
+} extra_delta_status_t;
+
+
 typedef struct {
     int            temperature;
     int            humidity;

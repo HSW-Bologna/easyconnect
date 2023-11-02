@@ -22,7 +22,7 @@ LV_IMG_DECLARE(img_icona_elettrostatico);
 LV_IMG_DECLARE(img_icona_uvc);
 LV_IMG_DECLARE(img_icona_aspirazione);
 LV_IMG_DECLARE(img_icona_immissione);
-
+LV_IMG_DECLARE(img_trash);
 
 
 enum {
@@ -82,13 +82,12 @@ static void update_info(model_t *pmodel, struct page_data *data) {
             int16_t calibrated_pressure =
                 data->device.sensor_data.pressure + pmodel->configuration.pressure_offsets[group];
 
-            lv_label_set_text_fmt(
-                data->lbl_extra, "%s: %i Pa\nAVG %s: %i Pa\n%s: %i Pa\n%s: %i Pa\nATA %s: %i Pa",
-                view_intl_get_string(pmodel, STRINGS_PRESSIONE_LETTA), data->device.sensor_data.pressure,
-                view_intl_get_string(pmodel, STRINGS_PRESSIONE), pmodel->pressure_average,
-                view_intl_get_string(pmodel, STRINGS_OFFSET_PRESSIONE), pmodel->configuration.pressure_offsets[group],
-                view_intl_get_string(pmodel, STRINGS_PRESSIONE_CALIBRATA), calibrated_pressure,
-                view_intl_get_string(pmodel, STRINGS_PRESSIONE_CALIBRATA), calibrated_pressure - 101325);
+            lv_label_set_text_fmt(data->lbl_extra, "%s: %i Pa\nAVG %s: %i Pa\n%s: %i Pa\n%s: %i Pa",
+                                  view_intl_get_string(pmodel, STRINGS_PRESSIONE_LETTA),
+                                  data->device.sensor_data.pressure, view_intl_get_string(pmodel, STRINGS_PRESSIONE),
+                                  pmodel->pressure_average, view_intl_get_string(pmodel, STRINGS_OFFSET_PRESSIONE),
+                                  pmodel->configuration.pressure_offsets[group],
+                                  view_intl_get_string(pmodel, STRINGS_PRESSIONE_CALIBRATA), calibrated_pressure);
             // lv_label_set_text_fmt(data->lbl_state, "Status: 0x%X\nPress: %i Pa", data->device.sensor_data.state,
             // model_get_device_pressure(pmodel, data->device));
             break;
@@ -134,14 +133,28 @@ static void open_page(model_t *pmodel, void *arg) {
     data->lbl_extra = lv_label_create(cont, data->lbl_info);
     lv_obj_align(data->lbl_extra, data->lbl_info, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
 
-
     lv_obj_t *btn = lv_btn_create(lv_scr_act(), NULL);
-    lbl           = lv_label_create(btn, NULL);
+    lv_obj_set_size(btn, 180, 48);
+    lv_btn_set_layout(btn, LV_LAYOUT_OFF);
+    lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, STYLE_RED);
+
+    lbl = lv_label_create(btn, NULL);
     lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &lv_font_montserrat_16);
     lv_obj_set_style_local_text_color(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, STYLE_WHITE);
-    lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, STYLE_RED);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
     lv_label_set_text(lbl, view_intl_get_string(pmodel, STRINGS_RIMUOVI_DISPOSITIVO));
-    lv_obj_set_size(btn, 180, 48);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_obj_set_width(lbl, 100);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    img = lv_img_create(btn, NULL);
+    lv_img_set_src(img, &img_trash);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
+
+    img = lv_img_create(btn, NULL);
+    lv_img_set_src(img, &img_trash);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_RIGHT_MID, -8, 0);
+
     lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -8);
     view_register_default_callback(btn, DELETE_BTN_ID);
 
