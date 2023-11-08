@@ -44,6 +44,7 @@ type alias Model =
     , newLogStart : Int
     , logs : List Log
     , speed : Int
+    , lightState : Maybe ( Bool, Bool, Bool )
     , fanState : Maybe Bool
     , filterState : Maybe Bool
     }
@@ -57,6 +58,7 @@ init _ =
       , logStart = 0
       , newLogStart = 0
       , logs = []
+      , lightState = Nothing
       , fanState = Nothing
       , filterState = Nothing
       , speed = 0
@@ -75,6 +77,7 @@ type Msg
     | Logs Decode.Value
     | MessageToastBoilerplate (MessageToast Msg)
     | UpdateLogs Int
+    | ToggleLight
     | ToggleFan
     | ToggleFilter
     | ChangeSpeed Int
@@ -111,8 +114,11 @@ update msg model =
 
                 newFilterState =
                     DeviceModel.getFilterState newDevices
+
+                newLightState =
+                    DeviceModel.getLightState newDevices
             in
-            ( { model | devices = newDevices, fanState = newFanState, filterState = newFilterState }, Cmd.none )
+            ( { model | devices = newDevices, fanState = newFanState, lightState = newLightState, filterState = newFilterState }, Cmd.none )
 
         StateUpdate value ->
             let
@@ -157,6 +163,13 @@ update msg model =
             ( { model | newLogStart = newLogStart }
             , Ports.requestLogs newLogStart
             )
+
+        ToggleLight ->
+            let
+                newLightState =
+                    Maybe.map (\x -> DeviceModel.nextLightState (DeviceModel.getLightGroups model.devices) x) model.lightState
+            in
+            ( model, Maybe.map Ports.setLight newLightState |> Maybe.withDefault Cmd.none )
 
         ToggleFan ->
             let
@@ -229,7 +242,7 @@ view model =
             <|
                 Ui.column [ Ui.width Ui.fill, Ui.height Ui.fill, Ui.spacing 32 ] <|
                     [ Ui.el [ Ui.centerX ] Image.logo
-                    , View.ControlPanel.view model { fanControl = ToggleFan, speedControl = ChangeSpeed, filterControl = ToggleFilter }
+                    , View.ControlPanel.view model { fanControl = ToggleFan, speedControl = ChangeSpeed, filterControl = ToggleFilter, lightControl = ToggleLight }
                     , Ui.el [ Ui.scrollbarY, Ui.width Ui.fill, Ui.height <| Ui.px 480 ] <|
                         Ui.column [ Ui.width Ui.fill, Ui.spacing 24 ] <|
                             List.map DeviceView.view model.devices

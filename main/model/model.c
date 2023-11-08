@@ -5,6 +5,8 @@
 #include "easyconnect_interface.h"
 #include "model.h"
 #include <esp_log.h>
+#include "utils/utils.h"
+#include "timer/timecheck.h"
 
 
 #define ABS(x) ((x) > 0 ? (x) : -(x))
@@ -20,6 +22,9 @@ static const char *TAG = "Model";
 
 void model_init(model_t *pmodel) {
     assert(pmodel != NULL);
+
+    pmodel->extra_delta_status = EXTRA_DELTA_STATUS_NONE;
+    pmodel->speed_change_ts    = 0;
 
     pmodel->current_network_rssi = -1000;
 
@@ -93,11 +98,11 @@ void model_init(model_t *pmodel) {
 
     pmodel->show_work_hours_state = 0;
 
-    pmodel->system_alarm = SYSTEM_ALARM_NONE;
-    pmodel->sensors_read = 0;
-    pmodel->ap_list_size = 0;
-    pmodel->scanning     = 0;
-    pmodel->wifi_state   = WIFI_STATE_DISCONNECTED;
+    pmodel->system_alarm       = SYSTEM_ALARM_NONE;
+    pmodel->sensors_calibrated = 0;
+    pmodel->ap_list_size       = 0;
+    pmodel->scanning           = 0;
+    pmodel->wifi_state         = WIFI_STATE_DISCONNECTED;
 
     pmodel->logs_num  = 0;
     pmodel->logs_from = 0;
@@ -985,11 +990,39 @@ void model_light_switch(model_t *model) {
 
 delta_status_t model_get_pressure_delta_status(model_t *pmodel, int16_t p1, int16_t p2) {
     if (model_get_fan_state(pmodel)) {
+        int32_t bottom_percentage_addition = 0;
+        int32_t top_percentage_addition    = 0;
+
+        if (!is_expired(pmodel->speed_change_ts, get_millis(), 60000UL)) {
+            switch (pmodel->extra_delta_status) {
+                case EXTRA_DELTA_DECREASE:
+                    top_percentage_addition = 10;
+                    break;
+                case EXTRA_DELTA_INCREASE:
+                    bottom_percentage_addition = -10;
+                    break;
+                default:
+                    break;
+            }
+        }
+
         int32_t pressure_difference_for_speed = get_expected_pressure_delta(pmodel);
-        int32_t maximum_allowed_difference_warn =
-            (pressure_difference_for_speed * model_get_pressure_difference_deviation_warn(pmodel)) / 100;
-        int32_t maximum_allowed_difference_stop =
-            (pressure_difference_for_speed * model_get_pressure_difference_deviation_stop(pmodel)) / 100;
+        int32_t bottom_allowed_difference_warn =
+            (pressure_difference_for_speed *
+             (model_get_pressure_difference_deviation_warn(pmodel) + bottom_percentage_addition)) /
+            100;
+        int32_t top_allowed_difference_warn =
+            (pressure_difference_for_speed *
+             (model_get_pressure_difference_deviation_warn(pmodel) + top_percentage_addition)) /
+            100;
+        int32_t bottom_allowed_difference_stop =
+            (pressure_difference_for_speed *
+             (model_get_pressure_difference_deviation_stop(pmodel) + bottom_percentage_addition)) /
+            100;
+        int32_t top_allowed_difference_stop =
+            (pressure_difference_for_speed *
+             (model_get_pressure_difference_deviation_stop(pmodel) + top_percentage_addition)) /
+            100;
         // ESP_LOGI(TAG, "expected %i", pressure_difference_for_speed);
         //  ESP_LOGI(TAG, "%i %i %4i %4i %i %i %i", model_get_pressure_difference_deviation_warn(pmodel),
         //           model_get_pressure_difference_deviation_stop(pmodel), p1, p2, pressure_difference_for_speed,
@@ -997,11 +1030,11 @@ delta_status_t model_get_pressure_delta_status(model_t *pmodel, int16_t p1, int1
 
         int32_t actual_delta = ABS(p1 - p2);
 
-        if (actual_delta < pressure_difference_for_speed - maximum_allowed_difference_stop ||
-            actual_delta > pressure_difference_for_speed + maximum_allowed_difference_stop) {
+        if (actual_delta < pressure_difference_for_speed - bottom_allowed_difference_stop ||
+            actual_delta > pressure_difference_for_speed + top_allowed_difference_stop) {
             return DELTA_STATUS_STOP;
-        } else if (actual_delta < pressure_difference_for_speed - maximum_allowed_difference_warn ||
-                   actual_delta > pressure_difference_for_speed + maximum_allowed_difference_warn) {
+        } else if (actual_delta < pressure_difference_for_speed - bottom_allowed_difference_warn ||
+                   actual_delta > pressure_difference_for_speed + top_allowed_difference_warn) {
             return DELTA_STATUS_WARN;
         } else {
             return DELTA_STATUS_OK;

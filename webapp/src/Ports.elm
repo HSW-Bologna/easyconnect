@@ -28,6 +28,32 @@ requestLogs num =
     command <| Encode.object [ ( "logs", Encode.int num ) ]
 
 
+setLight : ( Bool, Bool, Bool ) -> Cmd msg
+setLight state =
+    command <|
+        Encode.object
+            [ ( "light"
+              , Encode.int
+                    (case state of
+                        ( True, True, True ) ->
+                            0x07
+
+                        ( True, True, False ) ->
+                            0x03
+
+                        ( True, False, False ) ->
+                            0x01
+
+                        ( False, True, False ) ->
+                            0x02
+
+                        _ ->
+                            0
+                    )
+              )
+            ]
+
+
 setFan : Bool -> Cmd msg
 setFan state =
     command <| Encode.object [ ( "fan", Encode.bool state ) ]

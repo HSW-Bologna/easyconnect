@@ -39,6 +39,7 @@
 #define JSON_HUMIDITY    "hum"
 #define JSON_SPEED       "speed"
 #define JSON_FAN         "fan"
+#define JSON_LIGHT       "light"
 #define JSON_FILTER      "filt"
 #define JSON_LOGS        "logs"
 
@@ -167,6 +168,12 @@ static esp_err_t state_websocket_handler(httpd_req_t *req) {
             if (cJSON_IsBool(json_filter)) {
                 controller_send_message(
                     (view_controller_message_t){.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_FILTER});
+            }
+
+            cJSON *json_light = cJSON_GetObjectItem(json, JSON_LIGHT);
+            if (cJSON_IsNumber(json_light)) {
+                view_controller_message_t msg = {.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS};
+                controller_send_message(msg);
             }
 
             cJSON_Delete(json);

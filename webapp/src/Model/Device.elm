@@ -138,6 +138,7 @@ getFanState =
     in
     List.foldl isFan Nothing
 
+
 getFilterState : List Device -> Maybe Bool
 getFilterState =
     let
@@ -158,3 +159,92 @@ getFilterState =
                             accumulator
     in
     List.foldl isFilter Nothing
+
+
+getLightState : List Device -> Maybe ( Bool, Bool, Bool )
+getLightState =
+    let
+        isLight { class } accumulator =
+            let
+                ( first, second, third ) =
+                    Maybe.withDefault ( False, False, False ) accumulator
+            in
+            case class of
+                Light { on, group } ->
+                    if on then
+                        Just
+                            (case group of
+                                1 ->
+                                    ( True, second, third )
+
+                                2 ->
+                                    ( first, True, third )
+
+                                3 ->
+                                    ( first, second, True )
+
+                                _ ->
+                                    ( first, second, third )
+                            )
+
+                    else
+                        Just ( first, second, third )
+
+                _ ->
+                    accumulator
+    in
+    List.foldl isLight Nothing
+
+
+getLightGroups : List Device -> Int
+getLightGroups =
+    List.foldl
+        (\{ class } accumulator ->
+            let
+                group =
+                    Maybe.withDefault 0 (getGroup class)
+            in
+            if group > accumulator then
+                group
+
+            else
+                accumulator
+        )
+        0
+
+
+nextLightState : Int -> ( Bool, Bool, Bool ) -> ( Bool, Bool, Bool )
+nextLightState groups state =
+    case ( groups, state ) of
+        ( 1, ( False, _, _ ) ) ->
+            ( True, False, False )
+
+        ( 1, ( True, _, _ ) ) ->
+            ( False, False, False )
+
+        ( 2, ( False, False, _ ) ) ->
+            ( True, False, False )
+
+        ( 2, ( True, False, _ ) ) ->
+            ( False, True, False )
+
+        ( 2, ( False, True, _ ) ) ->
+            ( True, True, False )
+
+        ( 2, ( True, True, _ ) ) ->
+            ( False, False, False )
+
+        ( 3, ( False, False, False ) ) ->
+            ( True, False, False )
+
+        ( 3, ( True, False, False ) ) ->
+            ( True, True, False )
+
+        ( 3, ( True, True, False ) ) ->
+            ( True, True, True )
+
+        ( 3, ( True, True, True ) ) ->
+            ( False, False, False )
+
+        _ ->
+            ( False, False, False )

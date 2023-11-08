@@ -11,7 +11,7 @@ function wspath(local) {
         new_uri += "127.0.0.1:8080";
     } else {
         new_uri += "//" + loc.host;
-        //new_uri += "//192.168.43.18";
+        //new_uri += "//192.168.43.246";
         new_uri += loc.pathname + local;
     }
     return new_uri;

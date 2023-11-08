@@ -704,7 +704,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
         lv_label_set_text(pdata->row_pressure.lbl_unit_left, "Pa");
 
-        if (pmodel->sensors_read) {
+        if (pmodel->sensors_calibrated) {
             model_get_pressures(pmodel, pressures);
 
             delta_status_t delta_status =
@@ -763,7 +763,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
     const lv_img_dsc_t *error_dsc[] = {&img_ok_lg, &img_error_lg, &img_stop};
     if (pdata->row_temperature.obj != NULL) {
-        if (pmodel->sensors_read) {
+        if (pmodel->sensors_calibrated) {
             size_t error_level_1 = model_get_temperature_error_level(pmodel, group_1.temperature);
             size_t error_level_2 = model_get_temperature_error_level(pmodel, group_2.temperature);
             size_t error_level   = error_level_1 > error_level_2 ? error_level_1 : error_level_2;
@@ -811,7 +811,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
 
     if (pdata->row_humidity.obj != NULL) {
-        if (pmodel->sensors_read) {
+        if (pmodel->sensors_calibrated) {
             size_t error_level_1 = model_get_humidity_error_level(pmodel, group_1.humidity);
             size_t error_level_2 = model_get_humidity_error_level(pmodel, group_2.humidity);
             size_t error_level   = error_level_1 > error_level_2 ? error_level_1 : error_level_2;
@@ -1723,75 +1723,11 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_LIGHT_ID: {
-                            uint16_t class;
-                            if (!model_get_light_class(model, &class) || event.lv_event != LV_EVENT_CLICKED) {
+                            if (event.lv_event != LV_EVENT_CLICKED) {
                                 break;
                             }
 
-                            model_light_switch(model);
-
-                            switch (class) {
-                                case DEVICE_CLASS_LIGHT_1:
-                                    msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS;
-                                    if (model_get_light_state(model) == LIGHT_STATE_SINGLE_ON) {
-                                        msg.cmsg.light_value = 1;
-                                    } else {
-                                        msg.cmsg.light_value = 0;
-                                    }
-                                    break;
-
-                                case DEVICE_CLASS_LIGHT_2: {
-                                    msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS;
-
-                                    switch (model_get_light_state(model)) {
-                                        case LIGHT_STATE_OFF:
-                                            msg.cmsg.light_value = 0;
-                                            break;
-
-                                        case LIGHT_STATE_GROUP_1_ON:
-                                            msg.cmsg.light_value = 0x01;
-                                            break;
-
-
-                                        case LIGHT_STATE_GROUP_2_ON:
-                                            msg.cmsg.light_value = 0x02;
-                                            break;
-
-                                        case LIGHT_STATE_DOUBLE_ON:
-                                            msg.cmsg.light_value = 0x03;
-                                            break;
-                                    }
-                                    break;
-                                }
-
-                                case DEVICE_CLASS_LIGHT_3: {
-                                    msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS;
-
-                                    switch (model_get_light_state(model)) {
-                                        case LIGHT_STATE_OFF:
-                                            msg.cmsg.light_value = 0;
-                                            break;
-
-                                        case LIGHT_STATE_GROUP_1_ON:
-                                            msg.cmsg.light_value = 0x01;
-                                            break;
-
-                                        case LIGHT_STATE_GROUP_2_ON:
-                                            msg.cmsg.light_value = 0x03;
-                                            break;
-
-                                        case LIGHT_STATE_TRIPLE_ON:
-                                            msg.cmsg.light_value = 0x07;
-                                            break;
-                                    }
-                                    break;
-                                }
-
-                                default:
-                                    assert(0);
-                            }
-
-                            update_all_buttons(model, data);
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS;
                             break;
                         }
 

@@ -125,9 +125,73 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             break;
 
         case VIEW_CONTROLLER_MESSAGE_CODE_CONTROL_LIGHTS: {
+            uint16_t class;
+            if (!model_get_light_class(pmodel, &class)) {
+                break;
+            }
+
+            model_light_switch(pmodel);
+
+            switch (class) {
+                case DEVICE_CLASS_LIGHT_1:
+                    if (model_get_light_state(pmodel) == LIGHT_STATE_SINGLE_ON) {
+                        msg->light_value = 1;
+                    } else {
+                        msg->light_value = 0;
+                    }
+                    break;
+
+                case DEVICE_CLASS_LIGHT_2: {
+                    switch (model_get_light_state(pmodel)) {
+                        case LIGHT_STATE_OFF:
+                            msg->light_value = 0;
+                            break;
+
+                        case LIGHT_STATE_GROUP_1_ON:
+                            msg->light_value = 0x01;
+                            break;
+
+
+                        case LIGHT_STATE_GROUP_2_ON:
+                            msg->light_value = 0x02;
+                            break;
+
+                        case LIGHT_STATE_DOUBLE_ON:
+                            msg->light_value = 0x03;
+                            break;
+                    }
+                    break;
+                }
+
+                case DEVICE_CLASS_LIGHT_3: {
+                    switch (model_get_light_state(pmodel)) {
+                        case LIGHT_STATE_OFF:
+                            msg->light_value = 0;
+                            break;
+
+                        case LIGHT_STATE_GROUP_1_ON:
+                            msg->light_value = 0x01;
+                            break;
+
+                        case LIGHT_STATE_GROUP_2_ON:
+                            msg->light_value = 0x03;
+                            break;
+
+                        case LIGHT_STATE_TRIPLE_ON:
+                            msg->light_value = 0x07;
+                            break;
+                    }
+                    break;
+                }
+
+                default:
+                    assert(0);
+            }
+
             controller_update_class_output(pmodel, DEVICE_CLASS_LIGHT_1, (msg->light_value & 0x01) > 0);
             controller_update_class_output(pmodel, DEVICE_CLASS_LIGHT_2, (msg->light_value & 0x02) > 0);
             controller_update_class_output(pmodel, DEVICE_CLASS_LIGHT_3, (msg->light_value & 0x04) > 0);
+            view_event((view_event_t){.code = VIEW_EVENT_CODE_STATE_UPDATE});
             break;
         }
 
@@ -309,23 +373,33 @@ void controller_manage(model_t *pmodel) {
     static uint8_t       poll_address     = 0;
     static uint8_t       old_sensors_read = 0;
     static uint8_t       poll_full_cycle  = 0;
+    static uint8_t       old_fan_speed    = 0;
+
+    if (old_fan_speed < model_get_fan_speed(pmodel)) {
+        pmodel->extra_delta_status = EXTRA_DELTA_INCREASE;
+        pmodel->speed_change_ts    = get_millis();
+    } else if (old_fan_speed > model_get_fan_speed(pmodel)) {
+        pmodel->extra_delta_status = EXTRA_DELTA_DECREASE;
+        pmodel->speed_change_ts    = get_millis();
+    }
+    old_fan_speed = model_get_fan_speed(pmodel);
 
     if (poll_full_cycle) {
         if (sensors_ts == 0) {
             sensors_ts = get_millis();
             ESP_LOGI(TAG, "Poll full cycle");
         } else if (is_expired(sensors_ts, get_millis(), 4000)) {
-            pmodel->sensors_read = 1;
+            pmodel->sensors_calibrated = 1;
             network_get_current_rssi(pmodel);
             sensors_ts = get_millis();
         }
     }
 
-    if (pmodel->sensors_read && !old_sensors_read) {
+    if (pmodel->sensors_calibrated && !old_sensors_read) {
         ESP_LOGI(TAG, "Pressure calibration!");
         model_calibrate_pressures(pmodel);
     }
-    old_sensors_read = pmodel->sensors_read;
+    old_sensors_read = pmodel->sensors_calibrated;
 
     configuration_manage();
 
@@ -572,7 +646,7 @@ void controller_manage(model_t *pmodel) {
 
 
     if (is_expired(heapts, get_millis(), 2000UL)) {
-        // print_heap_status();
+        print_heap_status();
         controller_state_event(pmodel, STATE_EVENT_SENSORS_CHECK);
         heapts = get_millis();
     }

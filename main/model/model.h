@@ -135,6 +135,11 @@ typedef enum {
 } extra_delta_status_t;
 
 
+typedef enum {
+    CALIBRATION_STATE_STABILIZING = 0,
+} calibration_state_t;
+
+
 typedef struct {
     int            temperature;
     int            humidity;
@@ -142,14 +147,16 @@ typedef struct {
     int            uvc_filter_on;
     uint8_t        internal_sensor_error;
     uint8_t        internal_rtc_error;
-    uint8_t        sensors_read;
+    uint8_t        sensors_calibrated;
     system_alarm_t system_alarm;
     int16_t        pressure_average;
 
     uint8_t show_work_hours_state;
 
-    model_fan_state_t state;
-    light_state_t     light_state;
+    model_fan_state_t    state;
+    light_state_t        light_state;
+    extra_delta_status_t extra_delta_status;
+    unsigned long        speed_change_ts;
 
     size_t       ap_list_size;
     char         ap_list[MAX_AP_SCAN_LIST_SIZE][33];
