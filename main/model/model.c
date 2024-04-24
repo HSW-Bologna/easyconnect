@@ -6,15 +6,17 @@
 #include "model.h"
 #include <esp_log.h>
 #include "utils/utils.h"
-#include "timer/timecheck.h"
+#include "gel/timer/timecheck.h"
 
 
-#define ABS(x) ((x) > 0 ? (x) : -(x))
+#define ABS(x)         ((x) > 0 ? (x) : -(x))
+#define ABS_DIFF(x, y) ((x) > (y) ? (x) - (y) : (y) - (x))
 
 
 
 static uint8_t alarm_for_device(model_t *pmodel, size_t i);
 static int16_t get_expected_pressure_delta(model_t *pmodel);
+static int16_t sensor_pressure_average(pressure_sensor_t *sensor);
 
 
 static const char *TAG = "Model";
@@ -25,6 +27,7 @@ void model_init(model_t *pmodel) {
 
     pmodel->extra_delta_status = EXTRA_DELTA_STATUS_NONE;
     pmodel->speed_change_ts    = 0;
+    pmodel->min_pressure_ts    = 0;
 
     pmodel->current_network_rssi = -1000;
 
@@ -98,11 +101,14 @@ void model_init(model_t *pmodel) {
 
     pmodel->show_work_hours_state = 0;
 
-    pmodel->system_alarm       = SYSTEM_ALARM_NONE;
-    pmodel->sensors_calibrated = 0;
-    pmodel->ap_list_size       = 0;
-    pmodel->scanning           = 0;
-    pmodel->wifi_state         = WIFI_STATE_DISCONNECTED;
+    pmodel->sensor_calibration.state       = CALIBRATION_STATE_STABILIZING;
+    pmodel->sensor_calibration.num_sensors = 0;
+    pmodel->sensor_calibration.sensors     = NULL;
+
+    pmodel->system_alarm = SYSTEM_ALARM_NONE;
+    pmodel->ap_list_size = 0;
+    pmodel->scanning     = 0;
+    pmodel->wifi_state   = WIFI_STATE_DISCONNECTED;
 
     pmodel->logs_num  = 0;
     pmodel->logs_from = 0;
@@ -530,6 +536,13 @@ void model_set_device_state(model_t *pmodel, uint8_t address, uint16_t state) {
 }
 
 
+uint8_t model_is_device_pressure_sensor(model_t *pmodel, uint8_t address) {
+    assert(pmodel != NULL);
+    uint16_t mode = CLASS_GET_MODE(model_get_device(pmodel, address).class);
+    return mode == DEVICE_MODE_PRESSURE || mode == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY;
+}
+
+
 uint8_t model_is_device_sensor(model_t *pmodel, uint8_t address) {
     assert(pmodel != NULL);
     uint16_t mode = CLASS_GET_MODE(model_get_device(pmodel, address).class);
@@ -575,9 +588,38 @@ int16_t model_get_device_pressure(model_t *pmodel, device_t device) {
 }
 
 
+void model_get_average_pressures(model_t *pmodel, sensor_group_report_t *pressures) {
+    assert(pmodel != NULL);
+
+    int64_t  pressure_sums[DEVICE_GROUPS] = {0};
+    uint16_t group_counts[DEVICE_GROUPS]  = {0};
+
+    for (size_t i = 0; i < pmodel->sensor_calibration.num_sensors; i++) {
+        pressure_sensor_t *sensor = &pmodel->sensor_calibration.sensors[i];
+        device_t           device = model_get_device(pmodel, sensor->address);
+        int                group  = CLASS_GET_GROUP(device.class);
+
+        pressure_sums[group] += sensor_pressure_average(sensor);
+        group_counts[group]++;
+    }
+
+    for (size_t i = 0; i < DEVICE_GROUPS; i++) {
+        pressures[i].errors = 0;
+
+        if (group_counts[i] != 0) {
+            pressures[i].pressure = (int16_t)(pressure_sums[i] / group_counts[i]);
+            pressures[i].valid    = 1;
+        } else {
+            pressures[i].pressure = 0;
+            pressures[i].valid    = 0;
+        }
+    }
+}
+
+
 int model_calibrate_pressures(model_t *pmodel) {
     sensor_group_report_t pressures[DEVICE_GROUPS] = {0};
-    int                   res                      = model_get_raw_pressures(pmodel, pressures);
+    model_get_average_pressures(pmodel, pressures);
 
     size_t  count          = 0;
     int64_t pressure_total = 0;
@@ -608,7 +650,7 @@ int model_calibrate_pressures(model_t *pmodel) {
         }
     }
 
-    return res;
+    return 0;
 }
 
 
@@ -640,7 +682,8 @@ int model_get_raw_pressures(model_t *pmodel, sensor_group_report_t *pressures) {
             highest_group = CLASS_GET_GROUP(device.class);
         }
 
-        if (device.status == DEVICE_STATUS_OK && (device.sensor_data.state & 0x02) == 0) {
+        if (device.status == DEVICE_STATUS_OK && (device.sensor_data.state & 0x02) == 0 &&
+            device.sensor_data.exclude != SENSOR_EXCLUSION_EXCLUDED) {
             group_counts[group]++;
             pressure_sums[group] += device.sensor_data.pressure;
         } else {
@@ -723,7 +766,7 @@ int model_get_temperatures_humidities(model_t *pmodel, sensor_group_report_t *gr
             group_2->humidity    = 0;
         }
     } else {     // There is at most one external sensor group, use the internal sensor as first temperature
-        group_1->temperature = model_get_temperature(pmodel);
+        group_1->temperature = pmodel->temperature;
         group_1->humidity    = model_get_humidity(pmodel);
 
         if (pmodel->internal_sensor_error) {
@@ -1068,11 +1111,11 @@ size_t model_get_humidity_difference_level(model_t *pmodel, int16_t h1, int16_t 
 
 
 size_t model_get_local_temperature_humidity_error_level(model_t *pmodel) {
-    if (model_get_temperature(pmodel) > model_get_temperature_stop(pmodel) ||
+    if (pmodel->temperature > model_get_temperature_stop(pmodel) ||
         model_get_humidity(pmodel) > model_get_humidity_stop(pmodel)) {
         return 2;
     } else if (model_get_humidity(pmodel) > model_get_humidity_warn(pmodel) ||
-               model_get_temperature(pmodel) > model_get_temperature_warn(pmodel)) {
+               pmodel->temperature > model_get_temperature_warn(pmodel)) {
         return 1;
     } else {
         return 0;
@@ -1150,4 +1193,144 @@ static int16_t get_expected_pressure_delta(model_t *pmodel) {
     } else {
         return ((y2 - y1) * (percentage - x1)) / (x2 - x1) + y1;
     }
+}
+
+
+int model_get_unstable_sensor(model_t *pmodel) {
+    for (size_t i = 0; i < pmodel->sensor_calibration.num_sensors; i++) {
+        pressure_sensor_t *sensor = &pmodel->sensor_calibration.sensors[i];
+        if (model_get_device(pmodel, sensor->address).sensor_data.exclude == SENSOR_EXCLUSION_HIDE) {
+            continue;
+        } else if (!model_is_pressure_sensor_stable(pmodel, i)) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+
+void model_exclude_first_unstable_sensor(model_t *pmodel) {
+    int sensor_index = -1;
+    switch (pmodel->sensor_calibration.state) {
+        case CALIBRATION_STATE_STABILIZING:
+        case CALIBRATION_STATE_STABILIZING_TIMEOUT: {
+            sensor_index = model_get_unstable_sensor(pmodel);
+            break;
+        }
+
+        case CALIBRATION_STATE_READING:
+        case CALIBRATION_STATE_READING_RETRY: {
+            sensor_index = model_get_excessive_offset_sensor(pmodel);
+            break;
+        }
+
+        default:
+            break;
+    }
+
+    if (sensor_index >= 0) {
+        model_get_device_mut(pmodel, pmodel->sensor_calibration.sensors[sensor_index].address)->sensor_data.exclude =
+            SENSOR_EXCLUSION_EXCLUDED;
+    }
+}
+
+
+void model_hide_first_unstable_sensor(model_t *pmodel) {
+    int sensor_index = -1;
+    switch (pmodel->sensor_calibration.state) {
+        case CALIBRATION_STATE_STABILIZING:
+        case CALIBRATION_STATE_STABILIZING_TIMEOUT: {
+            sensor_index = model_get_unstable_sensor(pmodel);
+            break;
+        }
+
+        case CALIBRATION_STATE_READING:
+        case CALIBRATION_STATE_READING_RETRY: {
+            sensor_index = model_get_excessive_offset_sensor(pmodel);
+            break;
+        }
+
+        default:
+            break;
+    }
+
+    if (sensor_index >= 0) {
+        model_get_device_mut(pmodel, pmodel->sensor_calibration.sensors[sensor_index].address)->sensor_data.exclude =
+            SENSOR_EXCLUSION_HIDE;
+    }
+}
+
+
+uint8_t model_is_pressure_sensor_stable(model_t *pmodel, size_t sensor_index) {
+    pressure_sensor_t *sensor = &pmodel->sensor_calibration.sensors[sensor_index];
+
+    if (model_get_device(pmodel, sensor->address).sensor_data.exclude == SENSOR_EXCLUSION_EXCLUDED) {
+        return 1;
+    }
+
+    size_t current_pressure_index  = 0;
+    size_t previous_pressure_index = 0;
+
+    if (pmodel->sensor_calibration.sensors->pressure_index > 0) {
+        current_pressure_index = pmodel->sensor_calibration.sensors->pressure_index - 1;
+    } else {
+        current_pressure_index = NUM_CALIBRATION_READINGS - 1;
+    }
+
+    if (current_pressure_index > 0) {
+        previous_pressure_index = current_pressure_index - 1;
+    } else {
+        previous_pressure_index = NUM_CALIBRATION_READINGS - 1;
+    }
+
+    int16_t current_pressure  = sensor->pressures[current_pressure_index];
+    int16_t previous_pressure = sensor->pressures[previous_pressure_index];
+    ESP_LOGI(TAG, "Pressures %i %i %i", current_pressure, previous_pressure,
+             ABS_DIFF(current_pressure, previous_pressure));
+    return ABS_DIFF(current_pressure, previous_pressure) <= 6;
+}
+
+
+uint8_t model_is_pressure_sensor_offset_ok(model_t *pmodel, size_t sensor_index) {
+    pressure_sensor_t *sensor = &pmodel->sensor_calibration.sensors[sensor_index];
+    device_t           device = model_get_device(pmodel, sensor->address);
+    device_group_t     group  = CLASS_GET_GROUP(device.class);
+
+    if (device.sensor_data.exclude == SENSOR_EXCLUSION_EXCLUDED) {
+        return 1;
+    }
+
+    int16_t pressure        = sensor_pressure_average(sensor);
+    int16_t pressure_offset = ABS_DIFF(pressure, pmodel->pressure_average);
+
+    ESP_LOGI(TAG, "%i has average %i (against %i), offest %i (against %i)", device.address, pressure,
+             pmodel->pressure_average, pressure_offset, pmodel->configuration.pressure_offsets[group]);
+
+    return ABS_DIFF(pressure_offset, pmodel->configuration.pressure_offsets[group]) <= 100;
+}
+
+
+int model_get_excessive_offset_sensor(model_t *pmodel) {
+    for (size_t i = 0; i < pmodel->sensor_calibration.num_sensors; i++) {
+        pressure_sensor_t *sensor = &pmodel->sensor_calibration.sensors[i];
+        if (model_get_device(pmodel, sensor->address).sensor_data.exclude == SENSOR_EXCLUSION_HIDE) {
+            continue;
+        } else if (!model_is_pressure_sensor_offset_ok(pmodel, i)) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+
+static int16_t sensor_pressure_average(pressure_sensor_t *sensor) {
+    int64_t local_total = 0;
+    size_t  max         = sensor->loop ? NUM_CALIBRATION_READINGS : sensor->pressure_index;
+
+    for (size_t j = 0; j < max; j++) {
+        // ESP_LOGI(TAG, "%i value %i, %zu of %zu", sensor->address, sensor->pressures[j], j, max);
+        local_total += sensor->pressures[j];
+    }
+
+    return local_total / max;
 }

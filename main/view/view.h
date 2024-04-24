@@ -29,7 +29,8 @@ void        view_new_signal_handler(lv_obj_t *obj, lv_signal_cb_t cb);
 extern const pman_page_t page_main, page_settings, page_tech_settings, page_devices, page_commissioning,
     page_device_info, page_splash, page_devices_manage, page_automatic_device_config, page_datetime, page_date,
     page_time, page_language, page_parameter_slider, page_degrees, page_errors, page_pressure_calibration,
-    page_pressure_info, page_wifi, page_wifi_psk, page_wifi_ap_list, page_errors, page_current_errors, page_logs;
+    page_pressure_info, page_wifi, page_wifi_psk, page_wifi_ap_list, page_errors, page_current_errors, page_logs,
+    page_buzzer;
 
 
 #endif

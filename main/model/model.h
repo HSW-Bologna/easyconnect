@@ -8,11 +8,12 @@
 #include "gel/collections/queue.h"
 
 
-#define NUM_PARAMETERS    3
-#define MAX_FAN_SPEED     5
-#define TOP_FAN_SPEED     4
-#define MAX_BUZZER_VOLUME 3
-#define IP_PART(ip, p)    ((ip >> (8 * p)) & 0xFF)
+#define NUM_CALIBRATION_READINGS 20
+#define NUM_PARAMETERS           3
+#define MAX_FAN_SPEED            5
+#define TOP_FAN_SPEED            4
+#define MAX_BUZZER_VOLUME        1
+#define IP_PART(ip, p)           ((ip >> (8 * p)) & 0xFF)
 
 #define GETTER(name, field)                                                                                            \
     static inline                                                                                                      \
@@ -137,7 +138,19 @@ typedef enum {
 
 typedef enum {
     CALIBRATION_STATE_STABILIZING = 0,
+    CALIBRATION_STATE_STABILIZING_TIMEOUT,
+    CALIBRATION_STATE_READING,
+    CALIBRATION_STATE_READING_RETRY,
+    CALIBRATION_STATE_DONE,
 } calibration_state_t;
+
+
+typedef struct {
+    uint8_t  address;
+    uint16_t pressure_index;
+    uint8_t  loop;
+    int16_t  pressures[NUM_CALIBRATION_READINGS];
+} pressure_sensor_t;
 
 
 typedef struct {
@@ -147,7 +160,6 @@ typedef struct {
     int            uvc_filter_on;
     uint8_t        internal_sensor_error;
     uint8_t        internal_rtc_error;
-    uint8_t        sensors_calibrated;
     system_alarm_t system_alarm;
     int16_t        pressure_average;
 
@@ -170,6 +182,14 @@ typedef struct {
     log_t  logs[LOG_BUFFER_SIZE];
     size_t logs_from;
     size_t logs_num;
+
+    unsigned long min_pressure_ts;
+
+    struct {
+        calibration_state_t state;
+        size_t              num_sensors;
+        pressure_sensor_t  *sensors;
+    } sensor_calibration;
 
     struct {
         uint8_t  wifi_configured;
@@ -299,6 +319,12 @@ uint8_t        model_is_any_fatal_alarm(model_t *pmodel);
 size_t         model_get_ok_devices_count(model_t *pmodel);
 size_t         model_get_humidity_error_level(model_t *pmodel, int16_t humidity);
 size_t         model_get_temperature_error_level(model_t *pmodel, int16_t temperature);
+uint8_t        model_is_device_pressure_sensor(model_t *pmodel, uint8_t address);
+uint8_t        model_is_pressure_sensor_stable(model_t *pmodel, size_t sensor_index);
+int            model_get_unstable_sensor(model_t *pmodel);
+void           model_exclude_first_unstable_sensor(model_t *pmodel);
+void           model_hide_first_unstable_sensor(model_t *pmodel);
+int            model_get_excessive_offset_sensor(model_t *pmodel);
 
 
 GETTERNSETTER(humidity, humidity);

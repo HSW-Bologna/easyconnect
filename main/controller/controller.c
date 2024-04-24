@@ -23,6 +23,7 @@
 #include "services/server.h"
 #include "view/view_types.h"
 #include "services/device_commands.h"
+#include "sensors_calibration.h"
 #ifndef PC_SIMULATOR
 #include "esp32_commandline.h"
 #endif
@@ -250,6 +251,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg) 
             uint8_t update = 0;
 
             if (ulf_count > 0) {
+                ESP_LOGI(TAG, "UVC filter toggle");
                 model_uvc_filter_toggle(pmodel);
                 controller_state_event(pmodel, model_get_uvc_filter_state(pmodel) ? STATE_EVENT_FAN_UVC_ON
                                                                                   : STATE_EVENT_FAN_UVC_OFF);
@@ -362,18 +364,15 @@ void controller_send_message(view_controller_message_t msg) {
 
 
 void controller_manage(model_t *pmodel) {
-    static unsigned long refreshts        = 0;
-    static unsigned long work_hours_ts    = 0;
-    static unsigned long tempts           = 0;
-    static unsigned long poll_ts          = 0;
-    static unsigned long heapts           = 0;
-    static unsigned long time_ts          = 0;
-    static unsigned long server_ts        = 0;
-    static unsigned long sensors_ts       = 0;
-    static uint8_t       poll_address     = 0;
-    static uint8_t       old_sensors_read = 0;
-    static uint8_t       poll_full_cycle  = 0;
-    static uint8_t       old_fan_speed    = 0;
+    static unsigned long refreshts     = 0;
+    static unsigned long work_hours_ts = 0;
+    static unsigned long tempts        = 0;
+    static unsigned long poll_ts       = 0;
+    static unsigned long heapts        = 0;
+    static unsigned long time_ts       = 0;
+    static unsigned long server_ts     = 0;
+    static uint8_t       poll_address  = 0;
+    static uint8_t       old_fan_speed = 0;
 
     if (old_fan_speed < model_get_fan_speed(pmodel)) {
         pmodel->extra_delta_status = EXTRA_DELTA_INCREASE;
@@ -383,23 +382,6 @@ void controller_manage(model_t *pmodel) {
         pmodel->speed_change_ts    = get_millis();
     }
     old_fan_speed = model_get_fan_speed(pmodel);
-
-    if (poll_full_cycle) {
-        if (sensors_ts == 0) {
-            sensors_ts = get_millis();
-            ESP_LOGI(TAG, "Poll full cycle");
-        } else if (is_expired(sensors_ts, get_millis(), 4000)) {
-            pmodel->sensors_calibrated = 1;
-            network_get_current_rssi(pmodel);
-            sensors_ts = get_millis();
-        }
-    }
-
-    if (pmodel->sensors_calibrated && !old_sensors_read) {
-        ESP_LOGI(TAG, "Pressure calibration!");
-        model_calibrate_pressures(pmodel);
-    }
-    old_sensors_read = pmodel->sensors_calibrated;
 
     configuration_manage();
 
@@ -428,7 +410,6 @@ void controller_manage(model_t *pmodel) {
         view_event((view_event_t){.code = VIEW_EVENT_CODE_WIFI_UPDATE});
     }
 
-
     if (is_expired(poll_ts, get_millis(), 500UL)) {
         if (poll_address == 0) {
             poll_address = model_get_next_device_address(pmodel, poll_address);
@@ -448,6 +429,30 @@ void controller_manage(model_t *pmodel) {
     }
 
     if (is_expired(tempts, get_millis(), 1000UL)) {
+        if (model_get_uvc_filter_state(pmodel) || model_get_electrostatic_filter_state(pmodel)) {
+            sensor_group_report_t pressures[DEVICE_GROUPS] = {0};
+            int                   highest_group            = model_get_pressures(pmodel, pressures);
+            if (highest_group >= DEVICE_GROUP_2) {
+                int difference = pressures[0].pressure - pressures[1].pressure;
+                difference     = difference < 0 ? -difference : difference;
+
+                if (difference > pmodel->configuration.pressure_threshold_mb) {
+                    pmodel->min_pressure_ts = get_millis();
+                }
+            } else {
+                ESP_LOGI(TAG, "Not enough pressures");
+                pmodel->min_pressure_ts = get_millis();
+            }
+
+            if (is_expired(pmodel->min_pressure_ts, get_millis(), 60000UL)) {
+                ESP_LOGW(TAG, "Minimum pressure difference not reached");
+                pmodel->system_alarm = SYSTEM_ALARM_TRIGGERED;
+                system_shutdown(pmodel);
+            }
+        } else {
+            pmodel->min_pressure_ts = get_millis();
+        }
+
         if (temperature_error()) {
             pmodel->internal_sensor_error = 1;
         } else {
@@ -524,8 +529,7 @@ void controller_manage(model_t *pmodel) {
                     uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
                     if (new_poll_address == poll_address) {
                         // Restart
-                        poll_address    = 0;
-                        poll_full_cycle = 1;     // Full read
+                        poll_address = 0;
                     } else {
                         poll_address = new_poll_address;
                     }
@@ -629,8 +633,7 @@ void controller_manage(model_t *pmodel) {
                 uint8_t new_poll_address = model_get_next_device_address(pmodel, poll_address);
                 if (new_poll_address == poll_address) {
                     // Restart
-                    poll_full_cycle = 1;     // Full read
-                    poll_address    = 0;
+                    poll_address = 0;
                 } else {
                     poll_address = new_poll_address;
                 }
@@ -639,19 +642,24 @@ void controller_manage(model_t *pmodel) {
             case MODBUS_RESPONSE_CODE_PRESSURE:
                 model_set_sensors_values(pmodel, response.address, response.pressure, response.temperature,
                                          response.humidity);
+                if (model_is_device_pressure_sensor(pmodel, response.address)) {
+                    sensors_calibration_new_reading(pmodel, response.address, response.pressure);
+                }
                 view_event((view_event_t){.code = VIEW_EVENT_CODE_DEVICE_UPDATE});
                 break;
         }
     }
 
 
-    if (is_expired(heapts, get_millis(), 2000UL)) {
-        print_heap_status();
+    if (is_expired(heapts, get_millis(), 4000UL)) {
+        // print_heap_status();
+        network_get_current_rssi(pmodel);
         controller_state_event(pmodel, STATE_EVENT_SENSORS_CHECK);
         heapts = get_millis();
     }
 
     controller_state_manage(pmodel);
+    sensors_calibration_manage(pmodel);
 }
 
 
@@ -821,25 +829,26 @@ static void check_sensors_levels(model_t *pmodel) {
                    group_2.humidity > model_get_humidity_stop(pmodel);
         }
     } else {
-        current_temperature_1_warning = model_get_temperature(pmodel) > model_get_temperature_warn(pmodel);
+        current_temperature_1_warning = pmodel->temperature > model_get_temperature_warn(pmodel);
         current_humidity_1_warning    = model_get_humidity(pmodel) > model_get_humidity_warn(pmodel);
 
-        stop = model_get_temperature(pmodel) > model_get_temperature_stop(pmodel) || model_get_humidity_stop(pmodel);
+        stop = pmodel->temperature > model_get_temperature_stop(pmodel) ||
+               model_get_humidity(pmodel) > model_get_humidity_stop(pmodel);
     }
 
     if (stop) {
         if (is_expired(timestamp, get_millis(), 2000UL)) {
-            buzzer_beep(1, 500, 0, 3);
+            buzzer_beep(1, 500, 0, model_get_buzzer_volume(pmodel));
             timestamp = get_millis();
         }
     } else if (current_temperature_1_warning && !old_temperature_1_warning) {
-        buzzer_beep(1, 500, 0, 3);
+        buzzer_beep(1, 500, 0, model_get_buzzer_volume(pmodel));
     } else if (current_temperature_2_warning && !old_temperature_2_warning) {
-        buzzer_beep(1, 500, 0, 3);
+        buzzer_beep(1, 500, 0, model_get_buzzer_volume(pmodel));
     } else if (current_humidity_1_warning && !old_humidity_1_warning) {
-        buzzer_beep(1, 500, 0, 3);
+        buzzer_beep(1, 500, 0, model_get_buzzer_volume(pmodel));
     } else if (current_humidity_2_warning && !old_humidity_2_warning) {
-        buzzer_beep(1, 500, 0, 3);
+        buzzer_beep(1, 500, 0, model_get_buzzer_volume(pmodel));
     }
 
     old_temperature_1_warning = current_temperature_1_warning;

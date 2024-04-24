@@ -35,8 +35,8 @@ void app_main(void *arg) {
     add_simulated_device(&model, 8, 8, DEVICE_CLASS_GAS);
 
     uint16_t i = 9;
-    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_2));
-    model_set_sensors_values(&model, i++, 250, 20, 30);
+    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1));
+    model_set_sensors_values(&model, i++, 249, 20, 30);
     add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1));
     model_set_sensors_values(&model, i++, 275, 25, 40);
 

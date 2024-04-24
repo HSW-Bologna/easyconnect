@@ -120,13 +120,8 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                         }
 
                         case VOLUME_BTN_ID: {
-                            slider_parameter_t *args = view_common_slider_parameter_create(
-                                view_intl_get_string(pmodel, STRINGS_VOLUME), "", model_get_buzzer_volume(pmodel),
-                                MAX_BUZZER_VOLUME, model_set_buzzer_volume);
-
-                            msg.vmsg.code  = VIEW_COMMAND_CODE_CHANGE_PAGE_EXTRA;
-                            msg.vmsg.page  = &page_parameter_slider;
-                            msg.vmsg.extra = args;
+                            msg.vmsg.code = VIEW_COMMAND_CODE_CHANGE_PAGE;
+                            msg.vmsg.page = &page_buzzer;
                             break;
                         }
 

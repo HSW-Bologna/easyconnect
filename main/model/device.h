@@ -44,6 +44,13 @@ typedef enum {
 #define INDEX2ADDR(addr) (addr + 1)
 
 
+typedef enum {
+    SENSOR_EXCLUSION_NONE = 0,
+    SENSOR_EXCLUSION_EXCLUDED,
+    SENSOR_EXCLUSION_HIDE,
+} sensor_exclusion_t;
+
+
 typedef struct {
     uint8_t  status;
     uint8_t  address;
@@ -59,6 +66,8 @@ typedef struct {
             int16_t  temperature;
             int16_t  humidity;
             uint16_t state;
+
+            sensor_exclusion_t exclude;
         } sensor_data;
         struct {
             uint16_t output_state;

@@ -169,7 +169,9 @@ enum {
     BTN_HUMIDITY_ID,
     BTN_TEMPERATURE_ID,
     BTN_OVERRULE_SYSTEM_ALARM_ID,
+    BTN_EXCLUDE_SENSOR_ID,
     BTN_HIDE_SYSTEM_ALARM_ID,
+    BTN_HIDE_EXCLUDE_SENSOR_ID,
 
     // Ventilation popup
     BTN_SIPHONING_PERCENTAGE_0_MOD,
@@ -303,9 +305,11 @@ typedef struct {
 
 struct page_data {
     lv_obj_t *blanket;
+    lv_obj_t *sensor_blanket;
 
     lv_obj_t *lbl_version;
     lv_obj_t *lbl_system_alert;
+    lv_obj_t *lbl_sensor_exclusion;
 
     lv_obj_t *btn_light;
     lv_obj_t *btn_fan;
@@ -684,6 +688,49 @@ static void update_system_alert(model_t *pmodel, struct page_data *data) {
 }
 
 
+static void update_sensor_calibration(model_t *pmodel, struct page_data *pdata) {
+    switch (pmodel->sensor_calibration.state) {
+        case CALIBRATION_STATE_STABILIZING:
+            view_common_set_hidden(pdata->sensor_blanket, 1);
+            break;
+
+        case CALIBRATION_STATE_STABILIZING_TIMEOUT: {
+            int sensor_index = model_get_unstable_sensor(pmodel);
+            if (sensor_index >= 0) {
+                lv_label_set_text_fmt(pdata->lbl_sensor_exclusion,
+                                      "Il sensore %i ha valori troppo instabili; escludere?",
+                                      pmodel->sensor_calibration.sensors[sensor_index].address);
+                view_common_set_hidden(pdata->sensor_blanket, 0);
+            } else {
+                view_common_set_hidden(pdata->sensor_blanket, 1);
+            }
+            break;
+        }
+
+        case CALIBRATION_STATE_READING:
+            view_common_set_hidden(pdata->sensor_blanket, 1);
+            break;
+
+        case CALIBRATION_STATE_READING_RETRY: {
+            int sensor_index = model_get_excessive_offset_sensor(pmodel);
+            if (sensor_index >= 0) {
+                lv_label_set_text_fmt(pdata->lbl_sensor_exclusion, "Il sensore %i ha valori troppo diversi; escludere?",
+                                      pmodel->sensor_calibration.sensors[sensor_index].address);
+                view_common_set_hidden(pdata->sensor_blanket, 0);
+            } else {
+                view_common_set_hidden(pdata->sensor_blanket, 1);
+            }
+            break;
+        }
+
+        case CALIBRATION_STATE_DONE:
+            view_common_set_hidden(pdata->sensor_blanket, 1);
+            break;
+    }
+}
+
+
+
 static void update_all_buttons(model_t *pmodel, struct page_data *data) {
     data->uvc_alarm  = 0;
     data->esf_alarm  = 0;
@@ -704,7 +751,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
         lv_label_set_text(pdata->row_pressure.lbl_unit_left, "Pa");
 
-        if (pmodel->sensors_calibrated) {
+        if (pmodel->sensor_calibration.state == CALIBRATION_STATE_DONE) {
             model_get_pressures(pmodel, pressures);
 
             delta_status_t delta_status =
@@ -763,7 +810,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
     const lv_img_dsc_t *error_dsc[] = {&img_ok_lg, &img_error_lg, &img_stop};
     if (pdata->row_temperature.obj != NULL) {
-        if (pmodel->sensors_calibrated) {
+        if (pmodel->sensor_calibration.state == CALIBRATION_STATE_DONE) {
             size_t error_level_1 = model_get_temperature_error_level(pmodel, group_1.temperature);
             size_t error_level_2 = model_get_temperature_error_level(pmodel, group_2.temperature);
             size_t error_level   = error_level_1 > error_level_2 ? error_level_1 : error_level_2;
@@ -811,7 +858,7 @@ static void update_device_sensors(model_t *pmodel, struct page_data *pdata) {
 
 
     if (pdata->row_humidity.obj != NULL) {
-        if (pmodel->sensors_calibrated) {
+        if (pmodel->sensor_calibration.state == CALIBRATION_STATE_DONE) {
             size_t error_level_1 = model_get_humidity_error_level(pmodel, group_1.humidity);
             size_t error_level_2 = model_get_humidity_error_level(pmodel, group_2.humidity);
             size_t error_level   = error_level_1 > error_level_2 ? error_level_1 : error_level_2;
@@ -905,6 +952,8 @@ static void update_info(model_t *pmodel, struct page_data *data) {
             lv_label_set_text(data->row_local_temperature.lbl_unit_right, "%");
         }
 
+        lv_obj_align(data->row_local_temperature.lbl_unit_left, data->row_local_temperature.lbl_data_left,
+                     LV_ALIGN_OUT_RIGHT_BOTTOM, 0, 0);
         lv_obj_align(data->row_local_temperature.lbl_unit_right, data->row_local_temperature.lbl_data_right,
                      LV_ALIGN_OUT_RIGHT_BOTTOM, 0, 0);
     }
@@ -1142,8 +1191,47 @@ static void open_page(model_t *model, void *arg) {
     btn = view_common_back_button(cont, BTN_HIDE_SYSTEM_ALARM_ID);
     lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -16, -16);
 
-
     data->blanket = blanket;
+
+    blanket = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_set_size(blanket, LV_HOR_RES, LV_VER_RES);
+    lv_obj_align(blanket, NULL, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_style(blanket, LV_CONT_PART_MAIN, &style_transparent_cont);
+
+    cont = lv_cont_create(blanket, NULL);
+    lv_obj_set_size(cont, 312, 228);
+    lv_obj_align(cont, NULL, LV_ALIGN_IN_TOP_MID, 16, 4);
+
+    img = lv_img_create(cont, NULL);
+    lv_img_set_src(img, &img_danger);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_TOP_MID, 0, 4);
+
+    lbl = lv_label_create(cont, NULL);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_obj_set_width(lbl, 300);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_small());
+    lv_obj_set_auto_realign(lbl, 1);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, -12);
+    data->lbl_sensor_exclusion = lbl;
+
+    btn = lv_btn_create(cont, NULL);
+    lv_obj_set_size(btn, 200, 48);
+    view_register_default_callback(btn, BTN_EXCLUDE_SENSOR_ID);
+    lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
+    lv_btn_set_layout(btn, LV_LAYOUT_OFF);
+
+    lbl = lv_label_create(btn, NULL);
+    lv_label_set_text(lbl, "Escludi");
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 16, -12);
+
+    btn = view_common_back_button(cont, BTN_HIDE_EXCLUDE_SENSOR_ID);
+    lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -16, -16);
+
+    data->sensor_blanket = blanket;
 
 
     lv_obj_t *drawer = lv_cont_create(lv_scr_act(), NULL);
@@ -1195,6 +1283,7 @@ static void open_page(model_t *model, void *arg) {
     lv_slider_set_value(data->slider, model_get_fan_speed(model), LV_ANIM_OFF);
 
     update_device_sensors(model, data);
+    update_sensor_calibration(model, data);
 
     update_all_buttons(model, data);
     update_system_alert(model, data);
@@ -1240,6 +1329,7 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
             update_device_sensors(model, data);
             update_device_list(model, data);
             update_system_alert(model, data);
+            update_sensor_calibration(model, data);
             break;
 
         case VIEW_EVENT_CODE_DEVICE_NEW:
@@ -1280,6 +1370,12 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                 case LV_EVENT_LONG_PRESSED_REPEAT:
                 case LV_EVENT_CLICKED: {
                     switch (event.data.id) {
+                        case BTN_EXCLUDE_SENSOR_ID:
+                            model_exclude_first_unstable_sensor(model);
+                            update_device_sensors(model, data);
+                            update_sensor_calibration(model, data);
+                            break;
+
                         case BTN_OVERRULE_SYSTEM_ALARM_ID:
                             switch (data->system_alarm_message) {
                                 case SYSTEM_ALARM_MESSAGE_1:
@@ -1300,6 +1396,12 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                         case BTN_HIDE_SYSTEM_ALARM_ID:
                             data->system_alarm_message = SYSTEM_ALARM_MESSAGE_HIDDEN;
                             update_system_alert(model, data);
+                            break;
+
+                        case BTN_HIDE_EXCLUDE_SENSOR_ID:
+                            model_hide_first_unstable_sensor(model);
+                            update_device_sensors(model, data);
+                            update_sensor_calibration(model, data);
                             break;
 
                         case BTN_SIPHONING_PERCENTAGE_0_MOD:
@@ -1427,9 +1529,9 @@ static view_message_t process_page_event(model_t *model, void *arg, view_event_t
                             break;
 
                         case BTN_PRESSURE_THRESHOLD_MOD:
-                            model_set_pressure_threshold_mb(
-                                model,
-                                modify_parameter(model_get_pressure_threshold_mb(model), event.data.number, 0, 50));
+                            model_set_pressure_threshold_mb(model,
+                                                            modify_parameter(model_get_pressure_threshold_mb(model),
+                                                                             event.data.number * 5, 0, 100));
                             update_menus(model, data);
                             break;
 
@@ -2082,7 +2184,7 @@ static void update_auto_configuration(model_t *pmodel, struct page_data *pdata) 
     lv_label_set_text_fmt(pdata->auto_configuration.lbl_expected_devices, "%i", pdata->devices_to_configure);
 
     char string[32] = {0};
-    snprintf(string, sizeof(string), "#0000F0 %zu#", pdata->found_devices);
+    snprintf(string, sizeof(string), "#0000F0 %i#", pdata->found_devices);
     lv_label_set_text_fmt(pdata->auto_configuration.lbl_ok_devices,
                           view_intl_get_string(pmodel, STRINGS_AL_MOMENTO_N_DISPOSITIVI_STANNO_COMUNICANDO), string);
 }
