@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "elm": "^0.19.1-5",
+    "uglify-es": "^3.3.9"
+  }
+}
