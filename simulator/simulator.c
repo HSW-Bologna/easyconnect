@@ -10,6 +10,9 @@
 #include "controller/gui.h"
 
 
+static void add_simulated_device(model_t *pmodel, uint8_t address, uint16_t serial_number, uint16_t class);
+
+
 static const char *TAG = "Main";
 
 
@@ -22,11 +25,38 @@ void app_main(void *arg) {
     mouse_init();
 
     model_init(&model);
+    add_simulated_device(&model, 1, 1, DEVICE_CLASS_LIGHT_1);
+    add_simulated_device(&model, 2, 2, DEVICE_CLASS_LIGHT_2);
+    add_simulated_device(&model, 3, 3, DEVICE_CLASS_LIGHT_3);
+    add_simulated_device(&model, 4, 4, DEVICE_CLASS_IMMISSION_FAN);
+    add_simulated_device(&model, 5, 5, DEVICE_CLASS_SIPHONING_FAN);
+    add_simulated_device(&model, 6, 6, DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1));
+    add_simulated_device(&model, 7, 7, DEVICE_CLASS_ELECTROSTATIC_FILTER);
+    add_simulated_device(&model, 8, 8, DEVICE_CLASS_GAS);
+
+    uint16_t i = 9;
+    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_SAFETY(DEVICE_GROUP_1));
+    model_set_sensors_values(&model, i++, 249, 20, 30);
+    add_simulated_device(&model, i, i, DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY(DEVICE_GROUP_1));
+    model_set_sensors_values(&model, i++, 275, 25, 40);
+
+    model.ap_list_size = 6;
+    strcpy(model.ap_list[0], "rete 1");
+    strcpy(model.ap_list[1], "rete 2");
+    strcpy(model.ap_list[2], "rete 3");
+    strcpy(model.ap_list[3], "rete 4");
+    strcpy(model.ap_list[4], "rete 5");
+    strcpy(model.ap_list[5], "rete 6");
+    model.configuration.wifi_configured = 1;
+
     view_init(monitor_flush, mouse_read);
     controller_init(&model);
 
+
     ESP_LOGI(TAG, "Begin main loop");
     for (;;) {
+        model.temperature = 20;
+        model_set_humidity(&model, 30);
         controller_gui_manage(&model);
         controller_manage(&model);
 
@@ -34,4 +64,13 @@ void app_main(void *arg) {
     }
 
     vTaskDelete(NULL);
+}
+
+
+static void add_simulated_device(model_t *pmodel, uint8_t address, uint16_t serial_number, uint16_t class) {
+    model_new_device(pmodel, address);
+    model_set_device_error(pmodel, address, 0);
+    model_set_device_sn(pmodel, address, serial_number);
+    model_set_device_class(pmodel, address, class);
+    model_set_device_firmware(pmodel, address, 0);
 }

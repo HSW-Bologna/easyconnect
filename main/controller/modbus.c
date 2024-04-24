@@ -26,19 +26,22 @@
 #define MODBUS_TIMEOUT                30
 #define MODBUS_MAX_PACKET_SIZE        256
 #define MODBUS_BROADCAST_ADDRESS      0
-#define MODBUS_COMMUNICATION_ATTEMPTS 3
+#define MODBUS_COMMUNICATION_ATTEMPTS 4
 
 #define HOLDING_REGISTER_MOTOR_SPEED 256
 #define HOLDING_REGISTER_PRESSURE    256
+#define HOLDING_REGISTER_WORK_HOURS  256
 
 #define MODBUS_AUTO_COMMISSIONING_DONE_BIT 0x01
 
 typedef enum {
     TASK_MESSAGE_CODE_READ_DEVICE_INFO,
     TASK_MESSAGE_CODE_READ_DEVICE_MESSAGES,
-    TASK_MESSAGE_CODE_READ_DEVICE_ALARMS,
+    TASK_MESSAGE_CODE_READ_DEVICE_STATE,
     TASK_MESSAGE_CODE_READ_DEVICE_PRESSURE,
     TASK_MESSAGE_CODE_READ_DEVICE_INPUTS,
+    TASK_MESSAGE_CODE_READ_DEVICE_WORK_HOURS,
+    TASK_MESSAGE_CODE_RESET_DEVICE_WORK_HOURS,
     TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
     TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING,
     TASK_MESSAGE_CODE_SET_CLASS_OUTPUT,
@@ -54,8 +57,9 @@ struct __attribute__((packed)) task_message {
     uint8_t             address;
     union {
         struct {
-            int value;
             uint16_t class;
+            uint8_t value;
+            uint8_t bypass;
         };
         uint16_t expected_devices;
         uint16_t num_messages;
@@ -82,7 +86,7 @@ static void modbus_task(void *args);
 static int  write_holding_register(ModbusMaster *master, uint8_t address, uint16_t index, uint16_t data);
 static int  write_holding_registers(ModbusMaster *master, uint8_t address, uint16_t starting_address, uint16_t *data,
                                     size_t num);
-static int  write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int value);
+static int  write_coils(ModbusMaster *master, uint8_t address, uint16_t index, size_t num_values, uint8_t *values);
 static int  read_holding_registers(ModbusMaster *master, uint16_t *registers, uint8_t address, uint16_t start,
                                    uint16_t count);
 static void send_custom_function(ModbusMaster *master, uint8_t address, uint8_t function, uint8_t *data, size_t len);
@@ -166,51 +170,61 @@ int modbus_get_response(modbus_response_t *response) {
 void modbus_automatic_commissioning(uint16_t expected_devices) {
     struct task_message message = {.code             = TASK_MESSAGE_CODE_BEGIN_AUTOMATIC_COMMISSIONING,
                                    .expected_devices = expected_devices};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_update_events(uint8_t address, uint16_t previous_event_count) {
     struct task_message message = {
         .code = TASK_MESSAGE_CODE_UPDATE_EVENTS, .address = address, .event_count = previous_event_count};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_update_time(void) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_UPDATE_TIME};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
-void modbus_set_class_output(uint16_t class, int value) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_SET_CLASS_OUTPUT, .class = class, .value = value};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+void modbus_set_class_output(uint16_t class, uint8_t value, uint8_t bypass) {
+    struct task_message message = {
+        .code   = TASK_MESSAGE_CODE_SET_CLASS_OUTPUT,
+        .class  = class,
+        .value  = value,
+        .bypass = bypass,
+    };
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_set_fan_percentage(uint8_t address, uint8_t percentage) {
     struct task_message message = {
         .code = TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE, .address = address, .value = percentage};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_scan(void) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_SCAN};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
-void modbus_set_device_output(uint8_t address, int value) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT, .address = address, .value = value};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+void modbus_set_device_output(uint8_t address, uint8_t value, uint8_t bypass) {
+    struct task_message message = {
+        .code    = TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT,
+        .address = address,
+        .value   = value,
+        .bypass  = bypass,
+    };
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_read_device_info(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_INFO, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
@@ -227,25 +241,38 @@ void modbus_read_device_messages(uint8_t address, uint8_t device_model) {
             break;
     }
 
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
-void modbus_read_device_alarms(uint8_t address) {
-    struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_ALARMS, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+void modbus_read_device_state(uint8_t address) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_STATE, .address = address};
+    xQueueSend(messageq, &message, 0);
 }
 
 
 void modbus_read_device_pressure(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_PRESSURE, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
+}
+
+
+void modbus_read_device_work_hours(uint8_t address) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_WORK_HOURS, .address = address};
+    xQueueSend(messageq, &message, 0);
+}
+
+
+void modbus_reset_device_work_hours(uint8_t address) {
+    struct task_message message = {.code = TASK_MESSAGE_CODE_RESET_DEVICE_WORK_HOURS, .address = address};
+    xQueueSend(messageq, &message, 0);
+    modbus_read_device_work_hours(address);
 }
 
 
 void modbus_read_device_inputs(uint8_t address) {
     struct task_message message = {.code = TASK_MESSAGE_CODE_READ_DEVICE_INPUTS, .address = address};
-    xQueueSend(messageq, &message, portMAX_DELAY);
+    xQueueSend(messageq, &message, 0);
 }
 
 
@@ -344,11 +371,12 @@ static void modbus_task(void *args) {
                 case TASK_MESSAGE_CODE_READ_DEVICE_INFO: {
                     response.code    = MODBUS_RESPONSE_CODE_INFO;
                     response.address = message.address;
-                    ESP_LOGI(TAG, "Reading info from %i", message.address);
 
                     uint16_t registers[5];
                     if (read_holding_registers(&master, registers, message.address,
-                                               EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION, 5)) {
+                                               EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION,
+                                               sizeof(registers) / sizeof(registers[0]))) {
+                        error_resp.success_code = MODBUS_RESPONSE_CODE_INFO;
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         response.firmware_version = registers[0];
@@ -394,14 +422,17 @@ static void modbus_task(void *args) {
                     break;
                 }
 
-                case TASK_MESSAGE_CODE_READ_DEVICE_ALARMS: {
-                    response.code    = MODBUS_RESPONSE_CODE_ALARMS_REG;
+                case TASK_MESSAGE_CODE_READ_DEVICE_STATE: {
+                    response.code    = MODBUS_RESPONSE_CODE_STATE;
                     response.address = message.address;
 
-                    if (read_holding_registers(&master, &response.alarms, message.address,
-                                               EASYCONNECT_HOLDING_REGISTER_ALARMS, 1)) {
+                    uint16_t registers[2];
+                    if (read_holding_registers(&master, registers, message.address, EASYCONNECT_HOLDING_REGISTER_ALARMS,
+                                               sizeof(registers) / sizeof(registers[0]))) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
+                        response.alarms = registers[0];
+                        response.state  = registers[1];
                         xQueueSend(responseq, &response, portMAX_DELAY);
                     }
                     break;
@@ -427,7 +458,8 @@ static void modbus_task(void *args) {
                 case TASK_MESSAGE_CODE_SET_DEVICE_OUTPUT: {
                     response.code    = MODBUS_RESPONSE_CODE_DEVICE_OK;
                     response.address = message.address;
-                    if (write_coil(&master, message.address, 0, message.value)) {
+                    uint8_t coils    = (message.value << 0) | (message.bypass << 1);
+                    if (write_coils(&master, message.address, 0, 2, &coils)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         xQueueSend(responseq, &response, portMAX_DELAY);
@@ -468,16 +500,26 @@ static void modbus_task(void *args) {
 
                     for (size_t i = 1; i <= MODBUS_MAX_DEVICES; i++) {
                         if (ulTaskNotifyTake(pdTRUE, 0)) {
+                            ESP_LOGI(TAG, "Interrupting scan");
                             break;
                         }
 
-                        response.address = i;
-                        if (read_holding_registers(&master, NULL, i, EASYCONNECT_HOLDING_REGISTER_ADDRESS, 1) == 0) {
-                            response.error = 0;
+                        response.code     = MODBUS_RESPONSE_CODE_INFO;
+                        response.address  = i;
+                        response.scanning = 1;
+
+                        uint16_t registers[5];
+                        if (read_holding_registers(&master, registers, response.address,
+                                                   EASYCONNECT_HOLDING_REGISTER_FIRMWARE_VERSION,
+                                                   sizeof(registers) / sizeof(registers[0]))) {
+                            // No response
                         } else {
-                            response.error = 1;
+                            response.firmware_version = registers[0];
+                            response.class            = registers[1];
+                            response.serial_number    = (registers[2] << 16) | registers[3];
+                            xQueueSend(responseq, &response, portMAX_DELAY);
                         }
-                        xQueueSend(responseq, &response, portMAX_DELAY);
+
                         vTaskDelay(pdMS_TO_TICKS(MODBUS_TIMEOUT));
                     }
 
@@ -504,17 +546,17 @@ static void modbus_task(void *args) {
                     uint16_t period = 0;
 
                     if (message.expected_devices < 5) {
-                        period = 4;
-                    } else if (message.expected_devices < 10) {
                         period = 10;
-                    } else if (message.expected_devices < 20) {
+                    } else if (message.expected_devices < 10) {
                         period = 20;
+                    } else if (message.expected_devices < 20) {
+                        period = 40;
                     } else if (message.expected_devices < 30) {
-                        period = 30;
-                    } else if (message.expected_devices < 50) {
                         period = 60;
-                    } else {
+                    } else if (message.expected_devices < 50) {
                         period = 120;
+                    } else {
+                        period = 300;
                     }
 
                     uint8_t data[] = {(period >> 8) & 0xFF, period & 0xFF};
@@ -587,10 +629,19 @@ static void modbus_task(void *args) {
                             ESP_LOGW(TAG, "Device %i did not have address %i", device.serial_number, address);
                         } else {
                             confirmed_devices++;
+
+                            modbus_response_t single_device_response = {
+                                .code     = MODBUS_RESPONSE_CODE_INFO,
+                                .scanning = 1,
+                                .address  = device.address,
+                            };
+                            xQueueSend(responseq, &single_device_response, portMAX_DELAY);
                         }
 
                         starting_address = address;
                         address = device_list_get_next_configured_device_address(found_devices, starting_address);
+
+                        vTaskDelay(MODBUS_TIMEOUT / 2);
                     }
 
                     response.code           = MODBUS_RESPONSE_DEVICE_AUTOMATIC_CONFIGURATION;
@@ -600,7 +651,12 @@ static void modbus_task(void *args) {
                 }
 
                 case TASK_MESSAGE_CODE_SET_CLASS_OUTPUT: {
-                    uint8_t data[] = {(message.class >> 8) & 0xFF, message.class & 0xFF, message.value};
+                    uint8_t data[] = {
+                        (message.class >> 8) & 0xFF,
+                        message.class & 0xFF,
+                        message.value,
+                        message.bypass,
+                    };
                     send_custom_function(&master, MODBUS_BROADCAST_ADDRESS, EASYCONNECT_FUNCTION_CODE_SET_CLASS_OUTPUT,
                                          data, sizeof(data));
                     break;
@@ -608,21 +664,46 @@ static void modbus_task(void *args) {
 
                 case TASK_MESSAGE_CODE_SET_FAN_PERCENTAGE: {
                     ESP_LOGI(TAG, "Setting fan speed for device %i %i%%", message.address, message.value);
-                    if (write_holding_register(&master, message.address, HOLDING_REGISTER_MOTOR_SPEED, (uint16_t)message.value)) {
+                    if (write_holding_register(&master, message.address, HOLDING_REGISTER_MOTOR_SPEED,
+                                               (uint16_t)message.value)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
                     break;
                 }
 
                 case TASK_MESSAGE_CODE_READ_DEVICE_PRESSURE: {
-                    response.code    = MODBUS_RESPONSE_CODE_PRESSURE;
+                    response.code         = MODBUS_RESPONSE_CODE_PRESSURE;
+                    response.address      = message.address;
+                    uint16_t registers[3] = {0};
+
+                    if (read_holding_registers(&master, registers, message.address, HOLDING_REGISTER_PRESSURE,
+                                               sizeof(registers) / sizeof(registers[0]))) {
+                        xQueueSend(responseq, &error_resp, portMAX_DELAY);
+                    } else {
+                        response.pressure    = registers[0];
+                        response.temperature = registers[1];
+                        response.humidity    = registers[2];
+                        xQueueSend(responseq, &response, portMAX_DELAY);
+                    }
+                    break;
+                }
+
+                case TASK_MESSAGE_CODE_READ_DEVICE_WORK_HOURS: {
+                    response.code    = MODBUS_RESPONSE_CODE_WORK_HOURS;
                     response.address = message.address;
 
-                    if (read_holding_registers(&master, &response.pressure, message.address, HOLDING_REGISTER_PRESSURE,
-                                               1)) {
+                    if (read_holding_registers(&master, &response.work_hours, message.address,
+                                               HOLDING_REGISTER_WORK_HOURS, 1)) {
                         xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     } else {
                         xQueueSend(responseq, &response, portMAX_DELAY);
+                    }
+                    break;
+                }
+
+                case TASK_MESSAGE_CODE_RESET_DEVICE_WORK_HOURS: {
+                    if (write_holding_register(&master, message.address, HOLDING_REGISTER_WORK_HOURS, 0)) {
+                        xQueueSend(responseq, &error_resp, portMAX_DELAY);
                     }
                     break;
                 }
@@ -715,12 +796,11 @@ static int write_holding_registers(ModbusMaster *master, uint8_t address, uint16
     int     res                            = 0;
     size_t  counter                        = 0;
 
-    rs485_flush();
-
     do {
         res                 = 0;
         ModbusErrorInfo err = modbusBuildRequest16RTU(master, address, starting_address, num, data);
         assert(modbusIsOk(err));
+        rs485_flush();
         rs485_write(modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 
         int len = rs485_read(buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
@@ -743,16 +823,15 @@ static int write_holding_register(ModbusMaster *master, uint8_t address, uint16_
 }
 
 
-static int write_coil(ModbusMaster *master, uint8_t address, uint16_t index, int value) {
+static int write_coils(ModbusMaster *master, uint8_t address, uint16_t index, size_t num_values, uint8_t *values) {
     uint8_t buffer[MODBUS_RESPONSE_05_LEN] = {0};
     int     res                            = 0;
     size_t  counter                        = 0;
 
-    rs485_flush();
-
     do {
-        ModbusErrorInfo err = modbusBuildRequest05RTU(master, address, index, value);
+        ModbusErrorInfo err = modbusBuildRequest15RTU(master, address, index, num_values, values);
         assert(modbusIsOk(err));
+        rs485_flush();
         rs485_write(modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 
         int len = rs485_read(buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
@@ -777,8 +856,6 @@ static int read_holding_registers(ModbusMaster *master, uint16_t *registers, uin
     int             res     = 0;
     size_t          counter = 0;
 
-    rs485_flush();
-
     master_context_t ctx = {.pointer = registers, .start = start};
     if (registers == NULL) {
         modbusMasterSetUserPointer(master, NULL);
@@ -790,6 +867,7 @@ static int read_holding_registers(ModbusMaster *master, uint16_t *registers, uin
         res = 0;
         err = modbusBuildRequest03RTU(master, address, start, count);
         assert(modbusIsOk(err));
+        rs485_flush();
         rs485_write(modbusMasterGetRequest(master), modbusMasterGetRequestLength(master));
 
         int len = rs485_read(buffer, sizeof(buffer), pdMS_TO_TICKS(MODBUS_TIMEOUT));
@@ -799,7 +877,7 @@ static int read_holding_registers(ModbusMaster *master, uint16_t *registers, uin
         if (!modbusIsOk(err)) {
             ESP_LOGW(TAG, "Read holding registers for %i error %zu: %i %i", address, counter, err.source, err.error);
             if (len == 0) {
-                ESP_LOGW(TAG, "Empty packet!");
+                ESP_LOGD(TAG, "Empty packet!");
             } else {
                 ESP_LOG_BUFFER_HEX(TAG, buffer, len);
             }

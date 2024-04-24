@@ -1,14 +1,28 @@
 #include <stdlib.h>
 #include "src/lv_core/lv_disp.h"
 #include "src/lv_core/lv_obj.h"
+#include "src/lv_core/lv_obj_style_dec.h"
 #include "src/lv_misc/lv_area.h"
 #include "src/lv_widgets/lv_btn.h"
+#include "src/lv_widgets/lv_cont.h"
 #include "src/lv_widgets/lv_label.h"
+#include "controller/configuration.h"
+#include "view/intl/AUTOGEN_FILE_strings.h"
+#include "view/style.h"
 #include "view/view.h"
 #include "view/common.h"
 #include "view/intl/intl.h"
 #include "model/model.h"
 
+
+LV_IMG_DECLARE(img_icona_luce_1);
+LV_IMG_DECLARE(img_icona_luce_2);
+LV_IMG_DECLARE(img_icona_luce_3);
+LV_IMG_DECLARE(img_icona_elettrostatico);
+LV_IMG_DECLARE(img_icona_uvc);
+LV_IMG_DECLARE(img_icona_aspirazione);
+LV_IMG_DECLARE(img_icona_immissione);
+LV_IMG_DECLARE(img_trash);
 
 
 enum {
@@ -20,38 +34,67 @@ enum {
 
 struct page_data {
     device_t  device;
+    lv_obj_t *img_icon;
     lv_obj_t *lbl_info;
-    lv_obj_t *lbl_alarms[MAX_NUM_MESSAGES];
-    size_t    num_messages;
-    char     *messages[MAX_NUM_MESSAGES];
+    lv_obj_t *lbl_extra;
 };
 
 
 static void update_info(model_t *pmodel, struct page_data *data) {
     data->device = model_get_device(pmodel, data->device.address);
-    lv_label_set_text_fmt(data->lbl_info,
-                          "Dispositivo %i,\n versione %i.%i.%i\n classe 0x%X, stato %i, SN 0x%X, allarmi 0x%X",
-                          data->device.address, (data->device.firmware_version >> 10) & 0x3F,
-                          (data->device.firmware_version >> 6) & 0xF, (data->device.firmware_version >> 0) & 0x3F,
-                          data->device.class, data->device.status, data->device.serial_number, data->device.alarms);
+
+    view_common_get_class_icon(data->device.class, data->img_icon);
+
+    char device_type[64] = "";
+    view_common_get_class_string(pmodel, data->device.class, device_type, sizeof(device_type));
+
+    uint8_t alarm = 0;
 
     if (data->device.status == DEVICE_STATUS_COMMUNICATION_ERROR) {
-        lv_label_set_text(data->lbl_alarms[0], view_intl_get_string(pmodel, STRINGS_ERRORE_DI_COMUNICAZIONE));
-        lv_obj_set_hidden(data->lbl_alarms[0], 0);
-        lv_obj_set_hidden(data->lbl_alarms[1], 1);
+        alarm = 1;
     } else {
+        if (CLASS_GET_MODE(data->device.class) == DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY) {
+            // lv_label_set_text_fmt(data->lbl_state, "Status: 0x%X\nPress: %i Pa", data->device.sensor_data.state,
+            // model_get_device_pressure(pmodel, data->device));
+        }
+
         for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
             if ((data->device.alarms & (1 << i)) > 0) {
-                lv_obj_set_hidden(data->lbl_alarms[i], 0);
-                if (data->messages[i] == NULL || strlen(data->messages[i]) == 0) {
-                    lv_label_set_text(data->lbl_alarms[i], "----");
-                } else {
-                    lv_label_set_text(data->lbl_alarms[i], data->messages[i]);
-                }
-            } else {
-                lv_obj_set_hidden(data->lbl_alarms[i], 1);
+                alarm = 1;
+                break;
             }
         }
+    }
+
+    size_t group = CLASS_GET_GROUP(data->device.class);
+    lv_label_set_text_fmt(data->lbl_info, "%s: %s\n%s: %i.%i.%i\nSN: %i\nIP: %i  Gru: %i\n%s: %s",
+                          view_intl_get_string(pmodel, STRINGS_TIPO), device_type,
+                          view_intl_get_string(pmodel, STRINGS_REV_FW), (data->device.firmware_version >> 10) & 0x3F,
+                          (data->device.firmware_version >> 6) & 0xF, (data->device.firmware_version >> 0) & 0x3F,
+                          data->device.serial_number, data->device.address, group + 1,
+                          view_intl_get_string(pmodel, STRINGS_ALLARME), alarm ? "KO" : "OK");
+
+    switch (CLASS_GET_MODE(data->device.class)) {
+        case DEVICE_MODE_PRESSURE:
+        case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
+            view_common_set_hidden(data->lbl_extra, 0);
+
+            int16_t calibrated_pressure =
+                data->device.sensor_data.pressure + pmodel->configuration.pressure_offsets[group];
+
+            lv_label_set_text_fmt(data->lbl_extra, "%s: %i Pa\nAVG %s: %i Pa\n%s: %i Pa\n%s: %i Pa",
+                                  view_intl_get_string(pmodel, STRINGS_PRESSIONE_LETTA),
+                                  data->device.sensor_data.pressure, view_intl_get_string(pmodel, STRINGS_PRESSIONE),
+                                  pmodel->pressure_average, view_intl_get_string(pmodel, STRINGS_OFFSET_PRESSIONE),
+                                  pmodel->configuration.pressure_offsets[group],
+                                  view_intl_get_string(pmodel, STRINGS_PRESSIONE_CALIBRATA), calibrated_pressure);
+            // lv_label_set_text_fmt(data->lbl_state, "Status: 0x%X\nPress: %i Pa", data->device.sensor_data.state,
+            // model_get_device_pressure(pmodel, data->device));
+            break;
+
+        default:
+            view_common_set_hidden(data->lbl_extra, 1);
+            break;
     }
 }
 
@@ -59,10 +102,6 @@ static void update_info(model_t *pmodel, struct page_data *data) {
 static void *create_page(model_t *model, void *extra) {
     struct page_data *data = malloc(sizeof(struct page_data));
     data->device           = model_get_device(model, (uint8_t)(uintptr_t)extra);
-    data->num_messages     = 0;
-    for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
-        data->messages[i] = NULL;
-    }
     return data;
 }
 
@@ -72,26 +111,50 @@ static void open_page(model_t *pmodel, void *arg) {
     lv_obj_t         *title = view_common_title(BACK_BTN_ID, "Info dispositivo", NULL);
     (void)title;
 
-    lv_obj_t *lbl = lv_label_create(lv_scr_act(), NULL);
+    lv_obj_t *cont = lv_cont_create(lv_scr_act(), NULL);
+    lv_obj_add_style(cont, LV_CONT_PART_MAIN, &style_transparent_cont);
+    lv_obj_set_size(cont, LV_HOR_RES - 64, LV_VER_RES - 80);
+    lv_obj_align(cont, NULL, LV_ALIGN_CENTER, 0, -10);
+
+    lv_obj_t *img = lv_img_create(cont, NULL);
+    lv_obj_set_size(img, 32, 32);
+    lv_obj_set_auto_realign(img, 1);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_TOP_LEFT, 0, 0);
+    data->img_icon = img;
+
+    lv_obj_t *lbl = lv_label_create(cont, NULL);
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
     lv_obj_set_auto_realign(lbl, 1);
-    lv_obj_set_width(lbl, 420);
-    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 80);
+    lv_obj_set_width(lbl, LV_HOR_RES - 64);
+    lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_LEFT, 0, 40);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &lv_font_montserrat_16);
     data->lbl_info = lbl;
 
-    for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
-        lbl = lv_label_create(lv_scr_act(), NULL);
-        lv_obj_set_auto_realign(lbl, 1);
-        lv_obj_set_style_local_text_color(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
-        lv_obj_align(lbl, NULL, LV_ALIGN_IN_TOP_MID, 0, 150 + 24 * i);
-        data->lbl_alarms[i] = lbl;
-    }
+    data->lbl_extra = lv_label_create(cont, data->lbl_info);
+    lv_obj_align(data->lbl_extra, data->lbl_info, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 0);
 
     lv_obj_t *btn = lv_btn_create(lv_scr_act(), NULL);
-    lbl           = lv_label_create(btn, NULL);
-    lv_obj_set_style_local_text_font(lbl, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_subtitle());
-    lv_label_set_text(lbl, "Rimuovi");
     lv_obj_set_size(btn, 180, 48);
+    lv_btn_set_layout(btn, LV_LAYOUT_OFF);
+    lv_obj_set_style_local_bg_color(btn, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, STYLE_RED);
+
+    lbl = lv_label_create(btn, NULL);
+    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, &lv_font_montserrat_16);
+    lv_obj_set_style_local_text_color(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, STYLE_WHITE);
+    lv_label_set_align(lbl, LV_LABEL_ALIGN_CENTER);
+    lv_label_set_text(lbl, view_intl_get_string(pmodel, STRINGS_RIMUOVI_DISPOSITIVO));
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_BREAK);
+    lv_obj_set_width(lbl, 100);
+    lv_obj_align(lbl, NULL, LV_ALIGN_CENTER, 0, 0);
+
+    img = lv_img_create(btn, NULL);
+    lv_img_set_src(img, &img_trash);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_LEFT_MID, 8, 0);
+
+    img = lv_img_create(btn, NULL);
+    lv_img_set_src(img, &img_trash);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_RIGHT_MID, -8, 0);
+
     lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -8);
     view_register_default_callback(btn, DELETE_BTN_ID);
 
@@ -118,10 +181,10 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
             break;
 
         case VIEW_EVENT_CODE_DEVICE_MESSAGES:
-            data->num_messages = event.num_messages;
+            /*data->num_messages = event.num_messages;
             for (size_t i = 0; i < MAX_NUM_MESSAGES; i++) {
                 data->messages[i] = event.messages[i];
-            }
+            }*/
             update_info(pmodel, data);
             break;
 
@@ -140,10 +203,13 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
                             break;
 
-                        case DELETE_BTN_ID:
+                        case DELETE_BTN_ID: {
                             model_delete_device(pmodel, data->device.address);
+                            configuration_save_device_data(model_get_device(pmodel, data->device.address));
+                            msg.cmsg.code = VIEW_CONTROLLER_MESSAGE_CODE_SAVE;
                             msg.vmsg.code = VIEW_COMMAND_CODE_BACK;
                             break;
+                        }
 
                         case REFRESH_BTN_ID: {
                             msg.cmsg.code    = VIEW_CONTROLLER_MESSAGE_CODE_DEVICE_INFO;
@@ -172,9 +238,9 @@ static view_message_t process_page_event(model_t *pmodel, void *arg, view_event_
 void destroy_page(void *args, void *extra) {
     struct page_data *pdata = args;
 
-    for (size_t i = 0; i < pdata->num_messages; i++) {
-        free(pdata->messages[i]);
-    }
+    // for (size_t i = 0; i < pdata->num_messages; i++) {
+    // free(pdata->messages[i]);
+    //}
     free(pdata);
 }
 

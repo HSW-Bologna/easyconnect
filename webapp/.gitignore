@@ -1,0 +1,9 @@
+node_modules
+# elm-package generated files
+elm-stuff
+package.json
+package-lock.json
+# elm-repl generated files
+repl-temp-*
+build
+*.html

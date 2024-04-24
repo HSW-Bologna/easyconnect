@@ -1,22 +1,44 @@
 #include <assert.h>
 #include <stdio.h>
 #include "lvgl.h"
+#include "src/lv_widgets/lv_label.h"
 #include "view.h"
 #include "style.h"
 #include "common.h"
 #include "model/model.h"
+#include "view/intl/intl.h"
 
 
-lv_obj_t *view_common_back_button(int id) {
-    lv_obj_t *back = lv_btn_create(lv_scr_act(), NULL);
-    lv_obj_t *lbl  = lv_label_create(back, NULL);
-    lv_label_set_text(lbl, LV_SYMBOL_LEFT);
-    lv_obj_set_size(back, 50, 64);
-    lv_obj_align(back, NULL, LV_ALIGN_IN_TOP_LEFT, 4, 4);
-    view_register_default_callback(back, id);
-    lv_obj_set_style_local_text_font(lbl, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_title());
+LV_IMG_DECLARE(img_icona_luce_1);
+LV_IMG_DECLARE(img_icona_luce_2);
+LV_IMG_DECLARE(img_icona_luce_3);
+LV_IMG_DECLARE(img_icona_elettrostatico);
+LV_IMG_DECLARE(img_icona_uvc);
+LV_IMG_DECLARE(img_icona_aspirazione);
+LV_IMG_DECLARE(img_icona_immissione);
 
-    return back;
+LV_IMG_DECLARE(img_icon_gas_sm);
+
+LV_IMG_DECLARE(img_icon_pressure_sm);
+LV_IMG_DECLARE(img_icon_pressure_temperature_sm);
+
+LV_IMG_DECLARE(img_icon_temperature_humidity_sm);
+
+LV_IMG_DECLARE(img_icon_pressure_temperature_humidity_sm);
+
+LV_IMG_DECLARE(img_icon_immission_sm);
+
+LV_IMG_DECLARE(img_back_blue);
+
+
+lv_obj_t *view_common_back_button(lv_obj_t *parent, int id) {
+    lv_obj_t *img = lv_img_create(parent, NULL);
+    lv_img_set_src(img, &img_back_blue);
+    lv_obj_align(img, NULL, LV_ALIGN_IN_TOP_RIGHT, -8, 8);
+    lv_obj_set_click(img, 1);
+    view_register_default_callback(img, id);
+
+    return img;
 }
 
 
@@ -34,7 +56,7 @@ slider_parameter_t *view_common_slider_parameter_create(const char *title, const
 
 
 lv_obj_t *view_common_title(int id, const char *string, lv_obj_t **label) {
-    lv_obj_t *back = view_common_back_button(id);
+    lv_obj_t *back = view_common_back_button(lv_scr_act(), id);
 
     lv_obj_t  *_internal;
     lv_obj_t **title;
@@ -45,11 +67,11 @@ lv_obj_t *view_common_title(int id, const char *string, lv_obj_t **label) {
     }
     *title = lv_label_create(lv_scr_act(), NULL);
     lv_label_set_long_mode(*title, LV_LABEL_LONG_SROLL_CIRC);
-    lv_obj_set_size(*title, LV_HOR_RES - lv_obj_get_width(back) - 12, 52);
+    lv_obj_set_size(*title, LV_HOR_RES - lv_obj_get_width(back) * 2, 52);
     lv_label_set_align(*title, LV_LABEL_ALIGN_CENTER);
     lv_obj_set_style_local_text_font(*title, LV_LABEL_PART_MAIN, LV_STATE_DEFAULT, lv_theme_get_font_title());
     lv_label_set_text(*title, string);
-    lv_obj_align(*title, back, LV_ALIGN_OUT_RIGHT_MID, 4, 0);
+    lv_obj_align(*title, NULL, LV_ALIGN_IN_TOP_MID, 0, 0);
     return back;
 }
 
@@ -181,45 +203,93 @@ void view_common_set_hidden(lv_obj_t *obj, int hidden) {
 }
 
 
-void view_common_get_class_string(uint16_t class, char *string, size_t len) {
-    switch (class) {
-        case DEVICE_CLASS_LIGHT_1:
-            strncpy(string, "Luce 1", len);
+void view_common_get_class_string(model_t *pmodel, uint16_t class, char *string, size_t len) {
+    switch (CLASS_GET_MODE(class)) {
+        case DEVICE_MODE_LIGHT:
+            strncpy(string, view_intl_get_string(pmodel, STRINGS_LUCE), len);
             break;
 
-        case DEVICE_CLASS_LIGHT_2:
-            strncpy(string, "Luce 2", len);
-            break;
-
-        case DEVICE_CLASS_LIGHT_3:
-            strncpy(string, "Luce 3", len);
-            break;
-
-        case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+        case DEVICE_MODE_ESF:
             strncpy(string, "ESF", len);
             break;
 
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
-        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
-            strncpy(string, "ULF", len);
+        case DEVICE_MODE_UVC:
+            strncpy(string, "UVC", len);
             break;
 
-        case DEVICE_CLASS_PRESSURE_SAFETY:
-        case DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY:
-            strncpy(string, "PS", len);
+        case DEVICE_MODE_PRESSURE:
+            strncpy(string, view_intl_get_string(pmodel, STRINGS_SENSORE_DI_PRESSIONE_ASSOLUTA), len);
             break;
 
-        case DEVICE_CLASS_SIPHONING_FAN:
-            strncpy(string, "Aspirazione", len);
+        case DEVICE_MODE_TEMPERATURE_HUMIDITY:
+            snprintf(string, len, "%s/%s", view_intl_get_string(pmodel, STRINGS_TEMPERATURA),
+                     view_intl_get_string(pmodel, STRINGS_UMIDITA));
             break;
 
-        case DEVICE_CLASS_IMMISSION_FAN:
-            strncpy(string, "Immissione", len);
+        case DEVICE_MODE_PRESSURE_TEMPERATURE_HUMIDITY:
+            snprintf(string, len, "%s/%s", view_intl_get_string(pmodel, STRINGS_PRESSIONE),
+                     view_intl_get_string(pmodel, STRINGS_UMIDITA));
+            break;
+
+        case DEVICE_MODE_FAN:
+            if (class == DEVICE_CLASS_SIPHONING_FAN) {
+                strncpy(string, view_intl_get_string(pmodel, STRINGS_ASPIRAZIONE), len);
+            } else {
+                strncpy(string, view_intl_get_string(pmodel, STRINGS_IMMISSIONE), len);
+            }
             break;
 
         default:
             snprintf(string, len, "0x%X", class);
+            break;
+    }
+}
+
+
+void view_common_get_class_icon(uint16_t class, lv_obj_t *img) {
+    // Icon
+    switch (class) {
+        case DEVICE_CLASS_LIGHT_1:
+            lv_img_set_src(img, &img_icona_luce_1);
+            break;
+        case DEVICE_CLASS_LIGHT_2:
+            lv_img_set_src(img, &img_icona_luce_2);
+            break;
+        case DEVICE_CLASS_LIGHT_3:
+            lv_img_set_src(img, &img_icona_luce_3);
+            break;
+        case DEVICE_CLASS_ELECTROSTATIC_FILTER:
+            lv_img_set_src(img, &img_icona_elettrostatico);
+            break;
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_1):
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_2):
+        case DEVICE_CLASS_ULTRAVIOLET_FILTER(DEVICE_GROUP_3):
+            lv_img_set_src(img, &img_icona_uvc);
+            break;
+        case DEVICE_CLASS_GAS:
+            lv_img_set_src(img, &img_icon_gas_sm);
+            break;
+        case DEVICE_CLASS_IMMISSION_FAN:
+            lv_img_set_src(img, &img_icon_immission_sm);
+            break;
+        case DEVICE_CLASS_SIPHONING_FAN:
+            lv_img_set_src(img, &img_icona_aspirazione);
+            break;
+
+            CASE_ALL_GROUPS_FOR(DEVICE_CLASS_PRESSURE_SAFETY)
+            lv_img_set_src(img, &img_icon_pressure_sm);
+            break;
+
+            CASE_ALL_GROUPS_FOR(DEVICE_CLASS_TEMPERATURE_HUMIDITY_SAFETY)
+            lv_img_set_src(img, &img_icon_temperature_humidity_sm);
+            break;
+
+            CASE_ALL_GROUPS_FOR(DEVICE_CLASS_PRESSURE_TEMPERATURE_HUMIDITY_SAFETY)
+            lv_img_set_src(img, &img_icon_pressure_temperature_humidity_sm);
+            break;
+
+        default:
+            lv_obj_set_hidden(img, 1);
             break;
     }
 }

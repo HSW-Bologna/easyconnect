@@ -1,6 +1,6 @@
 import kconfiglib
 import os
-import multiprocessing
+import multiprocessing 
 from pathlib import Path
 import tools.meta.csv2carray as csv2carray
 import platform
@@ -120,6 +120,7 @@ CFLAGS = [
     "-DI2C_DEVICES_STRUCT_TM_CONVERSION",
     "-DLV_LVGL_H_INCLUDE_SIMPLE",
     "-DPC_SIMULATOR",
+    "-DAPP_CONFIG_SD_MOUNTPOINT='\"/tmp\"'",
     '-DprojCOVERAGE_TEST=1',
     "-DLV_KCONFIG_IGNORE",
     '-DGEL_PARAMETER_CONFIGURATION_HEADER="\\"gel_parameter_conf.h\\""',
@@ -174,7 +175,7 @@ def main():
     gel_selected = ['pagemanager', 'collections',
                     'data_structures', "timer", "parameter"]
     (gel_objects, include) = SConscript(
-        f'{COMPONENTS}/gel/SConscript', exports=['gel_env', 'gel_selected'])
+        f'{COMPONENTS}/generic_embedded_libs/SConscript', exports=['gel_env', 'gel_selected'])
     env['CPPPATH'] += [include]
 
     i2c_env = env
@@ -217,7 +218,10 @@ def main():
                 File(f'{B64}/decode.c'), File(f'{B64}/buffer.c')]
     sources += [File(f"{LIGHTMODBUS}/src/impl.c")]
 
-    prog = env.Program(PROGRAM, sources + freertos + gel_objects + i2c_objects)
+    total_sources = sources + freertos + gel_objects + i2c_objects
+    ctags = env.Command("", "", "ctags -R .")
+    prog = env.Program(PROGRAM, total_sources)
+    env.Depends(ctags, total_sources)
     PhonyTargets('run', './simulated', prog, env)
     env.Alias('mingw', prog)
     env.CompilationDatabase('build/compile_commands.json')

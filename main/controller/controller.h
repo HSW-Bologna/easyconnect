@@ -10,6 +10,7 @@ void controller_manage_message(model_t *pmodel, view_controller_message_t *msg);
 void controller_manage(model_t *pmodel);
 void controller_update_class_output(model_t *pmodel, uint16_t class, int value);
 void controller_update_fan_percentage(model_t *pmodel, uint8_t fan_speed);
+void controller_send_message(view_controller_message_t msg);
 
 
 #endif
